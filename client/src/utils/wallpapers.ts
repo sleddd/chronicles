@@ -17,7 +17,7 @@ export interface Wallpaper {
 
 export const WALLPAPERS: Wallpaper[] = [
   { id: 'own-2' },
-  { id: 'own-2-copy' },
+  { id: 'own-starry-night' },
   { id: 'own-3' },
   { id: 'own-4' },
   { id: 'own-beach' },

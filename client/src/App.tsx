@@ -79,6 +79,14 @@ function isInstalledApp(): boolean {
     && window.matchMedia('(display-mode: standalone)').matches;
 }
 
+/** Tells the key holder which page shows: a keyless page (services/keyHandoff.ts) waits to ask other tabs for the key */
+function KeylessPageWatch() {
+  const { pathname } = useLocation();
+  const { notePage } = useEncryption();
+  useEffect(() => { notePage(pathname); }, [pathname, notePage]);
+  return null;
+}
+
 function HomeRoute() {
   if (isInstalledApp()) return <Navigate to="/dashboard" replace />;
   return <Suspense fallback={null}><LandingView /></Suspense>;
@@ -699,6 +707,7 @@ export function App() {
       <AuthProvider>
         <EncryptionProvider>
           <BrowserRouter>
+            <KeylessPageWatch />
             <Routes>
               {/* Public */}
               <Route path="/login" element={<LoginView />} />

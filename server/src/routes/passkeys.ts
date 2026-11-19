@@ -19,8 +19,8 @@ import { sharedState } from '../services/sharedState.js';
 import { issueConfirmToken } from '../services/confirmTokens.js';
 import { passkeyUserHandle, webauthnConfig } from '../services/webauthn.js';
 import { logSecurityEvent } from '../utils/securityLogger.js';
-import { beginPending2FA, confirmGate, confirmIdentity, countConfirmFailure, rememberKnownDevice, secondFactorGate, sendIfHasherBusy, setSessionCookie, trustedForSignIn } from './auth.js';
-import { beginSignIn, cancelSignIns, signInStillWanted } from './authState.js';
+import { beginPending2FA, confirmGate, confirmIdentity, countConfirmFailure, rememberKnownDevice, rememberSignInNetwork, secondFactorGate, sendIfHasherBusy, setSessionCookie, trustedForSignIn } from './auth.js';
+import { beginSignIn, cancelSignIns, endSignIn, signInStillWanted } from './authState.js';
 import { previewField } from '../services/previews.js';
 
 /*
@@ -147,15 +147,22 @@ router.post('/passkey/options', authLimiter, async (_req, res) => {
 // passkey's wrap — unless this browser is trusted to skip the code (checked
 // after the touch, again once the session exists). Every failure answers the same.
 router.post('/passkey/verify', authLimiter, async (req, res) => {
-  const refuse = () => { res.status(401).json({ error: 'That passkey didn’t work. Try again, or sign in with your password.' }); };
+  let flight: string | null = null;
+  // Every answer that makes no session releases the flight at once
+  const refuse = async () => {
+    await endSignIn(flight);
+    res.status(401).json({ error: 'That passkey didn’t work. Try again, or sign in with your password.' });
+  };
   try {
     const parsed = passkeyLoginSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: 'Invalid request' }); return; }
 
     // Held from before the check until the session exists: "Sign out
-    // everywhere" landing in between cancels this sign-in (routes/authState.ts)
-    const candidate = await findPasskey(parsed.data.response.id).catch(() => null);
-    const flight = candidate ? await beginSignIn(candidate.accountId) : null;
+    // everywhere" landing in between cancels this sign-in (routes/authState.ts).
+    // A failed lookup is a server error, never "not on your account" — that
+    // answer tells the browser to delete the passkey from the device
+    const candidate = await findPasskey(parsed.data.response.id);
+    flight = candidate ? await beginSignIn(candidate.accountId) : null;
     const passkey = await checkAssertion(parsed.data.response, LOGIN_CHALLENGES, null);
     if (!passkey) {
       // A passkey this server has never stored: one made on the device whose
@@ -169,18 +176,20 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
         res.status(401).json({ error: 'That passkey didn’t work because it isn’t on your account. Sign in with your password, then add it again in Settings.', unknownCredential: true });
         return;
       }
-      refuse();
+      await refuse();
       return;
     }
-    if (!flight || !candidate || candidate.accountId !== passkey.accountId) { refuse(); return; }
+    if (!flight || !candidate || candidate.accountId !== passkey.accountId) { await refuse(); return; }
     const account = await prisma.account.findUnique({ where: { id: passkey.accountId } });
-    if (!account) { refuse(); return; }
+    if (!account) { await refuse(); return; }
 
-    // With 2FA on, the code is still needed — unless this browser is trusted
+    // With 2FA on, the code is still needed — unless this browser is trusted.
+    // The pending token takes over from the flight (cancelSignIns ends both)
     const twoFA = !!(account.totpEnabled && account.totpSecret);
     const trusted = twoFA && await trustedForSignIn(req, account.id);
     if (twoFA && !trusted) {
       const pendingToken = await beginPending2FA(account.id, passkey.id);
+      await endSignIn(flight);
       logSecurityEvent('login_2fa_required', { accountId: account.id, ip: req.ip, details: { method: 'passkey' } });
       res.json({ requires2FA: true, pendingToken });
       return;
@@ -194,16 +203,18 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
     });
     // Removed while this request was in flight ("Remove all passkeys" after a
     // lost device), every session signed out, or the browser's trust ended:
-    // the session it just earned must not outlive that
+    // the session it just earned must not outlive that. (signInStillWanted
+    // spends the flight either way)
     if (!(await passkeyExists(passkey.id, account.id)) || !(await signInStillWanted(account.id, flight))
       || (trusted && !(await trustedForSignIn(req, account.id)))) {
       try { await revokeSession(token.slice(0, 12), 'credentials_changed'); } catch { /* already gone */ }
       logSecurityEvent('login_superseded', { accountId: account.id });
-      refuse();
+      await refuse();
       return;
     }
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip, details: { method: 'passkey' } });
+    rememberSignInNetwork(req, account.id);
     try { await revokeBrowserSession(req); } catch { /* best effort: the new session works either way */ }
     rememberKnownDevice(res, account);
     setSessionCookie(res, token);
@@ -213,6 +224,7 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error('Passkey sign-in error:', err instanceof Error ? err.message : 'Unknown error');
+    await endSignIn(flight).catch(() => { /* expires on its own */ });
     res.status(500).json({ error: 'Passkey sign-in failed' });
   }
 });

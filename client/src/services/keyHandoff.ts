@@ -32,9 +32,11 @@
  * - pages that never need the key — the landing page, shares, public shelves,
  *   the legal pages (`keylessPage`) — never ask for it, and a tab showing one
  *   never hands it out. Those pages show other people's text (a share, a
- *   shelf), so they are where injected script is likeliest; keeping the key
- *   out of their memory is what can be done. A script that runs in the app's
- *   own pages could use the key there anyway.
+ *   shelf), so they are where injected script is likeliest. A tab loaded
+ *   straight onto one never holds the key; a tab that moved there from an app
+ *   page keeps the key it already had (it isn't dropped on navigation), but
+ *   won't pass it on from there. A script that runs in the app's own pages
+ *   could use the key there anyway.
  */
 
 const LOCK = 'chronicles-key';
@@ -55,6 +57,9 @@ const channel = (name = CHANNEL): BroadcastChannel | null => {
 /** The reply channel for one request: named for it, so only the tab that asked listens. */
 const replyName = (id: string) => `${CHANNEL}:${id}`;
 const REQUEST_ID = /^[0-9a-f-]{36}$/i;
+/** Until then, a tab on the previous build (no reply channel) still gets the key on the shared channel.
+ *  Two weeks after reply channels shipped: any tab still open from before then reloads to sign in. */
+export const OLD_REQUESTS_UNTIL = Date.UTC(2026, 11, 3);
 
 /** Pages that never need the key (and show other people's text): they neither ask for it nor hand it out. */
 const KEYLESS_PREFIXES = ['/share', '/public-shelf', '/health-privacy', '/terms', '/license', '/report-a-bug'];
@@ -93,9 +98,14 @@ export function holdKey(current: () => { key: CryptoKey; email: string } | null)
       try { ch?.postMessage({ type: 'none', to: msg.id } satisfies None); } catch { /* closed */ }
       return;
     }
-    // On the request's own channel. (A request without one comes from a tab
-    // still running the version before it, answered as before until it reloads)
+    // On the request's own channel. A request without one comes from a tab
+    // still running the build before reply channels; it's answered on the
+    // shared channel only until OLD_REQUESTS_UNTIL, then refused like any other
     const withReply = typeof msg.reply === 'string' && msg.reply === replyName(msg.id) && REQUEST_ID.test(msg.id);
+    if (!withReply && Date.now() >= OLD_REQUESTS_UNTIL) {
+      try { ch?.postMessage({ type: 'none', to: msg.id } satisfies None); } catch { /* closed */ }
+      return;
+    }
     const out = withReply ? channel(msg.reply) : ch;
     try {
       out?.postMessage({ type: 'key', to: msg.id, key: held.key } satisfies Key);

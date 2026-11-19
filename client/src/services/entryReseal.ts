@@ -33,7 +33,12 @@ export function setOlderEntriesFromMarker(markerOnServer: boolean): void {
 // hands them out, so an id it gave before, or one an entry already has, is
 // refused: a new entry sealed under an existing id would be valid for it.
 const RESERVE_BATCH = 20;
+// The server forgets a reservation nobody used after 7 days (RESERVATION_DAYS
+// in server/src/db/tenantQueries.ts), and a create under a forgotten id is
+// refused. A tab left open that long drops its held ids a day early instead
+const POOL_MAX_AGE_MS = 6 * 24 * 60 * 60 * 1000;
 let reserved: number[] = [];
+let reservedAt = 0;
 let issued = new Set<number>();
 let pending: Promise<void> | null = null;
 
@@ -58,6 +63,7 @@ function entriesLoaded(): Promise<void> {
 }
 
 export async function reserveEntryId(): Promise<number> {
+  if (reserved.length && Date.now() - reservedAt > POOL_MAX_AGE_MS) reserved = [];
   if (reserved.length === 0) await entriesLoaded();
   while (reserved.length === 0) {
     pending ??= entriesApi.reserveIds(RESERVE_BATCH)
@@ -66,6 +72,7 @@ export async function reserveEntryId(): Promise<number> {
         if (fresh.length !== r.ids.length || new Set(fresh).size !== fresh.length) throw new Error('The server reserved an entry id already in use');
         for (const id of fresh) issued.add(id);
         reserved.push(...fresh);
+        reservedAt = Date.now();
       })
       .finally(() => { pending = null; });
     await pending;
@@ -73,9 +80,9 @@ export async function reserveEntryId(): Promise<number> {
   return reserved.shift()!;
 }
 
-// A create refused for its id: the rest of the pool may be just as stale, so
-// it goes (the ids stay in `issued`, never used again) and the next save
-// reserves fresh ones. (The name is api.ts's ENTRY_ID_REFUSED, written out:
+// A create still refused for its id (its reservation was trimmed for another
+// reason): the rest of the pool may be just as stale, so it goes (the ids stay
+// in `issued`, never used again) and the next save reserves fresh ones. (The name is api.ts's ENTRY_ID_REFUSED, written out:
 // importing it would break the many tests that mock api.ts)
 if (typeof window !== 'undefined') window.addEventListener('chronicles:entry-id-refused', () => { reserved = []; });
 

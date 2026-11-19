@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import { PENDING_2FA, PENDING_2FA_PASSKEY, beginSignIn, cancelSignIns, signInStillWanted } from './authState.js';
+import { PENDING_2FA, beginSignIn, cancelSignIns, forgetPendingPasskey, pendingPasskeyOf, rememberPendingPasskey, signInStillWanted } from './authState.js';
 import bcrypt, { HasherBusyError } from '../services/passwordHasher.js';
 import crypto from 'crypto';
 import { promisify } from 'util';
@@ -12,7 +12,6 @@ import { revokeGoogleAccess } from '../services/googleRevoke.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware, revokeBrowserSession } from '../middleware/auth.js';
 import { issueConfirmToken, takeConfirmToken } from '../services/confirmTokens.js';
 import { trustDevice, useTrustedDevice, forgetTrustToken, forgetAllTrustedDevices, listTrustedDevices, forgetTrustedDevice, TRUST_DAYS } from '../db/trustedDeviceQueries.js';
-import { removeAllPasskeys } from '../db/passkeyQueries.js';
 import { parseId } from '../middleware/parseId.js';
 import { sharedState, resetSharedStateForTests } from '../services/sharedState.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
@@ -21,7 +20,7 @@ import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, s
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { previewField } from '../services/previews.js';
 import { networkKey } from '../services/networkKey.js';
-import { findAccountPasskey, passkeyExists } from '../db/passkeyQueries.js';
+import { findAccountPasskey } from '../db/passkeyQueries.js';
 
 // Sign-in state every instance shares (services/sharedState.ts: Postgres by
 // default): pending 2FA sign-ins (kept by the token's hash), the last TOTP
@@ -44,6 +43,8 @@ const LOGIN_NET_LOCKS = 'netlock_pw';
 const LOGIN_NET_SEEN = 'netseen_pw';
 const TWO_FA_NET_LOCKS = 'netlock_2fa';
 const TWO_FA_NET_SEEN = 'netseen_2fa';
+// Networks the account has fully signed in from: they still get past the brake
+const KNOWN_NETWORKS = 'known_net';
 
 const scrypt = promisify(crypto.scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
@@ -136,33 +137,88 @@ async function countTwoFAFailure(accountId: number, bucket: string): Promise<boo
  * and wrong codes (per account) count per network (`networkKey`: an IPv4 /24,
  * an IPv6 /48), so one IP or one network can only lock itself out — never the
  * owner signing in from elsewhere. Guesses spread over many networks are still
- * bounded: once `max` distinct networks have each locked their bucket within a
- * day, every stranger is refused for that email / account until the day that
- * started with the first of those locks is over. The window is fixed from that
- * first lock (`hit` never extends it) and nothing is counted while the brake
- * holds, so it can't be renewed forever. Known devices and signed-in sessions
- * keep their own buckets and never feel it.
+ * bounded: once `networks` distinct networks have each locked their bucket
+ * within a day, strangers are refused for that email / account until the day
+ * that started with the first of those locks is over. The window is fixed from
+ * that first lock (`hit` never extends it) and nothing is counted while the
+ * brake holds, so it can't be renewed forever.
+ *
+ * The brake never stops the owner: known devices and signed-in sessions keep
+ * their own buckets, and a network the account has fully signed in from in the
+ * last 90 days (`knownNetwork`) is let through to its usual per-network limit —
+ * so a pool of proxies can't lock the owner out of a new browser at home.
  */
 const BRAKE_WINDOW_MS = 24 * 60 * 60 * 1000;
-const LOGIN_BRAKE_NETWORKS = 20;
+
+interface Brake {
+  /** Distinct networks that have locked a bucket today, per scope */
+  locks: string;
+  /** Which networks have been counted today (`<scope>:<net>`) */
+  seen: string;
+  /** How many networks engage it */
+  networks: number;
+  /** For the security log */
+  name: string;
+}
+const LOGIN_BRAKE: Brake = { locks: LOGIN_NET_LOCKS, seen: LOGIN_NET_SEEN, networks: 20, name: 'password' };
 // Lower for codes: a stranger at the code screen already has the password
-const TWO_FA_BRAKE_NETWORKS = 5;
+const TWO_FA_BRAKE: Brake = { locks: TWO_FA_NET_LOCKS, seen: TWO_FA_NET_SEEN, networks: 5, name: '2fa' };
+
+/** The brake is engaged for this scope (an email, or an account id for 2FA). */
+function brakeEngaged(brake: Brake, scope: string): Promise<boolean> {
+  return sharedState.locked(brake.locks, scope, brake.networks);
+}
 
 /** A stranger's network bucket just locked: count the network (once a day) toward the brake. */
-async function noteNetworkLock(seen: string, locks: string, scope: string, net: string): Promise<void> {
-  const first = await sharedState.hit(seen, `${scope}:${net}`, BRAKE_WINDOW_MS);
-  if (first.count === 1) await sharedState.hit(locks, scope, BRAKE_WINDOW_MS);
+async function noteNetworkLock(brake: Brake, scope: string, net: string, accountId: number | null): Promise<void> {
+  const first = await sharedState.hit(brake.seen, `${scope}:${net}`, BRAKE_WINDOW_MS);
+  if (first.count !== 1) return;
+  const { count } = await sharedState.hit(brake.locks, scope, BRAKE_WINDOW_MS);
+  // Logged once, as it engages: a targeted attack shows in the security log
+  if (count === brake.networks) {
+    logSecurityEvent('signin_brake_engaged', { ...(accountId !== null && { accountId }), details: { brake: brake.name, networks: count } });
+  }
+}
+
+// Known networks are kept by an HMAC of account and network under a server
+// key, never the address: there are only ~16 million IPv4 /24s, so a plain
+// hash in a copy of the database could be reversed by trying them all
+const KNOWN_NETWORK_KEY = serverKey('chronicles:known-network');
+const KNOWN_NETWORK_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const knownNetworkToken = (accountId: number, net: string) =>
+  crypto.createHmac('sha256', KNOWN_NETWORK_KEY).update(`${accountId}|${net}`).digest('hex');
+
+/** A sign-in fully succeeded from here: this network gets past the brake for 90 days. Never fails the sign-in. */
+export function rememberSignInNetwork(req: Request, accountId: number): void {
+  const net = networkKey(req.ip);
+  if (net === '?') return;
+  sharedState.putToken(KNOWN_NETWORKS, knownNetworkToken(accountId, net), accountId, KNOWN_NETWORK_TTL_MS)
+    .catch(err => console.error('Remember sign-in network error:', err instanceof Error ? err.message : 'Unknown error'));
+}
+
+/** Whether the account has fully signed in from this network in the last 90 days. */
+async function knownNetwork(accountId: number, net: string): Promise<boolean> {
+  if (net === '?') return false;
+  return (await sharedState.getToken(KNOWN_NETWORKS, knownNetworkToken(accountId, net))) === accountId;
+}
+
+/** After a password change or recovery: only the network it was done from stays known. */
+async function resetKnownNetworks(req: Request, accountId: number): Promise<void> {
+  await sharedState.deleteTokensForAccount(KNOWN_NETWORKS, accountId);
+  rememberSignInNetwork(req, accountId);
 }
 
 /** The account id of a strangers' per-network 2FA bucket (`<id>:n:<net>`), else null. */
-function strangerTwoFAScope(bucket: string): { accountId: string; net: string } | null {
+function strangerTwoFAScope(bucket: string): { accountId: number; net: string } | null {
   const m = /^(\d+):n:(.+)$/.exec(bucket);
-  return m ? { accountId: m[1], net: m[2] } : null;
+  return m ? { accountId: Number(m[1]), net: m[2] } : null;
 }
 
+/** A stranger at the code screen, refused by the account's brake (never one on a known network). */
 async function twoFABrakeHolds(bucket: string): Promise<boolean> {
   const stranger = strangerTwoFAScope(bucket);
-  return !!stranger && sharedState.locked(TWO_FA_NET_LOCKS, stranger.accountId, TWO_FA_BRAKE_NETWORKS);
+  if (!stranger || !(await brakeEngaged(TWO_FA_BRAKE, String(stranger.accountId)))) return false;
+  return !(await knownNetwork(stranger.accountId, stranger.net));
 }
 
 /**
@@ -298,14 +354,18 @@ interface LoginBucket {
 }
 
 async function claimLoginAttempt(bucket: LoginBucket): Promise<number | null> {
-  // Many networks have each locked this email's strangers' buckets today: every stranger waits
-  if (bucket.net && await sharedState.locked(LOGIN_NET_LOCKS, bucket.email, LOGIN_BRAKE_NETWORKS)) return null;
+  // Many networks have each locked this email's strangers' buckets today:
+  // strangers wait, unless the account has signed in from this network before
+  if (bucket.net && await brakeEngaged(LOGIN_BRAKE, bucket.email)) {
+    const account = await prisma.account.findUnique({ where: { email: bucket.email }, select: { id: true } });
+    if (!account || !(await knownNetwork(account.id, bucket.net))) return null;
+  }
   return claimPasswordAttempt(LOGIN_FAILURES, bucket.key, LOGIN_MAX_FAILURES, LOGIN_LOCK_MS);
 }
 
-async function loginFailed(bucket: LoginBucket, n: number): Promise<void> {
+async function loginFailed(bucket: LoginBucket, n: number, accountId: number | null): Promise<void> {
   const locked = await passwordFailed(LOGIN_FAILURES, bucket.key, n, LOGIN_MAX_FAILURES);
-  if (locked && bucket.net) await noteNetworkLock(LOGIN_NET_SEEN, LOGIN_NET_LOCKS, bucket.email, bucket.net);
+  if (locked && bucket.net) await noteNetworkLock(LOGIN_BRAKE, bucket.email, bucket.net, accountId);
 }
 
 // Cap on wrong passwords at the password-confirmed actions (change password or
@@ -364,7 +424,7 @@ async function verifySecondFactor(
       locked = true;
     }
     const stranger = strangerTwoFAScope(bucket);
-    if (locked && stranger) await noteNetworkLock(TWO_FA_NET_SEEN, TWO_FA_NET_LOCKS, stranger.accountId, stranger.net);
+    if (locked && stranger) await noteNetworkLock(TWO_FA_BRAKE, String(stranger.accountId), stranger.net, stranger.accountId);
   }
   return factor;
 }
@@ -745,7 +805,7 @@ export async function trustedForSignIn(req: Request, accountId: number): Promise
  */
 export async function beginPending2FA(accountId: number, passkeyId?: number): Promise<string> {
   const pendingToken = crypto.randomBytes(32).toString('hex');
-  if (passkeyId !== undefined) await sharedState.putToken(PENDING_2FA_PASSKEY, pendingToken, passkeyId, PENDING_2FA_TTL_MS);
+  if (passkeyId !== undefined) await rememberPendingPasskey(pendingToken, passkeyId, PENDING_2FA_TTL_MS);
   await sharedState.putToken(PENDING_2FA, pendingToken, accountId, PENDING_2FA_TTL_MS);
   return pendingToken;
 }
@@ -1008,7 +1068,7 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!account) {
       logSecurityEvent('login_failed_no_account', { ip: req.ip });
       // Strikes too, so a lockout looks the same whether or not the account exists
-      await loginFailed(failureKey, attemptNo);
+      await loginFailed(failureKey, attemptNo, null);
       // Constant-time delay to prevent timing-based email enumeration
       await bcrypt.hash('dummy', BCRYPT_ROUNDS);
       await constantTimeDelay(startTime);
@@ -1021,7 +1081,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const flight = await beginSignIn(account.id);
     if (!(await checkAuthSecret(account.passwordHash, authSecret))) {
       logSecurityEvent('login_failed_bad_password', { accountId: account.id, ip: req.ip });
-      await loginFailed(failureKey, attemptNo);
+      await loginFailed(failureKey, attemptNo, account.id);
       await constantTimeDelay(startTime);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
@@ -1056,6 +1116,7 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
+    rememberSignInNetwork(req, account.id);
     try { await revokeBrowserSession(req); } catch { /* best effort: the new session works either way */ }
     rememberKnownDevice(res, account);
     setSessionCookie(res, token);
@@ -1173,6 +1234,8 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
     // Every trusted browser was trusted under the old password
     await forgetAllTrustedDevices(account.id);
     clearTrustCookie(res);
+    // …and every known network was earned under it
+    await resetKnownNetworks(req, account.id);
 
     // Create a fresh session after revoking all old ones (prevents race condition)
     const token = await createSession(account.id, account.tenantSchemaName, {
@@ -1329,13 +1392,8 @@ router.post('/recover', strictLimiter, async (req, res) => {
 
     const passwordHash = await hashAuthSecret(newAuthSecret);
 
-    // Before the sessions are revoked (routes/authState.ts): a lost device is a
-    // common reason to be here, so its passkeys go first when asked, then every
-    // sign-in under way is cancelled — none (a passkey's included) finishes after
-    if (parsed.data.removePasskeys) {
-      const removed = await removeAllPasskeys(account.id);
-      if (removed) logSecurityEvent('passkeys_removed_all', { accountId: account.id, ip: req.ip, details: { count: removed, at: 'recovery' } });
-    }
+    // Before the sessions are revoked (routes/authState.ts): every sign-in
+    // under way is cancelled, so none finishes after them
     await cancelSignIns(account.id);
 
     // Interactive transaction with row-level locking to prevent concurrent recovery race condition
@@ -1372,7 +1430,13 @@ router.post('/recover', strictLimiter, async (req, res) => {
         data: { revokedAt: new Date(), revokedReason: 'recovery' },
       });
 
-      return { success: true };
+      // A lost device is a common reason to be here: its passkeys go too when
+      // asked — only if this recovery wins, together with it
+      const passkeysRemoved = parsed.data.removePasskeys
+        ? await tx.$executeRaw`DELETE FROM public.passkeys WHERE account_id = ${account.id}`
+        : 0;
+
+      return { passkeysRemoved };
     });
 
     if (!txResult) {
@@ -1382,8 +1446,16 @@ router.post('/recover', strictLimiter, async (req, res) => {
       return;
     }
 
+    // A passkey sign-in that began while the transaction ran: its passkey is
+    // gone now, but its flight may have started after the first cancel
+    await cancelSignIns(account.id);
+    if (txResult.passkeysRemoved) {
+      logSecurityEvent('passkeys_removed_all', { accountId: account.id, ip: req.ip, details: { count: txResult.passkeysRemoved, at: 'recovery' } });
+    }
+
     await forgetAllTrustedDevices(account.id);
     clearTrustCookie(res);
+    await resetKnownNetworks(req, account.id);
     logSecurityEvent('recovery_success', { accountId: account.id, ip: req.ip });
     rememberKnownDevice(res, { id: account.id, email, passwordHash, totpEnabled: account.totpEnabled, totpSecret: account.totpSecret });
 
@@ -1434,7 +1506,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     }
     // A passkey sign-in on a 2FA account: the passkey stood in for the
     // password, the code is still needed, and its wrap is handed back after
-    const pendingPasskeyId = await sharedState.getToken(PENDING_2FA_PASSKEY, pendingToken);
+    const pendingPasskeyId = await pendingPasskeyOf(pendingToken);
 
     // The pending token survives a wrong code so the user can retry (the
     // 10-wrong-codes lock, the 5-minute expiry and authLimiter bound guessing);
@@ -1506,9 +1578,9 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     // all passkeys" after a lost device may have landed meanwhile)
     let passkeyWrap: { credentialId: string; wrappedMK: string; wrapIv: string } | null = null;
     if (pendingPasskeyId !== null) {
-      await sharedState.deleteToken(PENDING_2FA_PASSKEY, pendingToken);
+      await forgetPendingPasskey(pendingToken);
       const passkey = await findAccountPasskey(pendingPasskeyId, account.id);
-      if (!passkey || !(await passkeyExists(passkey.id, account.id))) {
+      if (!passkey) {
         try { await revokeSession(token.slice(0, 12), 'credentials_changed'); } catch { /* already gone */ }
         logSecurityEvent('login_superseded', { accountId: account.id });
         res.status(401).json({ error: 'Verification session expired. Please log in again.' });
@@ -1536,6 +1608,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     }
 
     logSecurityEvent('login_success', { accountId: account.id, ip: req.ip, details: passkeyWrap ? { method: 'passkey' } : undefined });
+    rememberSignInNetwork(req, account.id);
     try { await revokeBrowserSession(req); } catch { /* best effort: the new session works either way */ }
     rememberKnownDevice(res, account);
     setSessionCookie(res, token);

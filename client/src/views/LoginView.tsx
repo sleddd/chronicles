@@ -237,7 +237,7 @@ export function LoginView() {
         return;
       }
       const encryptionData = result.encryption;
-      if (!encryptionData.kekSalt || !encryptionData.encryptedMasterKey || !encryptionData.kekWrapIv) {
+      if (!encryptionData?.kekSalt || !encryptionData.encryptedMasterKey || !encryptionData.kekWrapIv) {
         await abandon();
         leave2FA('This account has no key to open. Use your recovery key.');
         return;

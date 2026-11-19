@@ -543,6 +543,29 @@ describe('Auth Routes', () => {
         (bcrypt.compare as any).mockResolvedValue(true);
         expect((await from(a, '192.0.2.50')).status).toBe(429);
       }, 20000);
+
+      it('the brake never stops the owner on a network they have signed in from', async () => {
+        const a = proxied();
+        (prisma.account.findUnique as any).mockResolvedValue(mockAccount);
+        // The owner signed in from home once
+        (bcrypt.compare as any).mockResolvedValue(true);
+        expect((await from(a, '198.51.100.4')).status).toBe(200);
+        // Then 20 other networks each lock the email
+        const { logSecurityEvent } = await import('../../utils/securityLogger.js');
+        (logSecurityEvent as any).mockClear();
+        (bcrypt.compare as any).mockResolvedValue(false);
+        await Promise.all(Array.from({ length: 20 }, (_, n) =>
+          Promise.all(Array.from({ length: 10 }, () => from(a, `10.0.${n}.1`)))));
+        // Logged once, as the brake engages
+        const engaged = (logSecurityEvent as any).mock.calls.filter((c: unknown[]) => c[0] === 'signin_brake_engaged');
+        expect(engaged).toHaveLength(1);
+        expect(engaged[0][1]).toMatchObject({ accountId: mockAccount.id, details: { brake: 'password', networks: 20 } });
+        (bcrypt.compare as any).mockResolvedValue(true);
+        // A stranger still waits…
+        expect((await from(a, '192.0.2.50')).status).toBe(429);
+        // …the owner, on a new browser at home (another address in the same /24), gets in
+        expect((await from(a, '198.51.100.77')).status).toBe(200);
+      }, 20000);
     });
 
     it('counts parallel wrong passwords before checking them, so a burst cannot pass the cap', async () => {
