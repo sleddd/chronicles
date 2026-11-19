@@ -56,6 +56,17 @@ const FEATURES: Feature[] = [
     alt: 'The journal with everyday entries by month and a Sunday entry open',
   },
   {
+    label: 'Media journal', title: 'Every book, film, show, and album in one place.',
+    body: 'Never lose track of what you’re reading, watching, or listening to. Leave half star ratings, nudge a progress bar forward as you go, and sort everything with your own tags and shelves for active, wanted, finished, paused, or set aside. A find cover & details feature lets you pull in the cover, creator, year, and genre from trusted catalogues. Bookmark the favourites you want others to see and they go onto a public shelf with its own link you can share with others, while your notes and progress stay private.',
+    points: [],
+    shot: ['media', 'media-entry', 'media-public'], size: [1268, 910],
+    alt: [
+      'The media journal shelf of covers with ratings, progress and shelf status under each',
+      'A book’s entry with its cover, author, year and genre filled in, shelf, tags, progress and a half-star rating',
+      'A public shelf as visitors see it, with the shared covers and ratings',
+    ],
+  },
+  {
     label: 'Goals and planning', title: 'From multiyear roadmaps down to your daily plan.',
     body: 'Every task links directly to milestones and goals, giving you seamless movement between list views, Kanban boards, and a draggable Gantt roadmap. Filter instantly by goal or category, drag tasks into your weekly planner to map out your days, and see everything automatically appear on your main calendar next to synced events and bills.',
     points: [],
