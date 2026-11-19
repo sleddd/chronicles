@@ -62,6 +62,19 @@ describe('MediaView', () => {
     expect(screen.getAllByRole('button', { name: /^Open Title/ })).toHaveLength(24);
   });
 
+  it('never remembers the chosen tag, and drops one an older build stored', () => {
+    localStorage.setItem('media-view-v1', JSON.stringify({ layout: 'list', tag: 'secret tag' }));
+    state.decryptedEntries = [entry(1, { tags: ['secret tag'] }), entry(2, {})];
+    renderWithTheme(<MediaView />);
+    // Not applied: both items show
+    expect(screen.getAllByText(/^Title \d+$/)).toHaveLength(2);
+    const stored = JSON.parse(localStorage.getItem('media-view-v1') ?? '{}');
+    expect(stored.layout).toBe('list');
+    expect('tag' in stored).toBe(false);
+    expect(localStorage.getItem('media-view-v1')).not.toContain('secret');
+    localStorage.removeItem('media-view-v1');
+  });
+
   it('with a public shelf on, the meta row names it with a Public shelf link, and Copy shelf link copies it', async () => {
     usePublicShelfStore.getState().setLoaded({ token: 't'.repeat(32), title: 'My Media List', itemCount: 1, createdAt: '', updatedAt: '' });
     renderWithTheme(<MediaView />);

@@ -95,6 +95,7 @@ export function isReservedImportColumn(header: string): boolean {
 const STRUCTURED_FIELDS = new Set([
   'items', 'scheduletimes', 'repeatdays', 'ingredients', 'days', 'steps', 'phases', 'categories',
   'routineitemsdone', 'checklist', 'wins', 'priorities', 'cover', 'meals', 'nutrientsource', 'slots', 'times',
+  'tags', 'linkedrecipeids', 'linkedshoppinglistids', 'payments', 'sessions', 'areas',
 ]);
 
 const IMPORT_DATE = /^\d{4}-\d{2}-\d{2}$/;

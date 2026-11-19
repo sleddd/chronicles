@@ -63,9 +63,38 @@ export function mediaLinkSite(hostname: string): { domain: string; name: string 
   return MEDIA_LINK_SITES.find(s => host === s.domain || host.endsWith(`.${s.domain}`)) ?? null;
 }
 
+/** First path segments that are a site's "leave this site" endpoint — /redirect,
+    /url, /out, /away, /exit, /link… (YouTube's /redirect?q=, Google's /url?q=,
+    Amazon's /gp/redirect.html). A link to one could carry a visitor anywhere,
+    so it is refused on every allowed site */
+const REDIRECT_FIRST = /^(redirect|redir|url|out|outbound|away|exit|link|go|goto|leave|external|click|r)(\.[a-z]+)?$/i;
+/** …and anywhere in the path, the unmistakable ones (/gp/redirect.html) — a
+    film called "Out" or "Link" lower down a path stays a film page */
+const REDIRECT_ANY = /^(redirect|redir|redirector|outbound)(\.[a-z]+)?$/i;
+
+/** True when the address has a redirect endpoint in its path, or any query
+    value (or fragment) that is itself an absolute http(s) address — plain or
+    URL-encoded, once or twice */
+function looksLikeRedirect(u: URL): boolean {
+  const segs = u.pathname.split('/').filter(Boolean).map(seg => { try { return decodeURIComponent(seg); } catch { return seg; } });
+  if (segs.length && REDIRECT_FIRST.test(segs[0])) return true;
+  if (segs.some(seg => REDIRECT_ANY.test(seg))) return true;
+  const absolute = (v: string) => {
+    let x = v;
+    for (let i = 0; i < 3; i++) {
+      if (/^\s*(https?:)?[/\\]{2}/i.test(x) || /(^|[^a-z])https?:[/\\]{2}/i.test(x) || /https?%3a/i.test(x)) return true;
+      try { const next = decodeURIComponent(x); if (next === x) break; x = next; } catch { break; }
+    }
+    return false;
+  };
+  for (const [, value] of u.searchParams) if (absolute(value)) return true;
+  return absolute(u.hash.slice(1));
+}
+
 /** A typed link as an https address on one of the allowed sites, else null —
     "goodreads.com/…" gets https://; http is upgraded; no logins in the
-    address, no other ports, never javascript:, data: or any other site */
+    address, no other ports, never javascript:, data: or any other site, and
+    never a redirect endpoint or an address carried in its query */
 export function allowedMediaLink(raw: string | undefined | null): string | null {
   const t = (raw ?? '').trim();
   if (!t || t.length > 500 || /[\s\x00-\x1f\x7f]/.test(t)) return null;
@@ -75,6 +104,7 @@ export function allowedMediaLink(raw: string | undefined | null): string | null 
   if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
   if (u.username || u.password || u.port) return null;
   if (!mediaLinkSite(u.hostname)) return null;
+  if (looksLikeRedirect(u)) return null;
   u.protocol = 'https:';
   return u.href;
 }

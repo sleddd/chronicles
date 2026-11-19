@@ -48,3 +48,33 @@ describe('public shelf item link', () => {
     expect(publicShelfItemSchema.safeParse({ ...base, link: 'https://www.imdb.com/' + 'a'.repeat(600) }).success).toBe(false);
   });
 });
+
+describe('media links never redirect', () => {
+  it('refuses redirect endpoints and addresses carried in the query', async () => {
+    const { allowedMediaLink } = await import('../validation/mediaLinks.js');
+    for (const bad of [
+      'https://www.youtube.com/redirect?q=https://evil.example',
+      'https://books.google.com/url?q=https%3A%2F%2Fevil.example',
+      'https://www.amazon.com/gp/redirect.html?location=https://evil.example',
+      'https://www.google.com/url?q=x', // not an allowed site anyway
+      'https://www.imdb.com/out?u=x',
+      'https://open.spotify.com/away',
+      'https://www.goodreads.com/book/show/1?next=https://evil.example',
+      'https://www.goodreads.com/book/show/1?next=https%253A%252F%252Fevil.example',
+      'https://www.goodreads.com/book/show/1?next=//evil.example',
+      'https://www.imdb.com/title/tt1#https://evil.example',
+    ]) expect(allowedMediaLink(bad), bad).toBeNull();
+  });
+
+  it('keeps ordinary pages, artist Bandcamp pages and films named like an endpoint', async () => {
+    const { allowedMediaLink } = await import('../validation/mediaLinks.js');
+    for (const ok of [
+      'https://www.goodreads.com/book/show/234225.Dune',
+      'https://artist.bandcamp.com/album/x',
+      'https://letterboxd.com/film/get-out/',
+      'https://letterboxd.com/film/out/',
+      'https://www.youtube.com/watch?v=abc&list=PL1',
+      'https://open.spotify.com/album/1?si=abc',
+    ]) expect(allowedMediaLink(ok), ok).not.toBeNull();
+  });
+});
