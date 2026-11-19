@@ -70,8 +70,7 @@ const FEATURES: Feature[] = [
     facts: [
       { label: 'Track', text: 'Drag a progress bar as you go, and rate in half stars.' },
       { label: 'Add', text: 'Search a title and the cover, creator, year and genre fill in for you.' },
-      // Share and Follow in one row; the Follow sentence is the earlier media copy's wording (the pasted line was cut off)
-      { label: 'Share', text: 'Bookmark favourites onto a public shelf with its own link. Your notes and progress stay private. Paste a public shelf link to follow along quietly with zero pressure.' },
+      { label: 'Share', text: 'Bookmark favorites onto a public shelf with its own link that you can share with others while your notes and progress stay private. You can also follow other user’s public shelves.' },
     ],
     shot: ['media', 'media-entry', 'media-public', 'media-following'], size: [1268, 910],
     alt: [
