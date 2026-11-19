@@ -419,8 +419,14 @@ export const Sidebar = memo(function Sidebar() {
     const shown = hasViews && sections.isOpen(item.key);
     const btn = (
       <NavIconBtn key={item.key} $active={item.active} $tab={open ? item.key === accentKey : undefined} $fullTab={open}
-        // A section's row also opens its views (never closes them — that's the arrow)
-        onClick={() => { if (hasViews) sections.openWith(item.key, item.path); setLastOpened(hasViews ? item.key : null); navigate(item.path); }}
+        // A section's row (its name, icon or anywhere on it) opens its page and drops its views open;
+        // clicked again while they're open, it closes them
+        onClick={() => {
+          if (shown) { toggleSection(item, shown); return; }
+          if (hasViews) sections.openWith(item.key, item.path);
+          setLastOpened(hasViews ? item.key : null);
+          navigate(item.path);
+        }}
         title={open ? undefined : item.label}
         aria-current={item.active && !item.views?.some(v => v.active) ? 'page' : undefined}>
         <IconCell><MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon></IconCell>

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
 import { Sidebar } from '@/components/organisms/Sidebar';
+import { resetNavSections } from '@/hooks/useNavSections';
 
 const mockNavigate = vi.fn();
 const mockSetMobileNavOpen = vi.fn();
@@ -39,6 +40,7 @@ function renderAt(path = '/') {
 
 describe('Sidebar', () => {
   beforeEach(() => {
+    resetNavSections();
     vi.clearAllMocks();
     localStorage.clear();
     // These look at the collapsed rail (icons, names as tooltips); it starts expanded now
@@ -194,8 +196,34 @@ describe('Sidebar', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Show Health views' }));
       expect(within(screen.getByRole('list', { name: 'Health views' })).queryByRole('button', { name: 'Med list' })).toBeNull();
       unmount();
+      resetNavSections(); // a reload starts the app afresh
       renderAt('/health');
       expect(screen.queryByRole('list', { name: 'Health views' })).toBeNull();
+    });
+
+    it('a click on the row or on its name both open the page and drop its views open', () => {
+      const { unmount } = renderAt('/dashboard');
+      fireEvent.click(within(screen.getByRole('button', { name: 'Health' })).getByText('Health'));
+      expect(mockNavigate).toHaveBeenCalledWith('/health');
+      expect(screen.getByRole('list', { name: 'Health views' })).toBeInTheDocument();
+      unmount();
+      mockNavigate.mockClear();
+      renderAt('/dashboard');
+      fireEvent.click(screen.getByRole('button', { name: 'Planning' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/goals/overview');
+      expect(screen.getByRole('list', { name: 'Planning views' })).toBeInTheDocument();
+    });
+
+    it('a second click on an open section’s row closes it, without leaving the page', () => {
+      renderAt('/dashboard');
+      const row = screen.getByRole('button', { name: 'Kitchen' });
+      fireEvent.click(within(row).getByText('fork_spoon'));
+      expect(mockNavigate).toHaveBeenCalledWith('/kitchen');
+      expect(screen.getByRole('list', { name: 'Kitchen views' })).toBeInTheDocument();
+      mockNavigate.mockClear();
+      fireEvent.click(within(row).getByText('Kitchen'));
+      expect(screen.queryByRole('list', { name: 'Kitchen views' })).toBeNull();
+      expect(mockNavigate).not.toHaveBeenCalled();
     });
 
     it('collapsed, no views show (icons only)', () => {

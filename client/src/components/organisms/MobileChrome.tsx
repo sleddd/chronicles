@@ -277,7 +277,12 @@ export function MobileChrome() {
     const btn = (
       <NavRow key={item.key} type="button" $active={item.active && !viewShowing && !hasViews} $quiet={quiet} aria-current={item.active && !viewShowing ? 'page' : undefined}
         // The sheet closes on the way there; the section is open the next time it's shown (until another page)
-        onClick={() => { if (hasViews) sections.openWith(item.key, item.path); go(item.path); }}>
+        // Opens its page with the views dropped open; tapped again while they're open, it closes them
+        onClick={() => {
+          if (shown) { sections.toggle(item.key); return; }
+          if (hasViews) sections.openWith(item.key, item.path);
+          go(item.path);
+        }}>
         <MaterialIcon $size={22} aria-hidden="true">{item.icon}</MaterialIcon>
         <span>{item.label}</span>
       </NavRow>

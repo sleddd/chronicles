@@ -89,8 +89,8 @@ const Inner = styled.div`
 `;
 
 const Head = styled.div`
-  padding: 53px 0 20px;
-  ${NAV_COMPACT} { padding: 20px 0 16px; }
+  padding: 53px 0 36px;
+  ${NAV_COMPACT} { padding: 20px 0 28px; }
   /* With no wallpaper, a hairline closes the title row (the photo marks it otherwise) */
   html:not([data-wallpaper]) & {
     border-bottom: 1px solid var(--border-subtle);
@@ -120,7 +120,8 @@ const MetaRow = styled.div`
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px 24px;
-  margin-top: 18px;
+  margin-top: 56px;
+  ${NAV_COMPACT} { margin-top: 32px; }
 `;
 
 const Meta = styled.div`
@@ -443,7 +444,7 @@ export function MediaView() {
             <FollowedShelves ownToken={publicShelf?.token ?? null} incoming={incoming} onIncomingDone={() => setIncoming(null)} />
           ) : (<>
           {items.length > 0 && (
-            <MediaFilterBar query={query} onQuery={setQuery} filters={{ ...filters, tag, sort }} onFilters={next => setSaved(v => ({ ...v, ...next }))} phone={phone} tags={tags}
+            <MediaFilterBar roomy query={query} onQuery={setQuery} filters={{ ...filters, tag, sort }} onFilters={next => setSaved(v => ({ ...v, ...next }))} phone={phone} tags={tags}
               aside={<MediaViewSwitch value={layout} onChange={l => setSaved(v => ({ ...v, layout: l }))} />} />
           )}
           <PublicShelfControl open={panelOpen} onOpenChange={setPanel} anchor={anchor} pendingItem={pendingItem} onTurnedOn={turnedOn} />

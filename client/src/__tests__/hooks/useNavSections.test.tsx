@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter, useNavigate } from 'react-router-dom';
-import { useNavSections } from '@/hooks/useNavSections';
+import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { useNavSections, resetNavSections } from '@/hooks/useNavSections';
 
 /* A real router, so the address actually changes: a section's row opens it and keeps it open
    through the page change it starts; any other page change closes it */
@@ -23,7 +23,7 @@ const renderAt = (path: string) => render(<MemoryRouter initialEntries={[path]}>
 const open = () => screen.getByTestId('open').textContent;
 
 describe('useNavSections', () => {
-  beforeEach(() => { localStorage.clear(); });
+  beforeEach(() => { localStorage.clear(); resetNavSections(); });
 
   it('starts closed and forgets the old remembered sections', () => {
     localStorage.setItem('nav-sections-open-v1', '{"health":true}');
@@ -49,6 +49,24 @@ describe('useNavSections', () => {
   it('going to a page closes a section opened by its arrow', () => {
     renderAt('/journal');
     fireEvent.click(screen.getByText('Health arrow'));
+    expect(open()).toBe('health');
+    fireEvent.click(screen.getByText('Symptoms view'));
+    expect(open()).toBe('none');
+  });
+
+  it('stays open when the new page mounts its own nav (every page has its own rail)', () => {
+    // A different component per page, as the templates do: the open section must survive the remount
+    const PageA = () => <div><Nav /></div>;
+    const PageB = () => <section><Nav /></section>;
+    render(
+      <MemoryRouter initialEntries={['/journal']}>
+        <Routes>
+          <Route path="/journal" element={<PageA />} />
+          <Route path="/health/*" element={<PageB />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByText('Health row'));
     expect(open()).toBe('health');
     fireEvent.click(screen.getByText('Symptoms view'));
     expect(open()).toBe('none');

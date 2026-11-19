@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
 import { MobileChrome } from '@/components/organisms/MobileChrome';
+import { resetNavSections } from '@/hooks/useNavSections';
 
 const mockNavigate = vi.fn();
 const mockSetOpen = vi.fn();
@@ -38,6 +39,7 @@ function renderAt(path = '/journal') {
 // The bar and menu are display:none outside the phone breakpoint (jsdom), so queries include hidden elements
 describe('MobileChrome drop-down menu', () => {
   beforeEach(() => {
+    resetNavSections();
     localStorage.clear(); vi.clearAllMocks(); open = true; });
 
   it('shows every destination as an icon over its name, marking the current one', () => {

@@ -197,8 +197,8 @@ const ViewBtn = styled.button<{ $active: boolean }>`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 `;
 
-const TypeRow = styled(Chips)<{ $phone: boolean }>`
-  margin-top: 24px;
+const TypeRow = styled(Chips)<{ $phone: boolean; $roomy?: boolean }>`
+  margin-top: ${({ $roomy }) => ($roomy ? 32 : 24)}px;
   ${NAV_COMPACT} { margin-top: 34px; }
   ${({ $phone }) => ($phone ? 'flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -16px; padding-right: 16px; &::-webkit-scrollbar { display: none; }' : '')}
   ${Chip} { height: 36px; padding: 0 18px; flex: none; }
@@ -237,6 +237,8 @@ export function MediaViewSwitch({ value, onChange }: { value: MediaLayout; onCha
 }
 
 interface MediaFilterBarProps {
+  /** A little more room above the type chips (the owner's page) */
+  roomy?: boolean;
   query: string;
   onQuery: (q: string) => void;
   filters: MediaFilters;
@@ -248,7 +250,7 @@ interface MediaFilterBarProps {
   tags?: string[];
 }
 
-export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, searchPlaceholder = 'Search titles, creators, genres', aside, tags }: MediaFilterBarProps) {
+export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, searchPlaceholder = 'Search titles, creators, genres', aside, tags, roomy }: MediaFilterBarProps) {
   const set = (patch: Partial<MediaFilters>) => onFilters({ ...filters, ...patch });
   const chevron = <Icon name="chevron-down" size={14} strokeWidth={2} />;
   return (
@@ -294,7 +296,7 @@ export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, sear
           {aside && !phone && <Aside $phone={false}>{aside}</Aside>}
         </Picks>
       </MediaToolBox>
-      <TypeRow $phone={phone} role="group" aria-label="Type">
+      <TypeRow $phone={phone} $roomy={roomy} role="group" aria-label="Type">
         <Chip type="button" $active={!filters.type} aria-pressed={!filters.type} onClick={() => set({ type: '' })}>All</Chip>
         {TYPE_CHIPS.map(t => (
           <Chip key={t.value} type="button" $active={filters.type === t.value} aria-pressed={filters.type === t.value} onClick={() => set({ type: t.value })}>{t.label}</Chip>
