@@ -23,6 +23,8 @@ export const WALLPAPERS: Wallpaper[] = [
   { id: 'own-beach' },
   { id: 'own-renaissance-floral' },
   { id: 'own-yosemite' },
+  { id: 'own-sunset' },
+  { id: 'own-waterfalls' },
   { id: 'nikolett-harmat-VSTP_kmMpPQ', by: 'Nikolett Harmat', url: 'https://unsplash.com/photos/VSTP_kmMpPQ' },
   { id: 'camille-brodard-kOAU9SG0VX8', by: 'Camille Brodard', url: 'https://unsplash.com/photos/kOAU9SG0VX8' },
   { id: 'curated-lifestyle-kfRDQsx6Oa4', by: 'Curated Lifestyle', url: 'https://unsplash.com/photos/kfRDQsx6Oa4' },
