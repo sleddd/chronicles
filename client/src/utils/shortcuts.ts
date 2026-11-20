@@ -7,6 +7,22 @@ export interface Shortcut { path: string; label: string; icon: string; group: st
 
 interface NavLike { label: string; icon: string; path: string; views?: { label: string; path: string }[] }
 
+/** Views under a section's view (its own sub tabs), offered after that view */
+const SUB_VIEWS: Record<string, { label: string; path: string }[]> = {
+  '/health/exercise': [
+    { label: 'Schedule', path: '/health/exercise/schedule' },
+    { label: 'Training', path: '/health/exercise/training' },
+    { label: 'History', path: '/health/exercise/history' },
+  ],
+  '/goals/tasks': [{ label: 'Todos', path: '/goals/todos' }],
+};
+
+/** Pages with no nav item of their own */
+const EXTRA_PAGES: Shortcut[] = [
+  { path: '/inspiration/research', label: 'Research', icon: 'lightbulb', group: 'Inspiration' },
+  { path: '/inspiration/quotes', label: 'Quotes', icon: 'lightbulb', group: 'Inspiration' },
+];
+
 /** Most chips a card keeps */
 export const MAX_SHORTCUTS = 24;
 
@@ -17,11 +33,17 @@ export function shortcutCatalog(nav: NavLike[], topics: { id: number; name: stri
   const add = (s: Shortcut) => { if (!seen.has(s.path)) { seen.add(s.path); out.push(s); } };
   add({ path: '/dashboard', label: 'Dashboard', icon: 'home', group: 'Pages' });
   for (const item of nav) {
-    add({ path: item.path, label: item.label, icon: item.icon, group: 'Pages' });
+    // A section with views is offered view by view, in its own group (its page is one of them)
+    if (!item.views?.length) add({ path: item.path, label: item.label, icon: item.icon, group: 'Pages' });
     for (const v of item.views ?? []) {
-      add({ path: v.path, label: v.label === item.label ? v.label : `${item.label} · ${v.label}`, icon: item.icon, group: item.label });
+      const viewLabel = v.label === item.label ? v.label : `${item.label} · ${v.label}`;
+      add({ path: v.path, label: viewLabel, icon: item.icon, group: item.label });
+      for (const sub of SUB_VIEWS[v.path] ?? []) {
+        add({ path: sub.path, label: `${viewLabel} · ${sub.label}`, icon: item.icon, group: item.label });
+      }
     }
   }
+  EXTRA_PAGES.forEach(add);
   for (const t of [...topics].sort((a, b) => a.name.localeCompare(b.name))) {
     add({ path: `/topics/${t.id}`, label: t.name, icon: 'sell', group: 'Topics' });
   }
