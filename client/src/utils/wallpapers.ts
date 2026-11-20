@@ -67,6 +67,7 @@ export const WALLPAPERS: Wallpaper[] = [
   { id: 'mark-olsen-OyiSf0nVz7U', by: 'Mark Olsen', url: 'https://unsplash.com/photos/OyiSf0nVz7U' },
   { id: 'mohamed-nohassi-nJB_Fgxx-pI', by: 'Mohamed Nohassi', url: 'https://unsplash.com/photos/nJB_Fgxx-pI' },
   { id: 'neil-thomas-dGyshquBzOc', by: 'Neil Thomas', url: 'https://unsplash.com/photos/dGyshquBzOc' },
+  { id: 'own-my-lakehouse' },
   { id: 'pawel-czerwinski-CENK_Rzij0c', by: 'Pawel Czerwinski', url: 'https://unsplash.com/photos/CENK_Rzij0c' },
   { id: 'philipp-torres-LNYdZutqsi0', by: 'Philipp Torres', url: 'https://unsplash.com/photos/LNYdZutqsi0' },
   { id: 'pj-gal-szabo--LgSPyExO9I', by: 'PJ Gal-Szabo', url: 'https://unsplash.com/photos/-LgSPyExO9I' },
