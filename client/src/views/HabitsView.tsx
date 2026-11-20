@@ -23,7 +23,7 @@ import { EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, groupByCa
 import { addDays, weekLabel, weekOf } from '../utils/planner.js';
 import {
   HABIT_DEFAULTS, HABIT_ICON, HABIT_TOPIC, countSeries, dayCells, dayTarget, describeTarget, habitCsvRows, habitTotals,
-  isDueOn, nextCount, streakWeeks, weekProgress, type DayCell, type Habit,
+  isDueOn, nextCount, streakWeeks, weekProgress, type CountOn, type DayCell, type DayRange, type Habit,
 } from '../utils/habits.js';
 
 /* Health → Habits: small cards, three across, under their categories — each
@@ -171,9 +171,10 @@ const Paused = styled.div`
   button:hover { color: var(--text-primary); text-decoration: underline; }
 `;
 
-/* The chosen habit's history */
+/* One history panel per habit */
 const Panel = styled.section`
-  margin-top: 40px;
+  margin-top: 24px;
+  scroll-margin-top: 24px;
   padding: 28px 32px 30px;
   background: var(--bg-panel);
   border-radius: 14px;
@@ -201,13 +202,13 @@ const LinkBtn = styled.button`
   &:hover { text-decoration: underline; }
 `;
 
-const Bar = styled.div`
+const Bar = styled.div<{ $top?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px 16px;
-  margin: 22px 0 6px;
+  margin: ${p => p.$top ? '40px 0 0' : '22px 0 6px'};
 `;
 
 const Sum = styled.div`
@@ -265,7 +266,12 @@ export function HabitsView() {
 
   const key = (h: Habit) => String(h.id);
   const [chosenKey, setChosenKey] = useState<string | null>(null);
-  const chosen = habits.find(h => key(h) === chosenKey) ?? habits[0];
+  const chosen = habits.find(h => key(h) === chosenKey);
+  // Picking a card takes you to its chart
+  const pick = (h: Habit) => {
+    setChosenKey(key(h));
+    document.getElementById(`habit-history-${key(h)}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const [period, setPeriod] = useState<MedPeriod>('3-months');
   const range = useMemo(() => medPeriodRange(period), [period]);
 
@@ -294,7 +300,7 @@ export function HabitsView() {
     return (
       <Card key={key(h)} $on={on} aria-label={h.name}>
         <CardHead>
-          <NameBtn type="button" aria-pressed={on} title="Show its history" onClick={() => setChosenKey(key(h))}>
+          <NameBtn type="button" aria-pressed={on} title="Go to its chart" onClick={() => pick(h)}>
             <b>{h.name}</b>
             <small>{describeTarget(h, describeDays)}</small>
           </NameBtn>
@@ -328,10 +334,8 @@ export function HabitsView() {
     );
   };
 
-  const totals = chosen ? habitTotals(chosen, range, today, count) : null;
-  const series = chosen ? countSeries(chosen, range, count) : null;
-  const cells = chosen ? dayCells(chosen, range, today, count) : [];
-  const chosenStreak = chosen ? streakWeeks(chosen, today, count) : 0;
+  // Every habit gets its chart, in the same order as the cards
+  const ordered = grouped ? groups.flatMap(g => g.items) : habits;
 
   return (
     <PlanningShell title="Health" tabs={<HealthTabBar />} actions={<>
@@ -359,54 +363,74 @@ export function HabitsView() {
         </Paused>
       )}
 
-      {chosen && totals && series && (
-        <Panel aria-label={`${chosen.name} over time`}>
-          <PanelHead>
-            <div>
-              <h2>{chosen.name}</h2>
-              <p>{describeTarget(chosen, describeDays)}{chosen.category ? ` · ${chosen.category}` : ''}</p>
-            </div>
-            <LinkBtn type="button" onClick={() => openInJournal(chosen.id)}>Edit habit</LinkBtn>
-          </PanelHead>
-          <Bar>
-            <Chips role="group" aria-label="Period">
-              {PERIODS.map(p => (
-                <Chip key={p.value} type="button" $active={period === p.value} aria-pressed={period === p.value}
-                  onClick={() => setPeriod(p.value)}>{p.label}</Chip>
-              ))}
-            </Chips>
-            <CsvLink onClick={downloadCsv} disabled={habits.length === 0} />
-          </Bar>
-          <Sum>
-            <Figures>
-              <span><strong>{totals.times}</strong>{totals.times === 1 ? 'time' : 'times'}</span>
-              <span><strong>{totals.days}</strong>{totals.days === 1 ? 'day' : 'days'}</span>
-              <span><strong>{totals.weeksMet}</strong>of {plural(totals.weeks, 'week', 'weeks')} met</span>
-              <span><strong>{chosenStreak}</strong>week streak</span>
-            </Figures>
-            <Dates>{rangeLabel(range)}</Dates>
-          </Sum>
-          <CountBars labels={series.labels} values={series.values} target={series.target}
-            ariaLabel={`${chosen.name}: times done each ${series.unit}, ${rangeLabel(range)}`}
-            unitLabel={v => plural(v, 'time', 'times')} />
-          <Note>
-            Each bar is a {series.unit}.{series.target !== undefined ? ` The dashed line is the target of ${series.target} a ${series.unit}.` : ''}
-          </Note>
-          {cells.length <= 190 && (<>
-            <SquaresHead>
-              <span>Each square is a day</span>
-              <SquareLegend>
-                <span><SquareSwatch $c={CELL_COLOR.full} />Done</span>
-                {dayTarget(chosen) > 1 && <span><SquareSwatch $c={CELL_COLOR.part} />Part done</span>}
-                {chosen.period === 'day' && <span><SquareSwatch $c={CELL_COLOR.missed} />Missed</span>}
-                <span><SquareSwatch $c={CELL_COLOR.off} />{chosen.period === 'day' ? 'Not due' : 'Not done'}</span>
-              </SquareLegend>
-            </SquaresHead>
-            <DaySquares colors={cells.map(c => CELL_COLOR[c])}
-              label={`${chosen.name}: ${plural(totals.days, 'day', 'days')} done, ${rangeLabel(range)}`} />
-          </>)}
-        </Panel>
-      )}
+      {ordered.length > 0 && (<>
+        <Bar $top>
+          <Chips role="group" aria-label="Period">
+            {PERIODS.map(p => (
+              <Chip key={p.value} type="button" $active={period === p.value} aria-pressed={period === p.value}
+                onClick={() => setPeriod(p.value)}>{p.label}</Chip>
+            ))}
+          </Chips>
+          <CsvLink onClick={downloadCsv} disabled={habits.length === 0} />
+        </Bar>
+        {ordered.map(h => (
+          <HabitHistory key={key(h)} habit={h} range={range} today={today} count={count}
+            onEdit={() => openInJournal(h.id)} />
+        ))}
+      </>)}
     </PlanningShell>
+  );
+}
+
+/* A habit's history over the chosen period: figures, bars and a square per day */
+function HabitHistory({ habit, range, today, count, onEdit }: {
+  habit: Habit;
+  range: DayRange;
+  today: string;
+  count: CountOn;
+  onEdit: () => void;
+}) {
+  const totals = useMemo(() => habitTotals(habit, range, today, count), [habit, range, today, count]);
+  const series = useMemo(() => countSeries(habit, range, count), [habit, range, count]);
+  const cells = useMemo(() => dayCells(habit, range, today, count), [habit, range, today, count]);
+  const streak = streakWeeks(habit, today, count);
+  return (
+    <Panel id={`habit-history-${habit.id}`} aria-label={`${habit.name} over time`}>
+      <PanelHead>
+        <div>
+          <h2>{habit.name}</h2>
+          <p>{describeTarget(habit, describeDays)}{habit.category ? ` · ${habit.category}` : ''}</p>
+        </div>
+        <LinkBtn type="button" onClick={onEdit}>Edit habit</LinkBtn>
+      </PanelHead>
+      <Sum>
+        <Figures>
+          <span><strong>{totals.times}</strong>{totals.times === 1 ? 'time' : 'times'}</span>
+          <span><strong>{totals.days}</strong>{totals.days === 1 ? 'day' : 'days'}</span>
+          <span><strong>{totals.weeksMet}</strong>of {plural(totals.weeks, 'week', 'weeks')} met</span>
+          <span><strong>{streak}</strong>week streak</span>
+        </Figures>
+        <Dates>{rangeLabel(range)}</Dates>
+      </Sum>
+      <CountBars labels={series.labels} values={series.values} target={series.target}
+        ariaLabel={`${habit.name}: times done each ${series.unit}, ${rangeLabel(range)}`}
+        unitLabel={v => plural(v, 'time', 'times')} />
+      <Note>
+        Each bar is a {series.unit}.{series.target !== undefined ? ` The dashed line is the target of ${series.target} a ${series.unit}.` : ''}
+      </Note>
+      {cells.length <= 190 && (<>
+        <SquaresHead>
+          <span>Each square is a day</span>
+          <SquareLegend>
+            <span><SquareSwatch $c={CELL_COLOR.full} />Done</span>
+            {dayTarget(habit) > 1 && <span><SquareSwatch $c={CELL_COLOR.part} />Part done</span>}
+            {habit.period === 'day' && <span><SquareSwatch $c={CELL_COLOR.missed} />Missed</span>}
+            <span><SquareSwatch $c={CELL_COLOR.off} />{habit.period === 'day' ? 'Not due' : 'Not done'}</span>
+          </SquareLegend>
+        </SquaresHead>
+        <DaySquares colors={cells.map(c => CELL_COLOR[c])}
+          label={`${habit.name}: ${plural(totals.days, 'day', 'days')} done, ${rangeLabel(range)}`} />
+      </>)}
+    </Panel>
   );
 }
