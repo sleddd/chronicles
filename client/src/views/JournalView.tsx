@@ -162,14 +162,9 @@ const NewEntryPill = styled.button`
   font-size: 13px;
   font-weight: 500;
   color: var(--color-accent);
-  /* On a wallpaper: a white outline and white text, no fill or blur */
+  /* On a wallpaper: the smoked glass pill with white text, like other pages' buttons on the photo
+     (with no fill it had no outline either, so it didn't read as a button) */
   ${glassPill}
-  html[data-wallpaper] &&, html[data-wallpaper] .page-action &&,
-  html[data-wallpaper] .page-action &&:hover {
-    background: transparent !important;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
   /* …but not in the phone / tablet top bar, which sits on the page colour, not the
      photo: the accent outline and text there, in either theme */
   html[data-wallpaper] #mobile-bar-actions &, #mobile-bar-actions & {
@@ -1161,7 +1156,7 @@ export function JournalView() {
             {/* Only while AI insights is on and agreed to in this browser (Settings → In-App AI) */}
             {aiInsightsOn && (
               <AiInsights onWrite={writeFromPrompt}
-                trigger={open => <NewEntryPill type="button" onClick={open} style={{ padding: '0 12px' }}>AI insights</NewEntryPill>} />
+                trigger={open => <NewEntryPill type="button" onClick={open} style={{ padding: '0 12px', marginLeft: 10 }}>AI insights</NewEntryPill>} />
             )}
           </TopBarAction>
         )}

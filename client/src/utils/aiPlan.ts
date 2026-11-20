@@ -2,7 +2,7 @@ import { approxTokens, cleanLine, firstJsonObject, type SharedLine } from './aiJ
 import { clampHours, hhmm } from './planner.js';
 
 /*
- * AI task planning (pure): what is sent when "AI plan my unscheduled tasks" is
+ * AI task planning (pure): what is sent when the Planner's "AI plan" is
  * pressed, and how the answer is read.
  *
  * Sent: the unscheduled tasks with their status and notes, the tasks already

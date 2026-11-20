@@ -48,7 +48,7 @@ const FEATURES: Record<AiFeature, { key: 'planEnabled' | 'insightsEnabled'; titl
   aiPlan: {
     key: 'planEnabled',
     title: 'AI task planning',
-    on: 'On. The Planner has an “AI plan my unscheduled tasks” button. It asks before it sends anything.',
+    on: 'On. The Planner has an “AI plan” button for your unscheduled tasks. It asks before it sends anything.',
     off: 'Off. Turning it on lets the AI read your tasks, goals, visions and events when you press its button.',
   },
   aiInsights: {

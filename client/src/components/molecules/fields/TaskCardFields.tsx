@@ -288,6 +288,24 @@ export function StatusDropdown<T extends string>({ value, options, onChange }: {
   );
 }
 
+/** A picker for the title box's foot with no dot: its name and the choice ⌄ (a meal's Breakfast / Lunch…) */
+export function FootPick<T extends string>({ name, value, options, placeholder, onChange }: {
+  name: string; value: T | ''; options: { value: T; label: string }[]; placeholder: string; onChange: (v: T) => void;
+}) {
+  const chosen = options.find(x => x.value === value);
+  return (
+    <StatusPick>
+      <span className="name">{name}</span>
+      <span className="value">{chosen?.label ?? placeholder}</span>
+      <Icon name="chevron-down" size={14} strokeWidth={2} />
+      <select aria-label={name} value={chosen ? value : ''} onChange={e => onChange(e.target.value as T)}>
+        {!chosen && <option value="">{placeholder}</option>}
+        {options.map(x => <option key={x.value} value={x.value}>{x.label}</option>)}
+      </select>
+    </StatusPick>
+  );
+}
+
 export function TaskStatusPick({ values, onChange }: { values: TaskFieldValues; onChange: (v: TaskFieldValues) => void }) {
   const status = taskStatusOf(values as unknown as Record<string, unknown>);
   const s = STATUSES.find(x => x.value === status) ?? STATUSES[0];

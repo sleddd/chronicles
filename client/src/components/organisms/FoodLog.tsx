@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type MouseEvent } from 'react';
 import styled from 'styled-components';
+import { glassPill } from '../../styles/wallpaper.js';
 import { Select } from '../atoms/Select.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -285,6 +286,12 @@ const DayNav = styled.div`
   padding: 0 10px;
   border: 1px solid var(--border-card);
   border-radius: 999px;
+  /* On a background photo: smoked glass, its day and arrows white (the Menu's week pill does the same) */
+  ${glassPill}
+  html[data-wallpaper] & {
+    --text-primary: #fff;
+    --text-muted: rgba(255, 255, 255, 0.82);
+  }
 `;
 
 const NavIcon = styled.button`

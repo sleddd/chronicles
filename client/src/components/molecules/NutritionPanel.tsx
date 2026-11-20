@@ -213,8 +213,8 @@ export function NutritionPanel({ values, onChange, isAi = () => false, action, e
   return (
     <>
       {/* The title on the left, the Estimate pill at the row's top right (the entry card would
-          otherwise stack the head's pieces in its label column) */}
-      <SectionHead style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', gridColumn: '1 / -1', gridRow: 'auto' }}>
+          otherwise stack the head's pieces in its label column), with a little room under it before the panel */}
+      <SectionHead style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', gridColumn: '1 / -1', gridRow: 'auto', marginBottom: 14 }}>
         <SectionTitle>Nutrition</SectionTitle>
         {action}
       </SectionHead>

@@ -1,10 +1,10 @@
 import { ChangeFields, type ChangeFieldValues } from '../molecules/fields/ChangeFields.js';
-import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject, type ReactNode, type CSSProperties } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { onPhoto, photoTokens, solidUnderPhoto } from '../../styles/wallpaper.js';
 import { cardLabel } from '../../styles/cardLabel.js';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
-import { SectionLabel, RowBox, LabelledRow, RowLabel } from '../molecules/fields/formKit.js';
+import { SectionLabel, RowBox, LabelledRow, RowLabel, DateTimeBox } from '../molecules/fields/formKit.js';
 import { TitleField } from '../molecules/fields/TitleInput.js';
 import { NAME_FIELD_BY_TYPE, NAME_MAX, NAME_PLACEHOLDER_BY_TYPE, contentWithName, nameFromContent } from '../../utils/nameFields.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
@@ -23,7 +23,7 @@ import { MilestoneFields, MilestoneStatusPick, type MilestoneFieldValues } from 
 import { HabitFields, type HabitFieldValues } from '../molecules/fields/HabitFields.js';
 import { HABIT_DEFAULTS } from '../../utils/habits.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
-import { FoodFields, type FoodFieldValues } from '../molecules/fields/FoodFields.js';
+import { FoodFields, MealPick, type FoodFieldValues } from '../molecules/fields/FoodFields.js';
 import { MedicationFields, type MedicationFieldValues } from '../molecules/fields/MedicationFields.js';
 import { MenuPlanFields, type MenuPlanFieldValues } from '../molecules/fields/MenuPlanFields.js';
 import { SymptomFields, type SymptomFieldValues } from '../molecules/fields/SymptomFields.js';
@@ -368,7 +368,18 @@ const TaskHead = styled.div`
   position: relative;
   z-index: 5; /* the topic menu drops over the rows */
   /* The journal: full screen / close 30px in from the pane's edge */
-  &[data-journal] { padding-right: 30px; }
+  /* …and a little more room under the row, above its rule */
+  &[data-journal] { padding-right: 30px; padding-bottom: 14px; margin-bottom: 12px; }
+  /* The journal: a rule under the row, between the content's edges (--head-x: 26px on a task card, the card's 36px elsewhere) */
+  &[data-journal]::after {
+    content: '';
+    position: absolute;
+    left: var(--head-x, 26px);
+    right: var(--head-x, 26px);
+    bottom: 0;
+    border-bottom: 1px solid var(--border-card);
+    pointer-events: none;
+  }
   /* Full width: room between the topic picker / close row and the entry under it */
   @media (min-width: 1025px) { &[data-full] { margin-bottom: 24px; } }
   /* The Quick entry: the topic picker a little further down from the card's top */
@@ -533,6 +544,10 @@ const cardRows = css`
     padding-top: 9px;
   }
   & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > :first-child:not(:only-child) > :first-child { ${cardLabel} }
+  /* A row whose field is a date | time box (When): the label sits on the date's own line of text, not above it.
+     The box starts 12px down the row (the fields' own top margin) and is 52px tall, so its text is centred 38px
+     down — the 12px label, on its ~16px line, goes 30px down to meet it */
+  & ${CustomFieldsBody} section:has(${DateTimeBox}):not(${CustomFieldsBody} section section) > :first-child:not(:only-child) { padding-top: 30px; }
   & ${SectionLabel}, & ${RowLabel} { ${cardLabel} }
   /* A group that runs the card's width (the meal's Nutrition panel, a media item's cover + details) */
   & ${CustomFieldsBody} section[data-card-wide]:not(${CustomFieldsBody} section section) > * { grid-column: 1 / -1; grid-row: auto; }
@@ -572,6 +587,8 @@ const cardRows = css`
     }
     & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > *, & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > :first-child:not(:only-child) { grid-column: 1; grid-row: auto; }
     & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > :first-child:not(:only-child) { flex-direction: row; flex-wrap: wrap; padding-top: 0; }
+    /* Stacked, the When label sits over its box like the others */
+    & ${CustomFieldsBody} section:has(${DateTimeBox}):not(${CustomFieldsBody} section section) > :first-child:not(:only-child) { padding-top: 0; }
     & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) > * + * { margin-top: 10px; }
     & .card-row { padding: 16px 20px; }
     & ${CustomFieldsBody} > * > :not(section):not(${RowBox}):not(${TitleField}):not(.card-row):not(.card-contents) { margin-inline: 20px; }
@@ -871,9 +888,24 @@ const JournalHead = styled.div<{ $expanded?: boolean; $roomy?: boolean }>`
   gap: 16px;
   /* 28px on the right puts the close ×'s glyph on the content's 36px edge (its button is 34px round an 18px icon).
      Full width needs no extra room: the corner reminders bell isn't shown over a full-width editor */
-  padding: 28px 28px ${({ $roomy }) => ($roomy ? '28px' : '4px')} 36px;
+  padding: 28px 28px 14px 36px;
+  margin-bottom: ${({ $roomy }) => ($roomy ? '24px' : '12px')};
+  /* A rule under the row, between the content's edges (the row's own padding differs left and right) */
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    left: 36px;
+    right: 36px;
+    bottom: 0;
+    border-bottom: 1px solid var(--border-card);
+  }
   ${NAV_COMPACT} { padding-right: 24px; }
-  @media (max-width: 640px) { padding: 20px 12px ${({ $roomy }) => ($roomy ? '18px' : '4px')} 20px; }
+  @media (max-width: 640px) {
+    padding: 20px 12px 12px 20px;
+    margin-bottom: ${({ $roomy }) => ($roomy ? '18px' : '8px')};
+    &::after { left: 20px; right: 20px; }
+  }
 `;
 
 const HeadIcons = styled.div`
@@ -1699,13 +1731,18 @@ export function EntryForm({
             <EditorArea $quick={quick}>{editorEl}</EditorArea>
             {/* A goal's Status sits here, like a task's; other topics just have the tools */}
             {/* With a Status (goal, milestone) it leads and the tools go right; without one the tools start at the left, together */}
-            <TitleFoot style={customType === 'goal' || customType === 'milestone' ? undefined : { justifyContent: 'flex-start' }}>
+            <TitleFoot style={customType === 'goal' || customType === 'milestone' || customType === 'food' ? undefined : { justifyContent: 'flex-start' }}>
               {customType === 'milestone' && (
                 <MilestoneStatusPick values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues}
                   onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />
               )}
               {customType === 'goal' && (
                 <GoalStatusPick values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues}
+                  onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />
+              )}
+              {/* A meal's Breakfast / Lunch… leads the same way, the tools on the right */}
+              {customType === 'food' && (
+                <MealPick values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues}
                   onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />
               )}
               {taskTools}
@@ -1750,7 +1787,7 @@ export function EntryForm({
                 onRemoveCategory={categoriesLoaded ? l => { void saveCategories(removeGoalCategory(goalCategories, l)); } : undefined} />}
               {customType === 'milestone' && <MilestoneFieldsWithTasks values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} attachableTasks={attachableTasks} entryId={entryId}
                 timer={exerciseTimer} timerRunning={timer.running} />}
-              {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
+              {customType === 'food' && <FoodFields mealInFoot values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
               {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}
               {customType === 'routine' && <RoutineFields values={{ ...ROUTINE_DEFAULTS, duration: '', items: [], days: [], isActive: true, notes: '', ...customFields } as RoutineFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} categoryOptions={trainingCategoryOptions}
                 timer={exerciseTimer} timerRunning={timer.running} />}
@@ -2123,7 +2160,7 @@ export function EntryForm({
           </EntryCard>
           ) : framed ? (
           <EntryCard $flat data-framed="">
-            <TaskHead data-journal="" data-full={expanded ? '' : undefined} style={{ paddingLeft: CARD_X }}>
+            <TaskHead data-journal="" data-full={expanded ? '' : undefined} style={{ paddingLeft: CARD_X, '--head-x': CARD_X } as CSSProperties}>
               <JournalPrompt>
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
                   label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />

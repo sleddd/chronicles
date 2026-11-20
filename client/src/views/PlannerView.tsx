@@ -259,9 +259,10 @@ export function PlannerView() {
       <TodayBtn type="button" onClick={() => setAnchor(today)}>Today</TodayBtn>
       {/* Only while AI task planning is on and agreed to in this browser (Settings → In-App AI) */}
       {aiPlanOn && (
-        <PillButton type="button" $variant="neutral" onClick={() => setAiPlanOpen(true)}>
-          {phone ? 'AI plan' : 'AI plan my unscheduled tasks'}
-        </PillButton>
+        // On a background photo: the smoked glass of the page's other buttons, so it reads as one
+        <span className="page-action" style={{ display: 'contents' }}>
+          <PillButton type="button" $variant="neutral" title="Plan my unscheduled tasks with AI" onClick={() => setAiPlanOpen(true)}>AI plan</PillButton>
+        </span>
       )}
       {taskTopicId && (
         <TopBarAction>

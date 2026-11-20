@@ -251,7 +251,10 @@ export function MedHistoryView() {
           <Controls>
             <FilterTabs options={MED_PERIODS} active={period} onChange={setPeriod} label="Period" />
             <SearchBox><SearchInput value={query} onChange={setQuery} placeholder="Search medications" /></SearchBox>
-            <PillButton type="button" $variant="neutral" onClick={() => downloadCsv(rows, range)} disabled={!rows.length}>Download CSV</PillButton>
+            {/* On a background photo: the smoked glass of the page's other buttons */}
+            <span className="page-action" style={{ display: 'contents' }}>
+              <PillButton type="button" $variant="neutral" onClick={() => downloadCsv(rows, range)} disabled={!rows.length}>Download CSV</PillButton>
+            </span>
           </Controls>
           {period === 'custom' && (
             <Range>
