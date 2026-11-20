@@ -46,6 +46,7 @@ import { occurrencesBetween, repeatRuleOf } from '../utils/recurrence.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
+import { Shortcuts } from '../components/organisms/Shortcuts.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi, settings as settingsApi, doses as dosesApi } from '../services/api.js';
 import { dashboardStats, type StatsPeriod, type StatsDose } from '../utils/dashboardStats.js';
@@ -94,9 +95,10 @@ import { topicEntries } from '../utils/topicIndex.js';
 
 /* ── Config ── */
 
-type SectionKey = 'glance' | 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time' | 'habits' | 'focus';
+type SectionKey = 'glance' | 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time' | 'habits' | 'focus' | 'shortcuts';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
+  { key: 'shortcuts', label: 'Shortcuts' },
   { key: 'wellness', label: 'Wellness check-in' },
   { key: 'clocks', label: 'World clocks & weather' },
   { key: 'quote', label: 'Quote of the day' },
@@ -131,6 +133,8 @@ interface DashboardConfig {
   tasksShow?: string;
   /** The Shopping list card's list: 'latest' (newest open list) or an entry id */
   shoppingShow?: string;
+  /** The Shortcuts card's chips: the pages' paths, in order */
+  shortcuts?: string[];
   /** Coming up leaves bills out (events and meetings only) */
   comingUpHideBills?: boolean;
   /** Day at a glance was set up: the Priorities and Coming up cards (now inside it) were switched off once */
@@ -152,7 +156,7 @@ type Layout = { head?: SectionKey[]; top?: SectionKey[]; left: SectionKey[]; rig
 /** The cards that can be dragged (in Your Agenda), and where they start */
 const DEFAULT_LAYOUT: Required<Layout> = {
   head: ['clocks'],
-  top: ['wellness', 'quote', 'menu', 'focus'],
+  top: ['shortcuts', 'wellness', 'quote', 'menu', 'focus'],
   left: ['priorities', 'tasks', 'nextUp', 'wins', 'habits', 'comingUp', 'quickLog', 'exercise', 'symptom'],
   right: ['recent', 'shopping', 'mantra', 'time', 'meds'],
   side: [],
@@ -2978,6 +2982,8 @@ export function DashboardView() {
     // Coming up lives in Day at a glance, not as a card
     comingUp: { label: 'coming up', on: false, node: null },
     habits: { label: 'habits', on: shown('habits'), node: <HabitsToday /> },
+    // Chips to the pages used most; across both columns to start, or in either column
+    shortcuts: { label: 'shortcuts', on: shown('shortcuts'), node: <Shortcuts links={config.shortcuts} onChange={next => void saveConfig({ ...config, shortcuts: next }).catch(() => {})} /> },
     // Exercise schedule and Medications are no longer on the home dashboard (Day at a glance has Meds / Move; the Health dashboard keeps both lists)
     exercise: { label: 'exercise schedule', on: false, node: null },
     quickLog: {
