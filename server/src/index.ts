@@ -210,7 +210,7 @@ initBetaTable().catch(err => console.error('Failed to init beta table:', err ins
 checkStoredCredentials().then(({ recoverySealed, outdated, sessionsRevoked }) => {
   if (recoverySealed) console.log(`Credential check: ${recoverySealed} recovery check(s) sealed`);
   if (outdated.length) {
-    console.warn(`Credential check: ${outdated.length} account(s) still on a pre-upgrade password hash (ids ${outdated.join(', ')}) can only sign in by recovery; ${sessionsRevoked} session(s) signed out`);
+    console.warn(`Credential check: ${outdated.length} account(s) still on a pre-upgrade password hash can only sign in by recovery (npm run migrate:phase2-status shows how many per account); ${sessionsRevoked} session(s) signed out`);
   }
 }).catch(err => console.error('Credential check failed:', err instanceof Error ? err.message : err));
 sealStoredTotpSecrets().then(({ sealed, readable, unopenable }) => {

@@ -1,5 +1,6 @@
 import styled from 'styled-components';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { MoodFace, type MoodFaceName } from '../atoms/MoodFace.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { glassCard } from '../../styles/wallpaper.js';
 
@@ -16,7 +17,7 @@ export const SLEEP_GOAL = 8;
 const WATER_MAX = 20;
 const SLEEP_MAX = 12;
 
-const MOODS = [
+const MOODS: { icon: MoodFaceName; label: string }[] = [
   { icon: 'sentiment_very_dissatisfied', label: 'Very low' },
   { icon: 'sentiment_dissatisfied', label: 'Low' },
   { icon: 'sentiment_neutral', label: 'Okay' },
@@ -231,10 +232,8 @@ const FaceBtn = styled.button<{ $active: boolean; $color: string }>`
   &:hover { color: ${({ $color }) => $color}; }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
   @media (max-width: 480px) { width: 50px; height: 50px; & > span { font-size: 60px; } }
-  /* Thin faces: lightest weight at the large optical size. font-weight too:
-     Safari (iPad / iOS) draws the variable icon font at the CSS weight and
-     can ignore the wght in font-variation-settings, so the faces came out bold */
-  & > span { font-weight: 100; font-variation-settings: 'FILL' 0, 'wght' 100, 'GRAD' 0, 'opsz' 48; }
+  /* The faces are drawn outlines (atoms/MoodFace), never font glyphs: the variable icon
+     font came out thick on iPhone / iPad whatever weight was asked for */
 `;
 
 const Chips = styled.div`
@@ -658,7 +657,7 @@ export function WellnessPanel({
           <FaceBtn key={m.icon} type="button" $active={mood === i + 1} $color={accent}
             aria-label={`Mood: ${m.label}`} aria-pressed={mood === i + 1}
             onClick={() => onMood(mood === i + 1 ? 0 : i + 1)}>
-            <MaterialIcon>{m.icon}</MaterialIcon>
+            <MoodFace name={m.icon} />
           </FaceBtn>
         ))}
       </Faces>

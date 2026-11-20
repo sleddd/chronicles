@@ -42,36 +42,22 @@ describe('logSecurityEvent', () => {
     expect(date.toISOString()).toBe(parsed.timestamp);
   });
 
-  it('includes accountId when provided', () => {
-    logSecurityEvent('login_success', { accountId: 42 });
-
-    const output = (console.log as any).mock.calls[0][0];
-    const parsed = JSON.parse(output);
-    expect(parsed.accountId).toBe(42);
-  });
-
-  it('excludes accountId when not provided', () => {
-    logSecurityEvent('some_event');
+  it('never writes the account id or the IP address, whatever it is given', () => {
+    logSecurityEvent('login_success', { accountId: 42, ip: '192.168.1.1' });
 
     const output = (console.log as any).mock.calls[0][0];
     const parsed = JSON.parse(output);
     expect(parsed).not.toHaveProperty('accountId');
-  });
-
-  it('includes ip when provided', () => {
-    logSecurityEvent('brute_force', { ip: '192.168.1.1' });
-
-    const output = (console.log as any).mock.calls[0][0];
-    const parsed = JSON.parse(output);
-    expect(parsed.ip).toBe('192.168.1.1');
-  });
-
-  it('excludes ip when not provided', () => {
-    logSecurityEvent('some_event');
-
-    const output = (console.log as any).mock.calls[0][0];
-    const parsed = JSON.parse(output);
     expect(parsed).not.toHaveProperty('ip');
+    expect(output).not.toContain('192.168.1.1');
+    expect(parsed.event).toBe('login_success');
+  });
+
+  it('drops a detail that names an account, and keeps the rest', () => {
+    logSecurityEvent('passkey_verify_failed', { accountId: 7, details: { bucket: '7', accountId: 7, ip: '10.0.0.1', why: 'not verified' } });
+
+    const parsed = JSON.parse((console.log as any).mock.calls[0][0]);
+    expect(parsed.details).toEqual({ why: 'not verified' });
   });
 
   it('includes details when provided', () => {
@@ -92,7 +78,7 @@ describe('logSecurityEvent', () => {
     expect(parsed).not.toHaveProperty('details');
   });
 
-  it('includes all fields when all options are provided', () => {
+  it('writes the level, event, time and details when all options are provided — never who or where from', () => {
     logSecurityEvent('full_event', {
       accountId: 7,
       ip: '10.0.0.1',
@@ -104,8 +90,7 @@ describe('logSecurityEvent', () => {
     expect(parsed.level).toBe('security');
     expect(parsed.event).toBe('full_event');
     expect(parsed.timestamp).toBeDefined();
-    expect(parsed.accountId).toBe(7);
-    expect(parsed.ip).toBe('10.0.0.1');
+    expect(Object.keys(parsed).sort()).toEqual(['details', 'event', 'level', 'timestamp']);
     expect(parsed.details).toEqual({ key: 'value' });
   });
 });

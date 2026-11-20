@@ -106,12 +106,12 @@ async function checkAssertion(
     // Why it failed, for the log only (the answer to the browser stays the
     // same): the verifier's own words name the cause — an origin or RP ID that
     // isn't this server's, a spent challenge, a signature that doesn't check
-    logSecurityEvent('passkey_verify_failed', { accountId: passkey.accountId, details: { bucket: bucket.split(':')[0], why: (err instanceof Error ? err.message : 'unknown').slice(0, 240) } });
+    logSecurityEvent('passkey_verify_failed', { accountId: passkey.accountId, details: { why: (err instanceof Error ? err.message : 'unknown').slice(0, 240) } });
     return null;
   });
   if (!verification) return null;
   if (!verification.verified || !verification.authenticationInfo.userVerified) {
-    logSecurityEvent('passkey_verify_failed', { accountId: passkey.accountId, details: { bucket: bucket.split(':')[0], why: verification.verified ? 'user not verified' : 'not verified' } });
+    logSecurityEvent('passkey_verify_failed', { accountId: passkey.accountId, details: { why: verification.verified ? 'user not verified' : 'not verified' } });
     return null;
   }
   // A challenge made for one account's confirmation only confirms that account

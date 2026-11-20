@@ -235,6 +235,8 @@ const Hello = styled.h1`
   line-height: 1.25;
   color: var(--text-primary);
   text-wrap: balance;
+  /* Tablets (the compact nav's range): a step smaller than the desktop's 58px */
+  ${NAV_COMPACT} { font-size: 42px; }
   @media (max-width: 640px) { font-size: 41px; }
   @media (max-width: 400px) { font-size: 37px; }
   ${onPhoto}
