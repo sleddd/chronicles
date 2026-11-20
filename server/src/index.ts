@@ -186,8 +186,8 @@ try {
 initSharesTable()
   .then(() => purgeDeadShares())
   .then(count => { if (count > 0) console.log(`Deleted ${count} revoked/expired share(s)`); })
-  .catch(err => console.error('Failed to init shares table:', err));
-initPasskeysTable().catch(err => console.error('Failed to init passkeys table:', err));
+  .catch(err => console.error('Failed to init shares table:', err instanceof Error ? err.message : err));
+initPasskeysTable().catch(err => console.error('Failed to init passkeys table:', err instanceof Error ? err.message : err));
 // A passkey is tied for good to the domain it was made on: say so when that would be localhost in production
 {
   const { rpID } = webauthnConfig();
@@ -197,16 +197,16 @@ initPasskeysTable().catch(err => console.error('Failed to init passkeys table:',
 }
 initTrustedDevicesTable()
   .then(() => purgeExpiredTrustedDevices())
-  .catch(err => console.error('Failed to init trusted browsers table:', err));
+  .catch(err => console.error('Failed to init trusted browsers table:', err instanceof Error ? err.message : err));
 // The stored-key Remember me is gone: its grants (device secrets, sealed) go too
 mainDb.$executeRawUnsafe('DROP TABLE IF EXISTS public.remember_grants')
   .catch(err => console.error('Failed to drop remember_grants:', err instanceof Error ? err.message : err));
-initPublicShelvesTable().catch(err => console.error('Failed to init public shelves table:', err));
-initAnalyticsTable().catch(err => console.error('Failed to init analytics table:', err));
-initAiChatTable().catch(err => console.error('Failed to init AI chat table:', err));
-initConsentTable().catch(err => console.error('Failed to init consent table:', err));
-initAppNoticeTable().catch(err => console.error('Failed to init notice table:', err));
-initBetaTable().catch(err => console.error('Failed to init beta table:', err));
+initPublicShelvesTable().catch(err => console.error('Failed to init public shelves table:', err instanceof Error ? err.message : err));
+initAnalyticsTable().catch(err => console.error('Failed to init analytics table:', err instanceof Error ? err.message : err));
+initAiChatTable().catch(err => console.error('Failed to init AI chat table:', err instanceof Error ? err.message : err));
+initConsentTable().catch(err => console.error('Failed to init consent table:', err instanceof Error ? err.message : err));
+initAppNoticeTable().catch(err => console.error('Failed to init notice table:', err instanceof Error ? err.message : err));
+initBetaTable().catch(err => console.error('Failed to init beta table:', err instanceof Error ? err.message : err));
 checkStoredCredentials().then(({ recoverySealed, outdated, sessionsRevoked }) => {
   if (recoverySealed) console.log(`Credential check: ${recoverySealed} recovery check(s) sealed`);
   if (outdated.length) {

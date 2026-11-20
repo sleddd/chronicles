@@ -19,7 +19,7 @@ router.get('/', readGate('settings', 3), async (req, res) => {
     const settings = await getAllSettings(req.auth!.tenantSchemaName);
     res.json(settings);
   } catch (err) {
-    console.error('Get settings error:', err);
+    console.error('Get settings error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
@@ -49,7 +49,7 @@ router.put('/', async (req, res) => {
     }
     res.json(result);
   } catch (err) {
-    console.error('Update setting error:', err);
+    console.error('Update setting error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to update setting' });
   }
 });

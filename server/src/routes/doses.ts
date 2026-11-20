@@ -58,7 +58,7 @@ router.get('/', readGate('doses-day', 4), async (req, res) => {
     await ensureDoseRecordsTable(req.auth!.tenantSchemaName);
     res.json({ records: (await getDoseRecords(req.auth!.tenantSchemaName, date)).map(serialize) });
   } catch (err) {
-    console.error('Get dose records error:', err);
+    console.error('Get dose records error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch doses' });
   }
 });
@@ -69,7 +69,7 @@ router.get('/all', readGate('doses', 2), async (req, res) => {
     await ensureDoseRecordsTable(req.auth!.tenantSchemaName);
     res.json({ records: (await getDoseRecords(req.auth!.tenantSchemaName)).map(serialize) });
   } catch (err) {
-    console.error('Get all dose records error:', err);
+    console.error('Get all dose records error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch doses' });
   }
 });
@@ -106,7 +106,7 @@ router.put('/reseal', async (req, res) => {
     }
     res.json({ resealed });
   } catch (err) {
-    console.error('Reseal dose records error:', err);
+    console.error('Reseal dose records error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to re-save doses' });
   }
 });
@@ -145,7 +145,7 @@ router.put('/:id', async (req, res) => {
     }
     res.json({ record: serialize(row) });
   } catch (err) {
-    console.error('Save dose record error:', err);
+    console.error('Save dose record error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to save dose' });
   }
 });
@@ -161,7 +161,7 @@ router.delete('/:id', async (req, res) => {
     await ensureDoseRecordsTable(req.auth!.tenantSchemaName);
     res.json({ deleted: await deleteDoseRecord(req.auth!.tenantSchemaName, id.data) });
   } catch (err) {
-    console.error('Delete dose record error:', err);
+    console.error('Delete dose record error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to delete dose' });
   }
 });

@@ -65,11 +65,14 @@ export async function isApproved(email: string, inviteCode: string | undefined):
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-/** Is this email approved but not signed up yet (someone else mustn't take it)? */
-export async function hasPendingInvite(email: string): Promise<boolean> {
+/** Is this email on the beta list (applied, waiting or approved) with no account
+ *  yet? Someone else mustn't move their account onto it: with no email
+ *  verification that would block the applicant's sign-up, and deleting that
+ *  account would take the applicant's row with it. */
+export async function onBetaList(email: string): Promise<boolean> {
   const rows = await prisma.$queryRaw<{ ok: number }[]>`
     SELECT 1 AS ok FROM public.beta_signups b
-    WHERE b.email = ${email} AND b.approved_at IS NOT NULL
+    WHERE b.email = ${email}
       AND NOT EXISTS (SELECT 1 FROM public.accounts a WHERE a.email = b.email)
   `;
   return rows.length > 0;

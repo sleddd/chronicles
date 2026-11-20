@@ -347,12 +347,16 @@ export const auth = {
   changeEmail: (data: { newEmail: string; currentAuthSecret: string; newAuthSecret: string; code?: string }) =>
     request<{ success: boolean; email: string }>('/auth/change-email', { method: 'POST', body: data }),
 
+  /** The salt for the recovery proof — all an email alone gets */
   getRecoveryParams: (email: string) =>
-    request<{
-      recoveryWrappedMK: string | null;
-      recoveryWrapIv: string | null;
-      recoveryKeySalt: string | null;
-    }>('/auth/recovery-params', { params: { email } }),
+    request<{ recoveryKeySalt: string | null }>('/auth/recovery-params', { params: { email } }),
+
+  /** The recovery key's wrap of the master key, for a proof of that key (and a
+   *  2FA code when the account has 2FA). `recoveryToken` then stands in for the
+   *  code at `recover`, since a code works once */
+  recoveryWrap: (data: { email: string; recoveryProof: string; code?: string }) =>
+    request<{ recoveryWrappedMK: string; recoveryWrapIv: string; recoveryToken: string; totpEnabled: boolean }>(
+      '/auth/recovery-wrap', { method: 'POST', body: data }),
 
   recover: (data: {
     email: string;
@@ -366,8 +370,10 @@ export const auth = {
     newRecoveryWrapIv: string;
     newRecoveryKeyHash: string;
     newRecoveryKeySalt: string;
-    /** Authenticator or backup code — required when the account has 2FA on */
+    /** Authenticator or backup code — required when the account has 2FA on… */
     code?: string;
+    /** …unless the token from `recoveryWrap`, which already checked one, is still good */
+    recoveryToken?: string;
     /** Also remove every passkey (a device was lost) */
     removePasskeys?: boolean;
   }) => request<{

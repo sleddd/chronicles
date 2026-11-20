@@ -63,6 +63,14 @@ describe('Public shelf routes', () => {
       expect(getPublicShelfPage).toHaveBeenCalledWith(TOKEN, 2, { type: null, shelf: null, minRating: null, q: null, sort: null }, 24);
     });
 
+    it('takes control characters out of the search (a NUL made Postgres refuse the query: a 500 anyone could cause)', async () => {
+      vi.mocked(getPublicShelfPage).mockResolvedValue({ title: 'My shelf', items: [], page: 1, pages: 1, total: 0, updatedAt: new Date() });
+      await request(app).get(`/api/public-shelf/${TOKEN}?q=du%00ne%0A`);
+      expect(vi.mocked(getPublicShelfPage).mock.calls[0][2].q).toBe('du ne');
+      await request(app).get(`/api/public-shelf/${TOKEN}?q=%00`);
+      expect(vi.mocked(getPublicShelfPage).mock.calls[1][2].q).toBeNull();
+    });
+
     it('passes whitelisted filters, a rounded rating and a trimmed search; junk is dropped', async () => {
       vi.mocked(getPublicShelfPage).mockResolvedValue({ title: 'x', items: [], page: 1, pages: 1, total: 0, updatedAt: new Date() });
       await request(app).get(`/api/public-shelf/${TOKEN}?type=book&shelf=done&rating=4.3&q=%20joni%20&sort=rating`);

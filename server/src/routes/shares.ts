@@ -52,7 +52,7 @@ router.get('/:token', shareLimiter, async (req, res) => {
     }
     res.json(publicShare(share));
   } catch (err) {
-    console.error('Get share error:', err);
+    console.error('Get share error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch share' });
   }
 });
@@ -95,7 +95,7 @@ router.post('/', authMiddleware, apiLimiter, async (req, res) => {
 
     res.status(201).json(ownedShare(share));
   } catch (err) {
-    console.error('Create share error:', err);
+    console.error('Create share error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to create share' });
   }
 });
@@ -115,7 +115,7 @@ router.delete('/:token', authMiddleware, apiLimiter, async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error('Revoke share error:', err);
+    console.error('Revoke share error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to revoke share' });
   }
 });
@@ -126,7 +126,7 @@ router.get('/', authMiddleware, apiLimiter, async (req, res) => {
     const shares = await getSharesByAccount(req.auth!.accountId);
     res.json(shares.map(ownedShare));
   } catch (err) {
-    console.error('List shares error:', err);
+    console.error('List shares error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to list shares' });
   }
 });

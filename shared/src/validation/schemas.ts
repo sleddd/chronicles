@@ -91,8 +91,19 @@ export const recoverSchema = z.object({
   // Authenticator or backup code — required when the account has 2FA on, so a
   // recovery key alone can't bypass two-factor
   code: z.string().min(1).max(64).optional(),
+  // …or the token /recovery-wrap answered with once it had checked that code
+  // (a code works once, and it was spent there)
+  recoveryToken: confirmTokenSchema.optional(),
   // Also remove every passkey (a lost device is a common reason to recover)
   removePasskeys: z.boolean().optional(),
+});
+
+// The recovery key's wrap of the master key is handed out only for a checked
+// proof of that key (and, with 2FA on, a code) — never for an email alone
+export const recoveryWrapSchema = z.object({
+  email: emailSchema,
+  recoveryProof: recoveryProofSchema,
+  code: z.string().min(1).max(64).optional(),
 });
 
 // 2FA / TOTP validation
@@ -278,10 +289,13 @@ export const PUBLIC_SHELF_LINK_MAX = 500;
 /** http(s), a host with a dot, no spaces or control characters */
 const PUBLIC_SHELF_LINK = /^https?:\/\/[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:\d+)?([/?#][^\s\x00-\x1f\x7f]*)?$/i;
 
+/** Shown text holds no control characters (Postgres refuses a NUL in JSONB) */
+const SHELF_TEXT = /^[^\u0000-\u001f\u007f]*$/;
+
 export const publicShelfItemSchema = z.object({
-  title: z.string().trim().min(1, 'An item needs a title').max(200),
-  creator: z.string().trim().max(200).default(''),
-  year: z.string().trim().max(12).default(''),
+  title: z.string().trim().min(1, 'An item needs a title').max(200).regex(SHELF_TEXT, 'Invalid title'),
+  creator: z.string().trim().max(200).regex(SHELF_TEXT, 'Invalid creator').default(''),
+  year: z.string().trim().max(12).regex(SHELF_TEXT, 'Invalid year').default(''),
   type: z.enum(['book', 'movie', 'tv', 'music']),
   rating: z.number().min(0).max(5).refine(r => Number.isInteger(r * 2), 'Rating must be in halves'),
   /** The Shelf status (Reading / Want to / Finished / Paused / Didn’t finish), not the feature */
@@ -293,7 +307,7 @@ export const publicShelfItemSchema = z.object({
 });
 
 export const putPublicShelfSchema = z.object({
-  title: z.string().trim().min(1, 'A title is required').max(PUBLIC_SHELF_TITLE_MAX),
+  title: z.string().trim().min(1, 'A title is required').max(PUBLIC_SHELF_TITLE_MAX).regex(SHELF_TEXT, 'Invalid title'),
   items: z.array(publicShelfItemSchema).max(PUBLIC_SHELF_ITEMS_MAX, 'Too many items'),
 });
 

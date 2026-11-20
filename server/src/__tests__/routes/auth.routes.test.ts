@@ -72,7 +72,7 @@ vi.mock('../../utils/securityLogger.js', () => ({
 
 vi.mock('../../db/betaQueries.js', () => ({
   isApproved: vi.fn().mockResolvedValue(false),
-  hasPendingInvite: vi.fn().mockResolvedValue(false),
+  onBetaList: vi.fn().mockResolvedValue(false),
   spendInvite: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -90,7 +90,7 @@ import * as authMw from '../../middleware/auth.js';
 import bcryptMock from '../../services/passwordHasher.js';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
-import { isApproved, hasPendingInvite, spendInvite } from '../../db/betaQueries.js';
+import { isApproved, onBetaList, spendInvite } from '../../db/betaQueries.js';
 import { createSession, revokeSession, revokeBrowserSession } from '../../middleware/auth.js';
 import bcrypt from '../../services/passwordHasher.js';
 import { createHash } from 'crypto';
@@ -728,13 +728,13 @@ describe('Auth Routes', () => {
         .mockResolvedValueOnce({ id: 1, passwordHash: AUTH_HASH })
         .mockResolvedValueOnce(null);
       (bcrypt.compare as any).mockResolvedValueOnce(true);
-      (hasPendingInvite as any).mockResolvedValueOnce(true);
+      (onBetaList as any).mockResolvedValueOnce(true);
 
       const res = await request(app).post('/api/auth/change-email').send(body);
 
       expect(res.status).toBe(409);
       expect(res.body.error).toBe('Email already in use');
-      expect(hasPendingInvite).toHaveBeenCalledWith('new@example.com');
+      expect(onBetaList).toHaveBeenCalledWith('new@example.com');
       expect(prisma.account.update).not.toHaveBeenCalled();
     });
 
@@ -1076,10 +1076,9 @@ describe('Auth Routes', () => {
   // GET /api/auth/recovery-params
   // =========================================================================
   describe('GET /api/auth/recovery-params', () => {
-    it('returns recovery params for existing user', async () => {
+    it('returns the salt for an existing user, and never the wrapped key', async () => {
       (prisma.account.findUnique as any).mockResolvedValue({
         recoveryWrappedMK: Buffer.from('wrappedmk'),
-        recoveryWrapIv: Buffer.from('wrapiv'),
         recoveryKeySalt: 'd'.repeat(32),
         encryptionEnabled: true,
       });
@@ -1089,13 +1088,13 @@ describe('Auth Routes', () => {
         .query({ email: 'test@example.com' });
 
       expect(res.status).toBe(200);
-      expect(res.body.recoveryWrappedMK).toBe(Buffer.from('wrappedmk').toString('base64'));
-      expect(res.body.recoveryWrapIv).toBe(Buffer.from('wrapiv').toString('base64'));
       // The client computes the recovery proof itself, so it needs the salt
-      expect(res.body.recoveryKeySalt).toBe('d'.repeat(32));
+      expect(res.body).toEqual({ recoveryKeySalt: 'd'.repeat(32) });
+      // An email alone must never be answered with the wrap (it comes from /recovery-wrap, for a proof)
+      expect(JSON.stringify(res.body)).not.toMatch(/recoveryWrappedMK|recoveryWrapIv/);
     });
 
-    it('returns decoy params for a non-existing user, shaped like real ones', async () => {
+    it('returns a decoy salt for a non-existing user, shaped like a real one', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(null);
 
       const res = await request(app)
@@ -1103,9 +1102,7 @@ describe('Auth Routes', () => {
         .query({ email: 'nobody@example.com' });
 
       expect(res.status).toBe(200);
-      // Same sizes as a real AES-GCM-wrapped 32-byte key and its 12-byte IV
-      expect(Buffer.from(res.body.recoveryWrappedMK, 'base64')).toHaveLength(48);
-      expect(Buffer.from(res.body.recoveryWrapIv, 'base64')).toHaveLength(12);
+      expect(Object.keys(res.body)).toEqual(['recoveryKeySalt']);
       expect(res.body.recoveryKeySalt).toMatch(/^[a-f0-9]{32}$/);
     });
 
@@ -1125,13 +1122,13 @@ describe('Auth Routes', () => {
       const a = await request(app).get('/api/auth/recovery-params').query({ email: 'a@example.com' });
       const b = await request(app).get('/api/auth/recovery-params').query({ email: 'b@example.com' });
 
-      expect(a.body.recoveryWrappedMK).not.toBe(b.body.recoveryWrappedMK);
+      expect(a.body.recoveryKeySalt).not.toBe(b.body.recoveryKeySalt);
     });
 
-    it('returns fake params when encryption is not enabled', async () => {
+    it('returns a decoy when encryption is not enabled', async () => {
       (prisma.account.findUnique as any).mockResolvedValue({
         recoveryWrappedMK: null,
-        recoveryWrapIv: null,
+        recoveryKeySalt: null,
         encryptionEnabled: false,
       });
 
@@ -1140,7 +1137,7 @@ describe('Auth Routes', () => {
         .query({ email: 'test@example.com' });
 
       expect(res.status).toBe(200);
-      expect(res.body.recoveryWrappedMK).toBeDefined();
+      expect(res.body.recoveryKeySalt).toMatch(/^[a-f0-9]{32}$/);
     });
 
     it('returns 400 when email is missing', async () => {

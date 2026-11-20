@@ -59,7 +59,7 @@ router.get('/:kind', listGate, async (req, res) => {
     }
     res.json({ records: page.records.map(serialize), more: page.more });
   } catch (err) {
-    console.error('Get finance records error:', err);
+    console.error('Get finance records error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch records' });
   }
 });
@@ -96,7 +96,7 @@ router.put('/:kind/:id', async (req, res) => {
     }
     res.json({ record: serialize(row) });
   } catch (err) {
-    console.error('Save finance record error:', err);
+    console.error('Save finance record error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to save record' });
   }
 });
@@ -122,7 +122,7 @@ router.delete('/:kind/:id', async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    console.error('Delete finance record error:', err);
+    console.error('Delete finance record error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to delete record' });
   }
 });

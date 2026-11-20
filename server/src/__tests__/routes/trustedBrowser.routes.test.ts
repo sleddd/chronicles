@@ -17,7 +17,7 @@ vi.mock('../../db/prisma.js', () => ({
 }));
 vi.mock('../../db/schemaManager.js', () => ({ registerTenant: vi.fn(), deleteAccountById: vi.fn() }));
 vi.mock('../../services/googleRevoke.js', () => ({ revokeGoogleAccess: vi.fn() }));
-vi.mock('../../db/betaQueries.js', () => ({ isApproved: async () => false, hasPendingInvite: async () => false, spendInvite: async () => undefined }));
+vi.mock('../../db/betaQueries.js', () => ({ isApproved: async () => false, onBetaList: async () => false, spendInvite: async () => undefined }));
 vi.mock('../../db/passkeyQueries.js', () => ({ removeAllPasskeys: async () => 0 }));
 
 // The trusted_devices table, in memory — hashes only, like the real one

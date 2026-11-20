@@ -100,9 +100,14 @@ describe('No unauthenticated encryption-param lookup', () => {
       'utf8'
     );
     expect(authContent).not.toContain("router.get('/salt'");
-    // The one public lookup returns only recovery-wrapped material (needs the 256-bit recovery key)
+    // The one public lookup answers with the proof's salt only: no wrap of the master key, of either kind
     const section = authContent.split("router.get('/recovery-params'")[1]?.split('router.')[0] || '';
     expect(section).not.toContain('encryptedMasterKey');
+    expect(section).not.toMatch(/recoveryWrappedMK:\s*Buffer|recoveryWrapIv/);
+    // The recovery wrap is sent only after the proof of the recovery key has matched
+    const wrap = authContent.split("router.post('/recovery-wrap'")[1]?.split("router.post('/recover'")[0] || '';
+    expect(wrap.indexOf('recoveryProofMatches')).toBeGreaterThan(-1);
+    expect(wrap.indexOf('recoveryProofMatches')).toBeLessThan(wrap.indexOf('recoveryWrappedMK: Buffer'));
   });
 });
 

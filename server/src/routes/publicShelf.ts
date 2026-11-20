@@ -36,7 +36,8 @@ function readQuery(q: Record<string, unknown>): PublicShelfQuery {
     type: (TYPES as readonly string[]).includes(type) ? type as PublicShelfQuery['type'] : null,
     shelf: (SHELVES as readonly string[]).includes(shelf) ? shelf as PublicShelfQuery['shelf'] : null,
     minRating: Number.isFinite(rating) && rating > 0 && rating <= 5 ? Math.round(rating * 2) / 2 : null,
-    q: str(q.q).trim().slice(0, Q_MAX) || null,
+    // No control characters: Postgres refuses a NUL in text, which was a 500 a stranger could cause
+    q: str(q.q).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, Q_MAX) || null,
     sort: (PUBLIC_SHELF_SORTS as readonly string[]).includes(sort) ? sort as PublicShelfQuery['sort'] : null,
   };
 }
@@ -102,7 +103,7 @@ router.get('/:token', publicShelfLimiter, async (req, res) => {
     }
     res.json({ title: result.title, items: result.items, page: result.page, pages: result.pages, total: result.total, updatedAt: result.updatedAt });
   } catch (err) {
-    console.error('Get public shelf error:', err);
+    console.error('Get public shelf error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch the public shelf' });
   }
 });
@@ -113,7 +114,7 @@ router.get('/', authMiddleware, apiLimiter, async (req, res) => {
     const shelf = await getPublicShelfByAccount(req.auth!.accountId);
     res.json({ publicShelf: shelf ? owned(shelf) : null });
   } catch (err) {
-    console.error('Get own public shelf error:', err);
+    console.error('Get own public shelf error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch your public shelf' });
   }
 });
@@ -134,7 +135,7 @@ router.put('/', authMiddleware, apiLimiter, writeGate, jsonBody({ limit: PUT_BOD
     const shelf = await upsertPublicShelf(req.auth!.accountId, { title, items });
     res.json(owned(shelf));
   } catch (err) {
-    console.error('Put public shelf error:', err);
+    console.error('Put public shelf error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to save your public shelf' });
   }
 });
@@ -149,7 +150,7 @@ router.post('/reset', authMiddleware, apiLimiter, writeGate, async (req, res) =>
     }
     res.json(owned(shelf));
   } catch (err) {
-    console.error('Reset public shelf error:', err);
+    console.error('Reset public shelf error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to reset the link' });
   }
 });
@@ -160,7 +161,7 @@ router.delete('/', authMiddleware, apiLimiter, writeGate, async (req, res) => {
     await deletePublicShelf(req.auth!.accountId);
     res.json({ success: true });
   } catch (err) {
-    console.error('Delete public shelf error:', err);
+    console.error('Delete public shelf error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to turn off your public shelf' });
   }
 });

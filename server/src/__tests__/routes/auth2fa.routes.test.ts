@@ -39,7 +39,7 @@ vi.mock('../../services/googleRevoke.js', () => ({ revokeGoogleAccess: vi.fn().m
 
 vi.mock('../../db/betaQueries.js', () => ({
   isApproved: vi.fn().mockResolvedValue(false),
-  hasPendingInvite: vi.fn().mockResolvedValue(false),
+  onBetaList: vi.fn().mockResolvedValue(false),
   spendInvite: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -510,6 +510,79 @@ describe('2FA hardening', () => {
       (prisma.$transaction as any).mockImplementation(async (fn: any) => fn(tx));
       return tx;
     }
+
+    // The recovery key's wrap of the master key: only for a proof of the key, and a code
+    describe('POST /api/auth/recovery-wrap', () => {
+      const wrapped = (secret: string) => ({
+        ...recoverableAccount(secret), recoveryWrappedMK: Buffer.alloc(48, 7), recoveryWrapIv: Buffer.alloc(12, 8),
+      });
+      const ask = { email: 'test@example.com', recoveryProof };
+
+      it('refuses a wrong proof, an unknown email and a missing proof alike, with no wrap', async () => {
+        (prisma.account.findUnique as any).mockResolvedValue(wrapped(generateSecret()));
+        const wrong = await request(app).post('/api/auth/recovery-wrap').send({ ...ask, recoveryProof: 'd'.repeat(64) });
+        (prisma.account.findUnique as any).mockResolvedValue(null);
+        const unknown = await request(app).post('/api/auth/recovery-wrap').send(ask);
+        const none = await request(app).post('/api/auth/recovery-wrap').send({ email: ask.email });
+
+        expect(wrong.status).toBe(401);
+        expect(unknown.status).toBe(401);
+        expect(unknown.body).toEqual(wrong.body);
+        expect(none.status).toBe(400);
+        for (const res of [wrong, unknown, none]) expect(JSON.stringify(res.body)).not.toMatch(/recoveryWrappedMK|recoveryToken/);
+      });
+
+      it('with 2FA on, a right proof alone gets no wrap: it asks for a code, and refuses a wrong one', async () => {
+        (prisma.account.findUnique as any).mockResolvedValue(wrapped(generateSecret()));
+
+        const missing = await request(app).post('/api/auth/recovery-wrap').send(ask);
+        expect(missing.status).toBe(401);
+        expect(missing.body.requires2FA).toBe(true);
+        expect(missing.body.recoveryWrappedMK).toBeUndefined();
+
+        const wrong = await request(app).post('/api/auth/recovery-wrap').send({ ...ask, code: 'zzzzzz-zzzzzz' });
+        expect(wrong.status).toBe(401);
+        expect(wrong.body.recoveryWrappedMK).toBeUndefined();
+      }, 30000);
+
+      it('hands over the wrap for the proof and a code, with a token that stands in for the code once', async () => {
+        const secret = generateSecret();
+        (prisma.account.findUnique as any).mockResolvedValue(wrapped(secret));
+
+        const res = await request(app).post('/api/auth/recovery-wrap').send({ ...ask, code: generateSync({ secret }) });
+        expect(res.status).toBe(200);
+        expect(res.body.recoveryWrappedMK).toBe(Buffer.alloc(48, 7).toString('base64'));
+        expect(res.body.recoveryWrapIv).toBe(Buffer.alloc(12, 8).toString('base64'));
+        expect(res.body.recoveryToken).toMatch(/^[a-f0-9]{64}$/);
+
+        // The code is spent, so the reset goes through on the token…
+        const tx = mockTransaction(recoveryKeyHash);
+        const reset = await request(app).post('/api/auth/recover').send({ ...body, recoveryToken: res.body.recoveryToken });
+        expect(reset.status).toBe(200);
+        expect(tx.account.update).toHaveBeenCalledTimes(1);
+
+        // …and only once: used again, it is asked for a code like any other
+        const again = await request(app).post('/api/auth/recover').send({ ...body, recoveryToken: res.body.recoveryToken });
+        expect(again.status).toBe(401);
+        expect(again.body.requires2FA).toBe(true);
+      }, 30000);
+
+      it('a made-up token, or another account\'s, is no second factor', async () => {
+        const secret = generateSecret();
+        (prisma.account.findUnique as any).mockResolvedValue({ ...wrapped(secret), id: 2 });
+        const other = await request(app).post('/api/auth/recovery-wrap').send({ ...ask, code: generateSync({ secret }) });
+        expect(other.status).toBe(200);
+
+        (prisma.account.findUnique as any).mockResolvedValue(wrapped(generateSecret()));
+        const tx = mockTransaction(recoveryKeyHash);
+        for (const recoveryToken of ['a'.repeat(64), other.body.recoveryToken]) {
+          const res = await request(app).post('/api/auth/recover').send({ ...body, recoveryToken });
+          expect(res.status).toBe(401);
+          expect(res.body.requires2FA).toBe(true);
+        }
+        expect(tx.account.update).not.toHaveBeenCalled();
+      }, 30000);
+    });
 
     it('asks for a second factor instead of resetting with the recovery key alone', async () => {
       (prisma.account.findUnique as any).mockResolvedValue(recoverableAccount(generateSecret()));

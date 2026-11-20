@@ -30,6 +30,9 @@ export function publishableLink(link: unknown): string | undefined {
   return url && url.length <= PUBLIC_SHELF_LINK_MAX ? url : undefined;
 }
 
+/** Shown text as one line: the server refuses control characters (a pasted line break or tab becomes a space) */
+export const shelfText = (text: string, max: number): string => text.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, max);
+
 /** The flagged items as what the public page shows, in the shelf's order */
 export function buildPublicShelfItems(items: MediaItem[]): PublicShelfItem[] {
   const out: PublicShelfItem[] = [];
@@ -38,9 +41,9 @@ export function buildPublicShelfItems(items: MediaItem[]): PublicShelfItem[] {
     const cover = publishableCover(item.cover);
     const link = publishableLink(item.fields.link);
     out.push({
-      title: item.title.trim().slice(0, 200) || 'Untitled',
-      creator: item.creator.trim().slice(0, 200),
-      year: item.year.trim().slice(0, 12),
+      title: shelfText(item.title, 200) || 'Untitled',
+      creator: shelfText(item.creator, 200),
+      year: shelfText(item.year, 12),
       type: item.type,
       rating: clampRating(item.rating),
       shelf: item.shelf,

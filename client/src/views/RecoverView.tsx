@@ -33,7 +33,12 @@ export function RecoverView() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [recoveryParams, setRecoveryParams] = useState<{ recoveryWrappedMK: string; recoveryWrapIv: string; recoveryKeySalt: string } | null>(null);
+  // The salt comes for the email. The wrapped key comes only once the recovery
+  // key (and a 2FA code, when the account has 2FA) has checked out, with a
+  // short-lived token that stands in for the code when the new password is sent
+  const [recoverySalt, setRecoverySalt] = useState('');
+  const [recoveryWrap, setRecoveryWrap] = useState<{ recoveryWrappedMK: string; recoveryWrapIv: string; recoveryToken: string } | null>(null);
+  const [has2FA, setHas2FA] = useState(false);
   const [newRecoveryKey, setNewRecoveryKey] = useState('');
   // Accounts with 2FA also need an authenticator or backup code — the server
   // asks for it only once the recovery key checks out
@@ -46,10 +51,10 @@ export function RecoverView() {
     setLoading(true);
     try {
       const params = await authApi.getRecoveryParams(email);
-      if (!params.recoveryWrappedMK || !params.recoveryWrapIv || !params.recoveryKeySalt) {
+      if (!params.recoveryKeySalt) {
         throw new Error('No recovery key set for this account');
       }
-      setRecoveryParams({ recoveryWrappedMK: params.recoveryWrappedMK, recoveryWrapIv: params.recoveryWrapIv, recoveryKeySalt: params.recoveryKeySalt });
+      setRecoverySalt(params.recoveryKeySalt);
       setStep('recovery');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to find account');
@@ -61,14 +66,34 @@ export function RecoverView() {
   const handleRecoveryStep = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    // Just validate the key looks right before advancing — actual unwrap happens
-    // atomically with the rewrap in handleNewPasswordStep to avoid auto-lock races.
     const cleanKey = recoveryKey.replace(/[-\s]/g, '');
     if (cleanKey.length < 16) {
       setError('Invalid recovery key');
       return;
     }
-    setStep('newPassword');
+    // The server checks a proof of the key (never the key) and only then hands
+    // over the wrapped key. The unwrap itself happens with the rewrap in
+    // handleNewPasswordStep, in one step
+    setLoading(true);
+    try {
+      const recoveryProof = await deriveRecoveryProof(cleanKey, recoverySalt);
+      const wrap = await authApi.recoveryWrap({
+        email,
+        recoveryProof,
+        ...(needs2FA && twoFACode.trim() && { code: twoFACode.trim() }),
+      });
+      setRecoveryWrap(wrap);
+      setHas2FA(wrap.totpEnabled);
+      // That code is spent: the token carries on from here
+      setNeeds2FA(false);
+      setTwoFACode('');
+      setStep('newPassword');
+    } catch (err) {
+      if (err instanceof ApiError && err.body.requires2FA) setNeeds2FA(true);
+      setError(err instanceof Error ? err.message : 'Invalid recovery key');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const freshSignIn = useFreshSignIn();
@@ -95,15 +120,15 @@ export function RecoverView() {
       const cleanKey = recoveryKey.replace(/[-\s]/g, '');
       const { salt, wrappedMK, wrapIv, newRecoveryKey: freshRecoveryKey, newRecoveryWrappedMK, newRecoveryWrapIv } = await recoverAndRewrap(
         cleanKey,
-        recoveryParams!.recoveryWrappedMK,
-        recoveryParams!.recoveryWrapIv,
+        recoveryWrap!.recoveryWrappedMK,
+        recoveryWrap!.recoveryWrapIv,
         newPassword,
       );
 
       // Proofs only: the recovery key would unwrap the stored recoveryWrappedMK
       // and the password the new wrapped key, so neither is sent
       const [recoveryProof, newAuthSecret, { recoveryKeyHash: newRecoveryKeyHash, recoveryKeySalt: newRecoveryKeySalt }] = await Promise.all([
-        deriveRecoveryProof(cleanKey, recoveryParams!.recoveryKeySalt),
+        deriveRecoveryProof(cleanKey, recoverySalt),
         deriveAuthSecret(newPassword, email),
         newRecoveryProof(freshRecoveryKey),
       ]);
@@ -120,11 +145,13 @@ export function RecoverView() {
         newRecoveryWrapIv,
         newRecoveryKeyHash,
         newRecoveryKeySalt,
-        ...(needs2FA && twoFACode.trim() && { code: twoFACode.trim() }),
+        // The token from the key check stands in for the 2FA code. Once it has
+        // run out (five minutes), the server asks for a code again
+        ...(needs2FA && twoFACode.trim() ? { code: twoFACode.trim() } : { recoveryToken: recoveryWrap!.recoveryToken }),
         ...(removePasskeys && { removePasskeys: true }),
       });
       // The server signed this browser in, and the key is open here: carry on signed in
-      adoptSession({ ...user, totpEnabled: needs2FA });
+      adoptSession({ ...user, totpEnabled: has2FA });
 
       // Show the new recovery key before navigating away
       setNewRecoveryKey(freshRecoveryKey);
@@ -175,6 +202,19 @@ export function RecoverView() {
               required
             />
           </FormField>
+          {needs2FA && (
+            <FormField label="Authenticator or backup code" htmlFor="recover-key-2fa">
+              <TextInput
+                id="recover-key-2fa"
+                value={twoFACode}
+                onChange={e => setTwoFACode(e.target.value)}
+                placeholder="123456 or xxxxxx-xxxxxx"
+                autoComplete="one-time-code"
+                autoFocus
+                required
+              />
+            </FormField>
+          )}
           <Button type="submit" fullWidth disabled={loading}>
             {loading ? <Spinner size={18} /> : 'Verify'}
           </Button>

@@ -6,7 +6,7 @@ import { promisify } from 'util';
 import { generateSecret, generateSync, verifySync, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import { prisma } from '../db/prisma.js';
-import { isApproved, hasPendingInvite, spendInvite } from '../db/betaQueries.js';
+import { isApproved, onBetaList, spendInvite } from '../db/betaQueries.js';
 import { registerTenant, deleteAccountById } from '../db/schemaManager.js';
 import { revokeGoogleAccess } from '../services/googleRevoke.js';
 import { createSession, revokeSession, revokeAllSessions, authMiddleware, revokeBrowserSession } from '../middleware/auth.js';
@@ -16,7 +16,7 @@ import { parseId } from '../middleware/parseId.js';
 import { sharedState, resetSharedStateForTests } from '../services/sharedState.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 import { apiLimiter, authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
-import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, keyWrapSchema, normalizeEmail, type ConfirmAction } from '@chronicles/shared';
+import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, recoveryWrapSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, keyWrapSchema, normalizeEmail, type ConfirmAction } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { previewField } from '../services/previews.js';
 import { networkKey } from '../services/networkKey.js';
@@ -656,13 +656,6 @@ function decoyBytes(email: string, label: string, length: number): string {
     .subarray(0, length).toString('base64');
 }
 
-function longDecoyBytes(email: string, label: string, length: number): string {
-  // Two HMAC blocks, for values longer than 32 bytes
-  const a = crypto.createHmac('sha256', DECOY_KEY).update(`${label}:1:${email}`).digest();
-  const b = crypto.createHmac('sha256', DECOY_KEY).update(`${label}:2:${email}`).digest();
-  return Buffer.concat([a, b]).subarray(0, length).toString('base64');
-}
-
 // =============================================================================
 // Credentials the server can check but can't use to decrypt
 // =============================================================================
@@ -1297,10 +1290,11 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
     if (!(await secondFactorGate(account, parsed.data.code, req, res, 'email_change_failed'))) return;
 
     // Check if email is already taken
-    // An email approved for someone else's beta invite is taken too: moving an
-    // account onto it would lock the invited person out of signing up
+    // An email on the beta list (applied or approved) with no account is taken
+    // too: moving an account onto it would lock that person out of signing up,
+    // and deleting the account afterwards would delete their application
     const existing = await prisma.account.findUnique({ where: { email: normalizedEmail } });
-    if ((existing && existing.id !== req.auth!.accountId) || (!existing && await hasPendingInvite(normalizedEmail))) {
+    if ((existing && existing.id !== req.auth!.accountId) || (!existing && await onBetaList(normalizedEmail))) {
       res.status(409).json({ error: 'Email already in use' });
       return;
     }
@@ -1325,6 +1319,82 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
     if (sendIfHasherBusy(err, res)) return;
     console.error('Change email error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Email change failed' });
+  }
+});
+
+// A recovery key that checked out at /recovery-wrap (with its 2FA code, when the
+// account has 2FA): the token /recover takes in place of a second code
+const RECOVERY_TOKENS = 'recovery_token';
+const RECOVERY_TOKEN_TTL_MS = 5 * 60 * 1000;
+
+/** With 2FA on, the recovery key alone isn't enough: an authenticator or backup
+ *  code too, asked for only after the key checks out. False once it has answered. */
+async function recoverySecondFactor(
+  account: { id: number; totpSecret: string | null; totpBackupCodes: string[] },
+  code: string | undefined,
+  req: Request,
+  res: Response,
+): Promise<boolean> {
+  const bucket = recoveryTwoFABucket(account.id);
+  const lock = await twoFALock(bucket);
+  if (lock) {
+    res.status(429).json({ error: twoFALockMessage(lock), requires2FA: true });
+    return false;
+  }
+  if (!code) {
+    res.status(401).json({ error: 'Enter the code from your authenticator app or a backup code', requires2FA: true });
+    return false;
+  }
+  const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret!, totpBackupCodes: account.totpBackupCodes }, code, bucket);
+  if (!factor) {
+    logSecurityEvent('recovery_2fa_failed', { accountId: account.id, ip: req.ip });
+    res.status(401).json({ error: 'Invalid code', requires2FA: true });
+    return false;
+  }
+  return true;
+}
+
+// =============================================================================
+// POST /api/auth/recovery-wrap — the recovery key's wrap of the master key
+// =============================================================================
+// Handed out only for a checked proof of the recovery key and, with 2FA on, a
+// code: never for an email alone. (It used to come from /recovery-params, to
+// anyone who knew the email. Nobody could open it without the recovery key —
+// but a copy fetched then stays good for a key that leaks later, whatever
+// "Generate new recovery key" does since, and opening it offline skips 2FA.)
+router.post('/recovery-wrap', strictLimiter, async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const parsed = recoveryWrapSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Recovery failed' });
+      return;
+    }
+    const email = normalizeEmail(parsed.data.email);
+    const account = await prisma.account.findUnique({ where: { email } });
+    // One answer for an unknown email, an account with no recovery key and a wrong key
+    if (!account || !account.recoveryKeyHash || !account.recoveryWrappedMK || !account.recoveryWrapIv
+      || !recoveryProofMatches(account.recoveryKeyHash, parsed.data.recoveryProof)) {
+      if (account) logSecurityEvent('recovery_failed', { accountId: account.id, ip: req.ip, details: { at: 'wrap' } });
+      await constantTimeDelay(startTime);
+      res.status(401).json({ error: 'Recovery failed' });
+      return;
+    }
+    if (account.totpEnabled && account.totpSecret) {
+      if (!(await recoverySecondFactor(account, parsed.data.code, req, res))) return;
+    }
+    const recoveryToken = crypto.randomBytes(32).toString('hex');
+    await sharedState.putToken(RECOVERY_TOKENS, recoveryToken, account.id, RECOVERY_TOKEN_TTL_MS);
+    logSecurityEvent('recovery_wrap_issued', { accountId: account.id, ip: req.ip });
+    res.json({
+      recoveryWrappedMK: Buffer.from(account.recoveryWrappedMK).toString('base64'),
+      recoveryWrapIv: Buffer.from(account.recoveryWrapIv).toString('base64'),
+      recoveryToken,
+      totpEnabled: account.totpEnabled,
+    });
+  } catch (err) {
+    console.error('Recovery wrap error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Recovery failed' });
   }
 });
 
@@ -1371,23 +1441,13 @@ router.post('/recover', strictLimiter, async (req, res) => {
 
     // With 2FA on, the recovery key alone isn't enough: also need an
     // authenticator or backup code (asked for only after the key checks out)
-    if (account.totpEnabled && account.totpSecret) {
-      const bucket = recoveryTwoFABucket(account.id);
-      const lock = await twoFALock(bucket);
-      if (lock) {
-        res.status(429).json({ error: twoFALockMessage(lock), requires2FA: true });
-        return;
-      }
-      if (!code) {
-        res.status(401).json({ error: 'Enter the code from your authenticator app or a backup code', requires2FA: true });
-        return;
-      }
-      const factor = await verifySecondFactor({ id: account.id, totpSecret: account.totpSecret, totpBackupCodes: account.totpBackupCodes }, code, bucket);
-      if (!factor) {
-        logSecurityEvent('recovery_2fa_failed', { accountId: account.id, ip: req.ip });
-        res.status(401).json({ error: 'Invalid code', requires2FA: true });
-        return;
-      }
+    // The code was already checked (and spent) at /recovery-wrap, which answered
+    // with a single-use token for this account: that stands in for it here.
+    // An expired or unknown token falls back to asking for a code
+    const codeChecked = !!parsed.data.recoveryToken
+      && (await sharedState.takeToken(RECOVERY_TOKENS, parsed.data.recoveryToken)) === account.id;
+    if (account.totpEnabled && account.totpSecret && !codeChecked) {
+      if (!(await recoverySecondFactor(account, code, req, res))) return;
     }
 
     const passwordHash = await hashAuthSecret(newAuthSecret);
@@ -1827,32 +1887,17 @@ router.get('/recovery-params', authLimiter, async (req, res) => {
 
     const account = await prisma.account.findUnique({
       where: { email },
-      select: {
-        recoveryWrappedMK: true,
-        recoveryWrapIv: true,
-        recoveryKeySalt: true,
-        encryptionEnabled: true,
-      },
+      select: { recoveryKeySalt: true, encryptionEnabled: true, recoveryWrappedMK: true },
     });
 
-    if (!account || !account.encryptionEnabled || !account.recoveryWrappedMK || !account.recoveryWrapIv || !account.recoveryKeySalt) {
-      // Stable decoy params (same size as a real AES-GCM-wrapped 32-byte key)
-      // so an unknown email is indistinguishable from a real one
-      await constantTimeDelay(startTime);
-      res.json({
-        recoveryWrappedMK: longDecoyBytes(email, 'wrapped-mk', 48),
-        recoveryWrapIv: decoyBytes(email, 'wrap-iv', 12),
-        recoveryKeySalt: Buffer.from(decoyBytes(email, 'recovery-salt', 16), 'base64').toString('hex'),
-      });
-      return;
-    }
-
+    // The salt only — what the browser needs to make its proof of the recovery
+    // key. The wrapped key itself comes from /recovery-wrap, for that proof.
+    // A stable decoy for an unknown email, so it reads like a real one
     await constantTimeDelay(startTime);
     res.json({
-      recoveryWrappedMK: Buffer.from(account.recoveryWrappedMK).toString('base64'),
-      recoveryWrapIv: Buffer.from(account.recoveryWrapIv).toString('base64'),
-      // Salt for the recovery proof, which the client now computes itself
-      recoveryKeySalt: account.recoveryKeySalt,
+      recoveryKeySalt: account?.encryptionEnabled && account.recoveryWrappedMK && account.recoveryKeySalt
+        ? account.recoveryKeySalt
+        : Buffer.from(decoyBytes(email, 'recovery-salt', 16), 'base64').toString('hex'),
     });
   } catch (err) {
     console.error('Recovery params error:', err instanceof Error ? err.message : 'Unknown error');

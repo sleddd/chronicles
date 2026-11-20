@@ -39,6 +39,11 @@ describe('what the public shelf carries', () => {
     expect(buildPublicShelfItems([])).toEqual([]);
   });
 
+  it('sends shown text as one line: the server refuses control characters', () => {
+    const [out] = buildPublicShelfItems([item({ id: 1, title: 'Du\u0000ne\nMessiah', creator: 'Frank\tHerbert', year: '19\u000065' })]);
+    expect(out).toMatchObject({ title: 'Du ne Messiah', creator: 'Frank Herbert', year: '19 65' });
+  });
+
   it('builds the link from the origin', () => {
     expect(publicShelfUrl('tok', 'https://x.example')).toBe('https://x.example/public-shelf/tok');
   });

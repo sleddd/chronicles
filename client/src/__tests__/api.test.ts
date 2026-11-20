@@ -231,7 +231,7 @@ describe('auth', () => {
   });
 
   it('getRecoveryParams sends email as query param', async () => {
-    fetchSpy = mockFetchResponse({ recoveryWrappedMK: null, recoveryWrapIv: null });
+    fetchSpy = mockFetchResponse({ recoveryKeySalt: 'd'.repeat(32) });
     vi.stubGlobal('fetch', fetchSpy);
 
     await auth.getRecoveryParams('a@b.com');
@@ -239,6 +239,19 @@ describe('auth', () => {
     const [url] = fetchSpy.mock.calls[0];
     expect(url).toContain('/api/auth/recovery-params');
     expect(url).toContain('email=a%40b.com');
+  });
+
+  it('recoveryWrap posts the proof (never the key) and gets the wrap with its token', async () => {
+    fetchSpy = mockFetchResponse({ recoveryWrappedMK: 'rw', recoveryWrapIv: 'ri', recoveryToken: 't', totpEnabled: false });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const res = await auth.recoveryWrap({ email: 'a@b.com', recoveryProof: 'c'.repeat(64) });
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe('/api/auth/recovery-wrap');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ email: 'a@b.com', recoveryProof: 'c'.repeat(64) });
+    expect(res.recoveryToken).toBe('t');
   });
 
   it('recover sends POST', async () => {

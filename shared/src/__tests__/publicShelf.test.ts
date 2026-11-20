@@ -32,6 +32,12 @@ describe('public shelf schema', () => {
     expect(publicShelfItemSchema.safeParse({ ...item, shelf: 'maybe' }).success).toBe(false);
     expect(publicShelfItemSchema.safeParse({ ...item, title: '   ' }).success).toBe(false);
     expect(putPublicShelfSchema.safeParse({ title: '', items: [] }).success).toBe(false);
+    // Postgres refuses a NUL in JSONB (a 500, and the row's text in the error): no control characters in shown text
+    for (const bad of ['Du\u0000ne', 'Du\nne', 'Du\u007fne']) {
+      expect(publicShelfItemSchema.safeParse({ ...item, title: bad }).success).toBe(false);
+      expect(publicShelfItemSchema.safeParse({ ...item, creator: bad }).success).toBe(false);
+      expect(putPublicShelfSchema.safeParse({ title: bad, items: [] }).success).toBe(false);
+    }
     const many = Array.from({ length: PUBLIC_SHELF_ITEMS_MAX + 1 }, () => ({ ...item, cover: undefined }));
     expect(putPublicShelfSchema.safeParse({ title: 'x', items: many }).success).toBe(false);
   });
