@@ -3,14 +3,20 @@ import { addableShortcuts, cleanShortcuts, MAX_SHORTCUTS, shortcutCatalog, shown
 
 const nav = [
   { label: 'Journal', icon: 'book', path: '/journal' },
-  { label: 'Health', icon: 'health_and_safety', path: '/health', views: [{ label: 'Dashboard', path: '/health' }, { label: 'Habits', path: '/health/habits' }] },
+  { label: 'Health', icon: 'health_and_safety', path: '/health', views: [{ label: 'Dashboard', path: '/health' }, { label: 'Exercise', path: '/health/exercise' }, { label: 'Habits', path: '/health/habits' }] },
 ];
 const topics = [{ id: 7, name: 'Recipes' }, { id: 3, name: 'Books' }];
 
 describe('shortcutCatalog', () => {
   it('lists the nav, its views and each topic, every path once', () => {
     const c = shortcutCatalog(nav, topics);
-    expect(c.map(s => s.path)).toEqual(['/dashboard', '/journal', '/health', '/health/habits', '/topics/3', '/topics/7']);
+    expect(c.map(s => s.path)).toEqual([
+      '/dashboard', '/journal',
+      '/health', '/health/exercise', '/health/exercise/schedule', '/health/exercise/training', '/health/exercise/history', '/health/habits',
+      '/inspiration/research', '/inspiration/quotes', '/topics/3', '/topics/7',
+    ]);
+    expect(c.find(s => s.path === '/health')).toMatchObject({ label: 'Health · Dashboard', group: 'Health' });
+    expect(c.find(s => s.path === '/health/exercise/training')).toMatchObject({ label: 'Health · Exercise · Training', group: 'Health' });
     expect(c.find(s => s.path === '/health/habits')).toMatchObject({ label: 'Health · Habits', group: 'Health', icon: 'health_and_safety' });
     expect(c.find(s => s.path === '/topics/3')).toMatchObject({ label: 'Books', group: 'Topics' });
   });
@@ -31,7 +37,7 @@ describe('saved shortcuts', () => {
 
   it('offers what is not yet pinned, grouped', () => {
     const groups = addableShortcuts(['/journal', '/health/habits'], catalog);
-    expect(groups.map(g => g.group)).toEqual(['Pages', 'Topics']);
+    expect(groups.map(g => g.group)).toEqual(['Pages', 'Health', 'Inspiration', 'Topics']);
     expect(groups.flatMap(g => g.items).some(s => s.path === '/journal')).toBe(false);
   });
 });
