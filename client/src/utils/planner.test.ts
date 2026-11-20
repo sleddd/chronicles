@@ -157,3 +157,24 @@ describe('a same-day end time sets the length', () => {
     expect(lengthPatch({ scheduledTime: '16:10' }, 2)).not.toHaveProperty('deadlineTime');
   });
 });
+
+describe('the month view', () => {
+  it('lists whole weeks around the month, Sunday first', async () => {
+    const { monthGridOf } = await import('./planner.js');
+    const grid = monthGridOf('2026-11-19');
+    expect(grid[0]).toBe('2026-11-01'); // Nov 1, 2026 is a Sunday
+    expect(grid[grid.length - 1]).toBe('2026-12-05');
+    expect(grid).toHaveLength(35);
+    const oct = monthGridOf('2026-10-07');
+    expect(oct[0]).toBe('2026-09-27');
+    expect(oct[oct.length - 1]).toBe('2026-10-31');
+  });
+
+  it('steps a month at a time, across years, and names the month', async () => {
+    const { addMonths, monthLabel } = await import('./planner.js');
+    expect(addMonths('2026-12-31', 1)).toBe('2027-01-01');
+    expect(addMonths('2026-01-15', -1)).toBe('2025-12-01');
+    expect(addMonths('2026-03-31', -1)).toBe('2026-02-01');
+    expect(monthLabel('2026-11-19')).toBe('November 2026');
+  });
+});

@@ -346,6 +346,26 @@ export function weekLabel(days: string[]): string {
   return a.m === b.m ? `${MONTHS[a.m]} ${a.d} – ${b.d}` : `${MONTHS[a.m]} ${a.d} – ${MONTHS[b.m]} ${b.d}`;
 }
 
+/** Every day of the month grid holding `day`: whole Sunday–Saturday weeks, so it starts and ends with days of the months beside it */
+export function monthGridOf(day: string): string[] {
+  const first = `${day.slice(0, 7)}-01`;
+  const last = addDays(addMonths(first, 1), -1);
+  const start = weekOf(first)[0];
+  const end = weekOf(last)[6];
+  const out: string[] = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+/** The 1st of the month `n` months from `day`'s */
+export function addMonths(day: string, n: number): string {
+  const total = Number(day.slice(0, 4)) * 12 + Number(day.slice(5, 7)) - 1 + n;
+  return `${String(Math.floor(total / 12)).padStart(4, '0')}-${String((total % 12) + 1).padStart(2, '0')}-01`;
+}
+
+/** "November 2026" */
+export const monthLabel = (day: string): string => `${LONG_MONTHS[parts(day).m]} ${day.slice(0, 4)}`;
+
 /** "Mon 12" */
 export const laneLabel = (day: string): string => { const p = parts(day); return `${WEEKDAYS[p.dow]} ${p.d}`; };
 /** "Thursday, October 15" */

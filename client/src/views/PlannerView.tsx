@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { PlanningShell, TodayBtn } from '../components/organisms/PlanningShell.js';
+import { PlannerMonth, type PlannerMonthDay } from '../components/molecules/PlannerMonth.js';
 import { PlannerBoard, type PlannerCard, type PlannerEvent, type PlannerLane } from '../components/organisms/PlannerBoard.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { HabitsToday } from '../components/organisms/HabitsToday.js';
@@ -28,7 +29,7 @@ import { EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, categorie
 import {
   addDays, dayLabel, hasMigrated, laneLabel, longDayLabel, monthDay, movedOrder, parsePlannerOrder, plannerFacts, priorityIndex,
   tasksByDay, unscheduled, weekLabel, weekOf, type PlannerOrder, type PlannerTask,
-  startPatch, lengthPatch,
+  startPatch, lengthPatch, monthGridOf, addMonths, monthLabel, hhmm,
 } from '../utils/planner.js';
 
 /* Planning → Planner: the week (or one day) at a glance. Tasks and todos are
@@ -38,8 +39,8 @@ import {
    day in the sealed setting `plannerOrder` (a task dropped on a day's free space
    lands by priority). Events and meetings sit at their times on the day. */
 
-type Mode = 'week' | 'day';
-const MODES: { value: Mode; label: string }[] = [{ value: 'week', label: 'Week' }, { value: 'day', label: 'Day' }];
+type Mode = 'month' | 'week' | 'day';
+const MODES: { value: Mode; label: string }[] = [{ value: 'month', label: 'Month' }, { value: 'week', label: 'Week' }, { value: 'day', label: 'Day' }];
 const MODE_KEY = 'planning-planner-v1';
 const FOLD_KEY = 'planning-planner-folded-v1';
 const NO_ORDER: PlannerOrder = {};
@@ -82,7 +83,7 @@ export function PlannerView() {
 
   // Week on wide screens, Day on phones, unless you chose otherwise in this browser
   const [chosen, setChosen] = useState<Mode | null>(() => {
-    try { const m = localStorage.getItem(MODE_KEY); return m === 'week' || m === 'day' ? m : null; } catch { return null; }
+    try { const m = localStorage.getItem(MODE_KEY); return m === 'month' || m === 'week' || m === 'day' ? m : null; } catch { return null; }
   });
   const mode: Mode = chosen ?? (phone ? 'day' : 'week');
   const setMode = (m: Mode) => {
@@ -99,7 +100,7 @@ export function PlannerView() {
     setFoldedState(f);
     try { if (f) localStorage.setItem(FOLD_KEY, '1'); else localStorage.removeItem(FOLD_KEY); } catch { /* storage unavailable */ }
   };
-  const days = useMemo(() => (mode === 'week' ? weekOf(anchor) : [anchor]), [mode, anchor]);
+  const days = useMemo(() => (mode === 'month' ? monthGridOf(anchor) : mode === 'week' ? weekOf(anchor) : [anchor]), [mode, anchor]);
 
   const [savedOrder, saveOrder, orderLoaded] = useEncryptedSetting<PlannerOrder>('plannerOrder', NO_ORDER);
   const order = useMemo(() => parsePlannerOrder(savedOrder), [savedOrder]);
@@ -138,6 +139,19 @@ export function PlannerView() {
     events: eventsByDay.get(day) ?? [], cards: (byDay.get(day) ?? []).map(card),
     // The day view also lists the habits due that day, to tick off with the tasks
     extra: mode === 'day' ? <HabitsToday day={day} plain /> : undefined,
+  }));
+
+  // Month: each day's tasks in the day's order, then its events (all-day first, then by time)
+  const monthDays: PlannerMonthDay[] = mode !== 'month' ? [] : days.map(day => ({
+    day, number: Number(day.slice(8, 10)), inMonth: day.slice(0, 7) === anchor.slice(0, 7), today: day === today, label: longDayLabel(day),
+    items: [
+      ...(byDay.get(day) ?? []).map(t => ({
+        key: `t${t.id}`, id: t.id, title: t.title, kind: 'task' as const, done: t.done,
+        time: t.at !== undefined ? formatTime12h(hhmm(t.at)) : undefined,
+      })),
+      ...[...(eventsByDay.get(day) ?? [])].sort((a, b) => (a.start ?? -1) - (b.start ?? -1))
+        .map(e => ({ key: `e${e.key}`, id: e.id, title: e.title, kind: 'event' as const, time: e.start !== undefined ? formatTime12h(hhmm(e.start)) : undefined })),
+    ],
   }));
 
   /* ── What's left to plan: search and Category ── */
@@ -234,12 +248,14 @@ export function PlannerView() {
   const [aiPlanOpen, setAiPlanOpen] = useState(false);
 
   const step = mode === 'week' ? 7 : 1;
-  const pillLabel = mode === 'week' ? weekLabel(days) : dayLabel(anchor);
+  const pillLabel = mode === 'month' ? monthLabel(anchor) : mode === 'week' ? weekLabel(days) : dayLabel(anchor);
+  // ‹ ›: a month, a week or a day at a time
+  const move = (dir: 1 | -1) => setAnchor(a => (mode === 'month' ? addMonths(a, dir) : addDays(a, dir * step)));
 
   return (
     <PlanningShell wide actions={<>
       <FilterTabs options={MODES} active={mode} onChange={setMode} />
-      <MonthPill label={pillLabel} onPrev={() => setAnchor(a => addDays(a, -step))} onNext={() => setAnchor(a => addDays(a, step))} />
+      <MonthPill label={pillLabel} onPrev={() => move(-1)} onNext={() => move(1)} />
       <TodayBtn type="button" onClick={() => setAnchor(today)}>Today</TodayBtn>
       {/* Only while AI task planning is on and agreed to in this browser (Settings → In-App AI) */}
       {aiPlanOn && (
@@ -255,11 +271,14 @@ export function PlannerView() {
     </>}>
       {aiPlanOpen && <AiPlanReview onClose={() => setAiPlanOpen(false)} />}
       {mode === 'day' && <DayTitle>{longDayLabel(anchor)}</DayTitle>}
+      {mode === 'month' ? (
+        <PlannerMonth days={monthDays} onOpen={openInJournal} onPickDay={day => { setAnchor(day); setMode('day'); }} />
+      ) : (
       <PlannerBoard
         lanes={lanes} overdue={left.overdue.map(card)} open={left.open.map(card)} ideas={left.ideas.map(card)}
         onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onToggleDone={toggleDone} onResize={resize} onAdd={add}
         folded={folded} onFold={setFolded}
-        onPrev={() => setAnchor(a => addDays(a, -step))} onNext={() => setAnchor(a => addDays(a, step))}
+        onPrev={() => move(-1)} onNext={() => move(1)}
         onPickDay={mode === 'week' ? day => { setAnchor(day); setMode('day'); } : undefined}
         toolsSet={(query.trim() ? 1 : 0) + (goalPicked ? 1 : 0) + (category ? 1 : 0)}
         tools={(
@@ -286,6 +305,7 @@ export function PlannerView() {
           </Tools>
         )}
       />
+      )}
     </PlanningShell>
   );
 }

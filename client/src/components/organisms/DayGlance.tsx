@@ -17,6 +17,8 @@ import { useCreateEntry } from '../../hooks/useCreateEntry.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
 import { useFinance } from '../../hooks/useFinance.js';
 import { useTodayDoses } from '../../hooks/useTodayDoses.js';
+import { useAsNeededDoses } from '../../hooks/useAsNeededDoses.js';
+import { AsNeededList } from './AsNeededMeds.js';
 import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
 import { showFlash } from '../../services/flashNotice.js';
 import { toDateStr, formatTime12h } from '../../utils/dateUtils.js';
@@ -832,6 +834,15 @@ const PopRow = styled.div`
   small { display: block; font-size: 13px; color: var(--text-muted); }
 `;
 
+/* "As needed", over the as-needed medications in the Meds list */
+const PopHead = styled.h5`
+  margin: 14px 0 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  ${cardLabel}
+  &:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+`;
+
 const PopLink = styled.button`
   margin-top: 6px;
   padding: 6px 0 2px;
@@ -1071,6 +1082,9 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     if (diff) doses.shiftDay(diff);
   }, [day, today, doses.day]); // eslint-disable-line react-hooks/exhaustive-deps
   const dosesForDay = doses.day === day;
+  /* As-needed medications: taken (Take one) from the Meds list, for today or a day already past */
+  const asNeeded = useAsNeededDoses(day > today ? today : day);
+  const asNeededShown = medsOn && day <= today && asNeeded.meds.length > 0;
   const routines = useRoutineChecklist(day);
 
   /* Events and meetings on the days of the week shown (repeats included) */
@@ -1380,10 +1394,11 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
         <TitleRow>
           <h2>Your Agenda</h2>
           <HeadActions>
-            {medTotal > 0 && (
-              <HeadStat type="button" $due={nextDue !== undefined} onClick={e => openFrom('meds', e)} aria-label={`Medications: ${medTaken} of ${medTotal} taken`}>
+            {(medTotal > 0 || asNeededShown) && (
+              <HeadStat type="button" $due={nextDue !== undefined} onClick={e => openFrom('meds', e)}
+                aria-label={medTotal > 0 ? `Medications: ${medTaken} of ${medTotal} taken` : 'Medications as needed'}>
                 <MaterialIcon $size={23} aria-hidden="true">health_and_safety</MaterialIcon>
-                Meds {medTaken} of {medTotal}{nextDue !== undefined && <strong> · {shortClock(nextDue)} due</strong>}
+                {medTotal > 0 ? <>Meds {medTaken} of {medTotal}</> : 'Meds as needed'}{nextDue !== undefined && <strong> · {shortClock(nextDue)} due</strong>}
               </HeadStat>
             )}
             {moveTotal > 0 && (
@@ -1634,6 +1649,12 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
       {open?.kind === 'meds' && (
         <MarkerList anchor={open.rect} title={`Medications ${dayWord}`} onClose={() => setOpen(null)}>
           {doses.groups.flatMap(g => g.doses).map(doseRow)}
+          {asNeededShown && (
+            <>
+              <PopHead>As needed</PopHead>
+              <AsNeededList state={asNeeded} />
+            </>
+          )}
           <PopLink type="button" onClick={() => navigate('/health/meds')}>Med list</PopLink>
         </MarkerList>
       )}

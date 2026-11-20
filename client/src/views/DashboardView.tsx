@@ -2981,7 +2981,7 @@ export function DashboardView() {
     quickLog: {
       label: 'quick meal log',
       on: shown('quickLog') && (ff.foodEnabled !== false || ff.exerciseEnabled !== false),
-      node: <QuickLog bare meal={ff.foodEnabled !== false} exercise={ff.exerciseEnabled !== false} />,
+      node: <QuickLog bare meal={ff.foodEnabled !== false} exercise={ff.exerciseEnabled !== false} medication={ff.medicationEnabled !== false} />,
     },
     recent: { label: 'recent entries', on: shown('recent'), node: <RecentEntries /> },
     time: { label: 'time tracked', on: shown('time'), node: <TimeTracked /> },

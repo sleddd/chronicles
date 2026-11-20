@@ -168,12 +168,20 @@ const ScrollArea = styled.div`
 /* Centered content column */
 /* At least the pane's height, so a short entry's foot (Close / Save) sits at the
    bottom of the pane — and a long one's at the end of the entry, scrolling with it */
-const EdBody = styled.div`
+const EdBody = styled.div<{ $full?: boolean }>`
   display: flex;
   flex-direction: column;
   width: 100%;
   min-height: 100%;
   padding-bottom: 24px;
+  /* Full width (the journal's Expand, or edit view): the whole entry pulled in from the nav rail and down from the top */
+  ${({ $full }) => $full && css`
+    @media (min-width: 1025px) {
+      padding: 24px 56px 24px;
+      /* …and never wider than 1100px, so the rows don't stretch across a wide screen */
+      & > * { width: 100%; max-width: 1100px; }
+    }
+  `}
   & > * { flex: 1 0 auto; }
 `;
 
@@ -359,28 +367,31 @@ const TaskHead = styled.div`
   padding: 18px 26px;
   position: relative;
   z-index: 5; /* the topic menu drops over the rows */
-  /* The journal: full screen / close right at the pane's edge (10px in) */
-  &[data-journal] { padding-right: 10px; }
+  /* The journal: full screen / close 30px in from the pane's edge */
+  &[data-journal] { padding-right: 30px; }
+  /* Full width: room between the topic picker / close row and the entry under it */
+  @media (min-width: 1025px) { &[data-full] { margin-bottom: 24px; } }
   /* The Quick entry: the topic picker a little further down from the card's top */
   &:not([data-journal]) { padding-top: 26px; }
-  /* Close: a round button with the reminders bell's fill, no outline — the dark smoked glass in
-     dark, the panel colour with a light shadow in light */
+  /* Close: a round button with the reminders bell's fill and a light outline round its edge —
+     the dark smoked glass in dark, the panel colour with a light shadow in light */
   && button[aria-label='Close'] {
     width: 34px;
     height: 34px;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 50%;
     background: rgba(18, 20, 26, 0.5);
     color: #fff;
   }
   && button[aria-label='Close']:hover { background: rgba(18, 20, 26, 0.66); }
   html[data-theme='light'] && button[aria-label='Close'] {
+    border-color: var(--border-subtle);
     background: var(--bg-panel);
     box-shadow: 0 1px 3px rgba(20, 24, 32, 0.08);
     color: var(--text-secondary);
   }
   html[data-theme='light'] && button[aria-label='Close']:hover { color: var(--text-primary); }
-  ${NAV_COMPACT} { &[data-journal] { padding-right: 26px; } }
+  ${NAV_COMPACT} { &[data-journal] { padding-right: 30px; } }
   & > :last-child:not(:first-child):not([role='radiogroup']) { margin-left: auto; }
   @container entrycard (max-width: 560px) { padding: 14px 18px; }
 `;
@@ -1868,6 +1879,13 @@ export function EntryForm({
             style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}>
             {imageUploading ? <Spinner size={14} /> : <Icon name="image" size={18} strokeWidth={1.7} />}
           </IconBtn>
+          {onExistingImagesSelected && (
+            <IconBtn type="button" aria-label="Add image from library" title={imagesFull ? 'Maximum of 7 images per entry' : 'Add from library'}
+              disabled={imagesFull} onClick={() => !imagesFull && setLibraryOpen(true)}
+              style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}>
+              <MaterialIcon $size={20} aria-hidden="true">photo_library</MaterialIcon>
+            </IconBtn>
+          )}
         </>
       )}
       {!quick && (
@@ -1898,6 +1916,13 @@ export function EntryForm({
             style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}>
             {imageUploading ? <Spinner size={14} /> : <Icon name="image" size={18} strokeWidth={1.7} />}
           </IconBtn>
+          {onExistingImagesSelected && (
+            <IconBtn type="button" aria-label="Add image from library" title={imagesFull ? 'Maximum of 7 images per entry' : 'Add from library'}
+              disabled={imagesFull} onClick={() => !imagesFull && setLibraryOpen(true)}
+              style={{ opacity: imagesFull ? 0.35 : 1, cursor: imagesFull ? 'default' : 'pointer' }}>
+              <MaterialIcon $size={20} aria-hidden="true">photo_library</MaterialIcon>
+            </IconBtn>
+          )}
         </>
       )}
       <IconBtn type="button" $active={isFavorite} $activeColor={accentColor}
@@ -2056,7 +2081,7 @@ export function EntryForm({
     <FormWrapper>
       {/* No top bar: the question, the writing area, the fields and the tool row all in one scroll */}
       <ScrollArea>
-        <EdBody>
+        <EdBody $full={!quick && !!expanded}>
           {isTaskCard ? (
           <EntryCard $flat data-task-card="">
             <TaskHead data-journal="" data-full={expanded ? '' : undefined}>

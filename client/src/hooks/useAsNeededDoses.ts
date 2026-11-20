@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { doses as dosesApi, type DoseLogRecord } from '../services/api.js';
 import { stripHtml } from '../utils/stripHtml.js';
@@ -20,6 +20,12 @@ export function useAsNeededDoses(day?: string) {
   const [logs, setLogs] = useState<DoseLogRecord[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
+  // Tells the page's other dose lists to reload. This list already has the change, so it skips its own event
+  const ownEvent = useRef(false);
+  const announce = useCallback(() => {
+    ownEvent.current = true;
+    try { window.dispatchEvent(new Event(DOSES_CHANGED)); } finally { ownEvent.current = false; }
+  }, []);
   const today = toDateStr(new Date());
   const date = day ?? today;
   const isToday = date === today;
@@ -52,7 +58,7 @@ export function useAsNeededDoses(day?: string) {
     setLogs([]);
     void fetchLogs();
     const onVisible = () => { if (document.visibilityState === 'visible') void fetchLogs(); };
-    const onChanged = () => { void fetchLogs(); };
+    const onChanged = () => { if (!ownEvent.current) void fetchLogs(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener(DOSES_CHANGED, onChanged);
     return () => {
@@ -66,22 +72,23 @@ export function useAsNeededDoses(day?: string) {
     try {
       const { log } = await dosesApi.logAsNeeded({ medicationPostId: medId, date: today });
       setLogs(prev => [...prev, log]);
+      announce();
     } catch (err) {
       console.error('Failed to log dose:', err);
       setError('That dose didn’t save. Try again.');
     } finally { setBusy(null); }
-  }, [today]);
+  }, [today, announce]);
 
   const remove = useCallback(async (logId: string) => {
     const before = logs;
     setLogs(prev => prev.filter(l => l.id !== logId));
-    try { await dosesApi.remove(logId); }
+    try { await dosesApi.remove(logId); announce(); }
     catch (err) {
       console.error('Failed to remove dose:', err);
       setLogs(before);
       setError('Couldn’t remove that dose. Try again.');
     }
-  }, [logs]);
+  }, [logs, announce]);
 
   const takenOf = useCallback((medId: number) =>
     logs.filter(l => l.medicationPostId === medId).sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime)), [logs]);

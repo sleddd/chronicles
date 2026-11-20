@@ -1,3 +1,5 @@
+import { AsNeededList } from './AsNeededMeds.js';
+import { useAsNeededDoses } from '../../hooks/useAsNeededDoses.js';
 import { useMemo, useRef, useState } from 'react';
 import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
@@ -878,17 +880,36 @@ const BareBody = styled.div`
   padding-top: 12px;
 `;
 
-export function QuickLog({ meal = true, exercise = true, bare = false }: { meal?: boolean; exercise?: boolean; bare?: boolean }) {
-  const [kind, setKind] = useState<'meal' | 'exercise'>(meal ? 'meal' : 'exercise');
-  if (!meal && !exercise) return null;
-  const title = kind === 'meal' ? 'Quick meal log' : 'Quick exercise log';
-  const toggle = meal && exercise ? (
+/* Meal | Exercise | Medication. Medication is the as-needed medications, each
+   with Take one, and shows only when there is one to take. */
+type QuickKind = 'meal' | 'exercise' | 'medication';
+const QUICK_TITLES: Record<QuickKind, string> = {
+  meal: 'Quick meal log',
+  exercise: 'Quick exercise log',
+  medication: 'Take as needed',
+};
+const QUICK_TABS: Record<QuickKind, string> = { meal: 'Meal', exercise: 'Exercise', medication: 'Medication' };
+
+export function QuickLog({ meal = true, exercise = true, medication = true, bare = false }: { meal?: boolean; exercise?: boolean; medication?: boolean; bare?: boolean }) {
+  const asNeeded = useAsNeededDoses();
+  const kinds: QuickKind[] = [
+    ...(meal ? ['meal' as const] : []),
+    ...(exercise ? ['exercise' as const] : []),
+    ...(medication && asNeeded.meds.length > 0 ? ['medication' as const] : []),
+  ];
+  const [picked, setKind] = useState<QuickKind>('meal');
+  if (!kinds.length) return null;
+  // The chosen tab can go away (the last as-needed medication paused): fall back to the first
+  const kind = kinds.includes(picked) ? picked : kinds[0];
+  const title = QUICK_TITLES[kind];
+  const toggle = kinds.length > 1 ? (
     <Switch role="tablist" aria-label="Log a" data-fold-hide="">
-      <SwitchBtn type="button" role="tab" aria-selected={kind === 'meal'} $active={kind === 'meal'} onClick={() => setKind('meal')}>Meal</SwitchBtn>
-      <SwitchBtn type="button" role="tab" aria-selected={kind === 'exercise'} $active={kind === 'exercise'} onClick={() => setKind('exercise')}>Exercise</SwitchBtn>
+      {kinds.map(k => (
+        <SwitchBtn key={k} type="button" role="tab" aria-selected={kind === k} $active={kind === k} onClick={() => setKind(k)}>{QUICK_TABS[k]}</SwitchBtn>
+      ))}
     </Switch>
   ) : undefined;
-  const body = kind === 'meal' ? <MealQuick /> : <ExerciseQuick />;
+  const body = kind === 'meal' ? <MealQuick /> : kind === 'exercise' ? <ExerciseQuick /> : <AsNeededList state={asNeeded} />;
   if (bare) {
     return (
       <section aria-label={title}>
