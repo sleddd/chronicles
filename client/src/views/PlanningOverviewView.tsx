@@ -22,10 +22,16 @@ import { cardLabel } from '../styles/cardLabel.js';
 import {
   EMPTY_GOAL_CATEGORIES, addGoalCategory, areaInfo, goalCategoryList, orderAreas, parseGoalCategories, sameCategory, withAreaInfo, withAreaOrder,
   type GoalCategoryConfig,
+  CUSTOM_AREA_PHOTO, areaImageKeys,
 } from '../utils/goalCategories.js';
 import { weekOf, plannerFacts, effectiveDay } from '../utils/planner.js';
 import { weekProgress, isDueOn, type Habit } from '../utils/habits.js';
 import { wallpaperById, wallpaperSrc } from '../utils/wallpapers.js';
+import { CustomPhotoTile } from '../components/organisms/CustomPhotoTile.js';
+import { useImagesReady } from '../hooks/useImagesReady.js';
+import { useDecryptedImage } from '../hooks/useDecryptedImage.js';
+import { pinImageKeys, type EntryImage } from '../services/imageStorage.js';
+import { replaceStoredImage } from '../services/backgroundImages.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { showFlash } from '../services/flashNotice.js';
 
@@ -404,7 +410,7 @@ export function PlanningOverviewView() {
               {Array.from({ length: cols }, (_, c) => (
                 <MasonryCol key={c}>
                   {areas.filter((_, i) => i % cols === c).map(area => (
-                    <AreaCard key={area} area={area} config={config} onSave={save} today={today} week={week}
+                    <AreaCard key={area} area={area} config={config} onSave={save} onSaveStrict={saveCategories} today={today} week={week}
                       goals={goals.filter(g => sameCategory(g.category, area)).sort((a, b) => Number(a.status === 'completed') - Number(b.status === 'completed'))}
                       progressOf={progressOf}
                       taskCount={(g: PlanGoal) => tasks.filter(t => t.goalId === g.id).length}
@@ -434,9 +440,11 @@ export function PlanningOverviewView() {
 
 type WeekTask = ReturnType<typeof usePlanData>['tasks'][number];
 
-function AreaCard({ area, config, onSave, today, week, goals, progressOf, taskCount, weekTasks, weekHabits, habitWeek,
+function AreaCard({ area, config, onSave, onSaveStrict, today, week, goals, progressOf, taskCount, weekTasks, weekHabits, habitWeek,
   onTickTask, onTickHabit, habitDoneToday, onOpen, onGoals, onWeek }: {
   area: string; config: GoalCategoryConfig; onSave: (next: GoalCategoryConfig) => unknown;
+  /** The same save, but it rejects when it fails (a photo is only let go once its replacement is saved) */
+  onSaveStrict: (next: GoalCategoryConfig) => Promise<unknown>;
   today: string; week: string[];
   goals: PlanGoal[]; progressOf: (g: PlanGoal) => number; taskCount: (g: PlanGoal) => number;
   weekTasks: WeekTask[]; weekHabits: Habit[]; habitWeek: (h: Habit) => { done: number; target: number };
@@ -445,7 +453,30 @@ function AreaCard({ area, config, onSave, today, week, goals, progressOf, taskCo
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({ id: area });
   const info = areaInfo(config, area);
-  const photo = info.photo && wallpaperById(info.photo) ? wallpaperSrc(info.photo) : undefined;
+  // The person's own photo (only while Entry Images is on and set up), else one of the app's
+  const imagesReady = useImagesReady();
+  const ownChosen = info.photo === CUSTOM_AREA_PHOTO && !!info.photoImage;
+  const own = useDecryptedImage(ownChosen && imagesReady ? info.photoImage!.key : null, info.photoImage?.iv ?? null, info.photoImage?.mimeType ?? null);
+  const photo = ownChosen ? own.url ?? undefined : info.photo && wallpaperById(info.photo) ? wallpaperSrc(info.photo) : undefined;
+  // The settings as they are now: an upload takes a while, and what is saved after it
+  // must be built on the latest, not on what they were when it began
+  const configRef = useRef(config);
+  configRef.current = config;
+  const savePhotoChoice = (photo: string) => { void onSave(withAreaInfo(configRef.current, area, { photo })); };
+  // A new photo of the person's own, or none: the one it replaces leaves the bucket once
+  // this is saved, unless something still uses it
+  const setOwnPhoto = async (image: EntryImage | null) => {
+    const now = areaInfo(configRef.current, area);
+    const old = now.photoImage;
+    const next = withAreaInfo(configRef.current, area, { photo: image ? CUSTOM_AREA_PHOTO : now.photo === CUSTOM_AREA_PHOTO ? '' : now.photo ?? '', photoImage: image ?? undefined });
+    pinImageKeys('areas', areaImageKeys(next));
+    const saved = await replaceStoredImage({
+      old, next: image,
+      save: () => onSaveStrict(next),
+      repin: () => pinImageKeys('areas', areaImageKeys(configRef.current)),
+    });
+    if (!saved) showFlash('Couldn’t save that photo. Try again.');
+  };
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(info.vision ?? '');
   const [picking, setPicking] = useState<DOMRect | null>(null);
@@ -472,7 +503,13 @@ function AreaCard({ area, config, onSave, today, week, goals, progressOf, taskCo
       </Header>
       {picking && (
         <PhotoPicker anchor={picking} value={info.photo ?? null} onClose={() => setPicking(null)}
-          onChange={id => { void onSave(withAreaInfo(config, area, { photo: id ?? '' })); setPicking(null); }} />
+          onChange={id => { savePhotoChoice(id ?? ''); setPicking(null); }}
+          own={imagesReady ? {
+            image: info.photoImage ?? null, chosen: ownChosen,
+            onPick: () => { savePhotoChoice(CUSTOM_AREA_PHOTO); setPicking(null); },
+            onSet: image => { void setOwnPhoto(image); setPicking(null); },
+            onRemove: () => { void setOwnPhoto(null); },
+          } : undefined} />
       )}
       <Body>
         <div>
@@ -609,11 +646,17 @@ const DragGhost = styled.div`
 `;
 
 /* The header photo picker: portalled, under the camera button; Escape or a click outside closes it */
-function PhotoPicker({ anchor, value, onChange, onClose }: { anchor: DOMRect; value: string | null; onChange: (id: string | null) => void; onClose: () => void }) {
+function PhotoPicker({ anchor, value, onChange, onClose, own }: {
+  anchor: DOMRect; value: string | null; onChange: (id: string | null) => void; onClose: () => void;
+  /** The "Your photo" tile (Entry Images on and set up) */
+  own?: { image: EntryImage | null; chosen: boolean; onPick: () => void; onSet: (image: EntryImage) => void; onRemove: () => void };
+}) {
   const ref = useRef<HTMLDivElement>(null);
+  // The library dialog opens over this panel: a click or Escape in it must not close the panel under it
+  const modalOpen = useRef(false);
   useEffect(() => {
-    const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const down = (e: MouseEvent) => { if (!modalOpen.current && ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && !modalOpen.current) onClose(); };
     document.addEventListener('mousedown', down);
     document.addEventListener('keydown', key);
     return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key); };
@@ -624,7 +667,8 @@ function PhotoPicker({ anchor, value, onChange, onClose }: { anchor: DOMRect; va
   return createPortal(
     <PickerPanel ref={ref} style={{ left, top }} role="dialog" aria-label="Choose a photo">
       <h3>Area photo</h3>
-      <WallpaperPicker value={value} onChange={onChange} />
+      <WallpaperPicker value={value} onChange={onChange}
+        extra={own ? <CustomPhotoTile {...own} onModal={open => { modalOpen.current = open; }} /> : undefined} />
     </PickerPanel>,
     document.body,
   );

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   collectImageKeys,
   bestEffortDeleteImages,
+  pinImageKeys,
   getImageObjectUrl,
   clearImageCache,
   setImageStorageConfig,
@@ -45,6 +46,9 @@ const img = (n: number) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   clearImageCache();
+  // The settings that may use a photo have been read, and use none
+  pinImageKeys('wallpaper', []);
+  pinImageKeys('areas', []);
   setImageStorageConfig(null, null);
   setImageStorageDraft(null);
   vi.stubGlobal('URL', Object.assign(URL, {
@@ -166,6 +170,36 @@ describe('bestEffortDeleteImages', () => {
       expect(matching).toHaveLength(1);
       expect(matching[0]).toContain('X-Amz-Signature=');
     }
+  });
+
+  it('deletes nothing until every setting that may use a photo has been read', async () => {
+    setImageStorageConfig(CFG, encryptedValueOf(CFG));
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    clearImageCache(); // a new session: nothing read yet
+    setImageStorageConfig(CFG, encryptedValueOf(CFG));
+    await bestEffortDeleteImages([img(1).key]);
+    pinImageKeys('wallpaper', []);
+    await bestEffortDeleteImages([img(1).key]);
+    expect(fetchMock).not.toHaveBeenCalled();
+    pinImageKeys('areas', []);
+    await bestEffortDeleteImages([img(1).key]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a photo a background or a Vision area is using', async () => {
+    setImageStorageConfig(CFG, encryptedValueOf(CFG));
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    pinImageKeys('wallpaper', [img(1).key, img(1).thumbKey]);
+    pinImageKeys('areas', [img(2).key]);
+    await bestEffortDeleteImages([img(1).key, img(1).thumbKey, img(2).key, img(3).key]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain(`/my-images/${img(3).key}?`);
+    // No longer used: it can go
+    pinImageKeys('wallpaper', []);
+    await bestEffortDeleteImages([img(1).key]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('never throws on network failure', async () => {

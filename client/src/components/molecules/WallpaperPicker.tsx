@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { UNSPLASH_LINK, WALLPAPERS, wallpaperLink, wallpaperThumb } from '../../utils/wallpapers.js';
@@ -5,7 +6,8 @@ import { UNSPLASH_LINK, WALLPAPERS, wallpaperLink, wallpaperThumb } from '../../
 /* Settings → Theme → Background: "None" (the default) then every wallpaper as
    a thumbnail, each with its credit on it — "Photo by <name> on Unsplash",
    linking to the photo and to Unsplash (our own photos carry no credit). The chosen one has an accent outline
-   and a tick. Props only. */
+   and a tick. `extra` is a tile of the caller's own after None (the person's own
+   photo, `CustomPhotoTile`). Props only. */
 
 const Grid = styled.div`
   display: grid;
@@ -16,7 +18,7 @@ const Grid = styled.div`
   padding: 4px;
 `;
 
-const Tile = styled.div<{ $on: boolean }>`
+export const Tile = styled.div<{ $on: boolean }>`
   position: relative;
   aspect-ratio: 16 / 10;
   border-radius: 10px;
@@ -27,7 +29,7 @@ const Tile = styled.div<{ $on: boolean }>`
 `;
 
 /* The whole tile picks it; the credit links sit above it */
-const Pick = styled.button`
+export const Pick = styled.button`
   position: absolute;
   inset: 0;
   display: flex;
@@ -64,7 +66,7 @@ const Credit = styled.p`
   a { color: #fff; text-decoration: underline; text-underline-offset: 2px; pointer-events: auto; }
 `;
 
-const Chosen = styled.span`
+export const Chosen = styled.span`
   position: absolute;
   top: 8px;
   right: 8px;
@@ -76,13 +78,14 @@ const Chosen = styled.span`
   pointer-events: none;
 `;
 
-export function WallpaperPicker({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+export function WallpaperPicker({ value, onChange, extra }: { value: string | null; onChange: (id: string | null) => void; extra?: ReactNode }) {
   return (
     <Grid role="radiogroup" aria-label="Background">
       <Tile $on={!value}>
         <Pick type="button" role="radio" aria-checked={!value} onClick={() => onChange(null)}>None</Pick>
         {!value && <Chosen><Icon name="check" size={12} strokeWidth={3} /></Chosen>}
       </Tile>
+      {extra}
       {WALLPAPERS.map(w => (
         <Tile key={w.id} $on={value === w.id}>
           <Pick type="button" role="radio" aria-checked={value === w.id} aria-label={w.by ? `Photo by ${w.by}` : `Photo ${w.id.replace(/^own-/, '').replace(/-/g, ' ')}`} onClick={() => onChange(w.id)}>

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { rememberWallpaper, startingWallpaper } from '../utils/wallpapers.js';
+import type { EntryImage } from '../services/imageStorage.js';
 import { DEFAULT_ACCENT_COLOR, safeAccent } from '../styles/accent.js';
 import { resolveTheme, rememberTheme, startingTheme, type ThemePreference, isAuthPath } from '../utils/autoTheme.js';
 import type { UserFieldDef, TopicCustomFields } from '../types/userFields.js';
@@ -68,6 +69,10 @@ interface UIState {
    *  (never picked: the theme's default — shownWallpaper turns it into a photo) */
   wallpaper: string | null;
   setWallpaper: (id: string | null) => void;
+  /** The person's own background photo (shown while `wallpaper` is CUSTOM_WALLPAPER), and whether the saved setting has been read yet */
+  customWallpaper: EntryImage | null;
+  wallpaperSynced: boolean;
+  setCustomWallpaper: (image: EntryImage | null) => void;
 
   // Profile
   displayName: string;
@@ -167,6 +172,9 @@ export const useUIStore = create<UIState>((set) => ({
   setAccentColor: (color) => set({ accentColor: safeAccent(color) }),
   wallpaper: startingWallpaper(),
   setWallpaper: (id) => { rememberWallpaper(id); set({ wallpaper: id }); },
+  customWallpaper: null,
+  wallpaperSynced: false,
+  setCustomWallpaper: (image) => set({ customWallpaper: image, wallpaperSynced: true }),
 
   displayName: '',
   setDisplayName: (name) => set({ displayName: name }),

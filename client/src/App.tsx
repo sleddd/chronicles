@@ -64,7 +64,10 @@ import { ShoppingListsView } from './views/ShoppingListsView.js';
 import { autoThemeFor, PAGE_COLOR } from './utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 import { useEncryptedSetting } from './hooks/useEncryptedSetting.js';
-import { resolveWallpaper } from './utils/wallpapers.js';
+import { resolveWallpaper, customWallpaperFrom, type WallpaperSetting } from './utils/wallpapers.js';
+import { pinImageKeys } from './services/imageStorage.js';
+import { storedImageKeys } from './utils/storedImage.js';
+import { areaImageKeys, parseGoalCategories, EMPTY_GOAL_CATEGORIES, type GoalCategoryConfig } from './utils/goalCategories.js';
 import { useTimeStore } from './stores/timeStore.js';
 import { RunningTimer } from './components/organisms/RunningTimer.js';
 import { NotificationBell } from './components/organisms/NotificationBell.js';
@@ -525,11 +528,22 @@ function ChatWhenOn() {
 /** The saved wallpaper (the sealed `wallpaper` setting) into the store once
  *  it's opened — the browser's remembered copy shows until then. */
 function WallpaperSync() {
-  const [saved, , loaded] = useEncryptedSetting<string | null>('wallpaper', null);
+  const [saved, , loaded] = useEncryptedSetting<WallpaperSetting>('wallpaper', null);
   const setWallpaper = useUIStore(s => s.setWallpaper);
+  const setCustomWallpaper = useUIStore(s => s.setCustomWallpaper);
   useEffect(() => {
-    if (loaded) setWallpaper(resolveWallpaper(saved));
-  }, [loaded, saved, setWallpaper]);
+    if (!loaded) return;
+    const custom = customWallpaperFrom(saved);
+    setCustomWallpaper(custom);
+    setWallpaper(resolveWallpaper(saved));
+    // The person's own background may be an entry's photo: deleting that entry leaves it in the bucket
+    pinImageKeys('wallpaper', storedImageKeys(custom));
+  }, [loaded, saved, setWallpaper, setCustomWallpaper]);
+  // The same for the Vision areas' own photos
+  const [areas, , areasLoaded] = useEncryptedSetting<GoalCategoryConfig>('goalCategories', EMPTY_GOAL_CATEGORIES);
+  useEffect(() => {
+    if (areasLoaded) pinImageKeys('areas', areaImageKeys(parseGoalCategories(areas)));
+  }, [areasLoaded, areas]);
   return null;
 }
 

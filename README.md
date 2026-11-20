@@ -18,7 +18,16 @@ A health dashboard you can rearrange by dragging widgets into rows, with today's
 <img width="1268" height="1300" alt="The health dashboard: nutrients against goals, the wellness check-in, quick logs, habits and today’s doses" src="client/src/assets/landing/features/health-dashboard-dark.jpg" />
 
 ### In-App AI
-Optional, and you bring your own key from OpenAI, Claude (Anthropic) or Amazon Bedrock. It estimates calories and nutrients for meals and exercise, and a chat bubble helps with the app and suggests ready-made saves — `/save Meals oatmeal with berries` files a journal entry without going to the AI. The AI never sees your journal entries, only what you type to it. Chats aren't kept: they're gone when you clear them or sign out, unless you save one to your journal with `/save chat`. Add notes in Settings for things you want the AI to always know. Requests go from your browser straight to the provider, never through the Chronicles server.
+Optional, and you bring your own key from OpenAI, Claude (Anthropic) or Amazon Bedrock. It estimates calories and nutrients for meals and exercise, and a chat bubble helps with the app and suggests ready-made saves — `/save Meals oatmeal with berries` files a journal entry without going to the AI. The chat and the estimates never see your journal entries, only what you type to them. Chats aren't kept: they're gone when you clear them or sign out, unless you save one to your journal with `/save chat`. Add notes in Settings for things you want the AI to always know. Requests go from your browser straight to the provider, never through the Chronicles server.
+
+Two further features can read your entries, and both are off until you turn them on:
+
+- **AI task planning** — A button on the Planner sends your unscheduled tasks, the tasks already planned, your goals and milestones with their notes, your visions, the names of your goal categories and task types, and the names and times of the next 14 days' events. The AI suggests days and times for tasks, new tasks and milestones, cleaner titles, better filing and the dates that fill out your Roadmap. You review every suggestion, untick what you don't want, and nothing changes until you press Apply. Event moves start unticked.
+- **AI insights** — A button on the Journal sends the text of your Journal entries for the last 7 or 30 days, and no other topic. The AI writes a short reflection with prompts you can copy or start a new entry from. The reflection is screened for safety before you see it, and support resources are shown when your writing shows a risk sign.
+
+Each has its own switch in Settings and its own notice to agree to, in every browser you use it from. Every press then shows exactly what will be shared and waits for OK. What is sent leaves Chronicles' encryption and is covered by your provider's terms. The request and the answer are never stored.
+
+<img width="1268" height="900" alt="The AI plan review, with suggested days for tasks and changes to goals to tick or untick" src="client/src/assets/landing/features/ai-plan-dark.jpg" />
 
 ### Topics
 Entries are organized by topic — tasks, goals, meals, medication, recipes, books, quotes and more — or your own. Add, remove and reorder topics, choose their icons and give them custom fields (text, number, date, yes/no, link). Each topic's page lists its entries by month, with search.
@@ -83,6 +92,7 @@ Your account, theme (light or dark and 30 accent colors), which features are on,
 - **Unsaved writing survives** — what you're typing is sealed with your key as you go and offered back after you sign in again
 - **Finance data is zero-knowledge too** — budgets, bills, payments, savings, goals and paydays are encrypted in the browser and stored in their own tables as ciphertext; the server never sees an amount, name or date. There are no bank connections. Chronicles is still not a banking app — see the [Finance disclaimer](#finance)
 - **AI is optional and bring-your-own** — when you turn it on, the meal or exercise description you're estimating (or your chat message) goes from your browser straight to the provider you chose; nothing passes through the Chronicles server
+- **AI never reads your entries unless you ask it to** — AI task planning and AI insights are separate switches, off by default. Each needs its own consent in each browser, and each press lists what will be sent and waits for OK. What you send is readable by your provider, and nothing sent or returned is stored unencrypted
 
 ## Upcoming Features
 
@@ -154,7 +164,7 @@ Each section is a collapsible card (all start collapsed; Settings remembers whic
 - **Features** - Turn on or off meals, medication, goals, milestones, exercise, allergies, cycle tracking, entertainment and inspiration; Finance and paycheck reconcile are off until you turn them on
 - **Calendar Sync** - Connect Google Calendar, choose the target calendar, toggle imports, manage the Apple ICS feed, and clean up old events
 - **Entry Images** - Toggle the feature, enter your Cloudflare R2 credentials (autosaved and master-key encrypted), test the connection, and follow the built-in setup guide
-- **In-App AI** - Choose Claude, Amazon Bedrock, or OpenAI, add your credentials and model, and leave notes for the chat assistant
+- **In-App AI** - Choose Claude, Amazon Bedrock, or OpenAI, add your credentials and model, and leave notes for the chat assistant. Switch on the chat, AI task planning and AI insights separately. The last two show a notice to agree to first
 - **Security** - Passkeys, change password, active sessions, recovery key, two-factor authentication (TOTP setup wizard with QR code and backup codes) and trusted browsers
 - **Data** - Default topics, seed test data (and sample Finance data when Finance is on), export to CSV, export all Finance data (a ZIP of spreadsheets plus a JSON backup), import entries (CSV) and a Daily Log (JSON) — each import has a downloadable example file
 - **Privacy** and **Sign Out**

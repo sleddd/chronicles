@@ -61,7 +61,12 @@ import { parseThemePreference, type ThemePreference } from '../utils/autoTheme.j
 import { featureFlagsFrom } from '../utils/featureFlags.js';
 import { WallpaperPicker } from '../components/molecules/WallpaperPicker.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
-import { NO_WALLPAPER, shownWallpaper, wallpaperById } from '../utils/wallpapers.js';
+import { CUSTOM_WALLPAPER, DEFAULT_CHOICE, shownWallpaper, wallpaperById, wallpaperSetting, type WallpaperSetting } from '../utils/wallpapers.js';
+import { CustomPhotoTile } from '../components/organisms/CustomPhotoTile.js';
+import { useImagesReady } from '../hooks/useImagesReady.js';
+import { pinImageKeys, type EntryImage } from '../services/imageStorage.js';
+import { replaceStoredImage } from '../services/backgroundImages.js';
+import { storedImageKeys } from '../utils/storedImage.js';
 
 const TIMEZONES = [
   { value: 'Pacific/Honolulu', label: 'Hawaii (HST)' },
@@ -218,11 +223,43 @@ export function SettingsView() {
   // What shows now (a never-picked choice is the theme's default photo)
   const wallpaper = useUIStore(s => shownWallpaper(s.wallpaper, s.themeMode));
   const setWallpaper = useUIStore(s => s.setWallpaper);
-  const [, saveWallpaper] = useEncryptedSetting<string | null>('wallpaper', null);
+  const [, saveWallpaper] = useEncryptedSetting<WallpaperSetting>('wallpaper', null);
+  // A photo of the person's own (uploaded, or from their entries' photos): offered only
+  // while Entry Images is on and set up. It stays saved while another background is chosen
+  const customWallpaper = useUIStore(s => s.customWallpaper);
+  const setCustomWallpaper = useUIStore(s => s.setCustomWallpaper);
+  const imagesReady = useImagesReady();
+  // None is saved as its own value: nothing saved means the default photo
+  const saveBackground = (id: string | null, custom: EntryImage | null) => saveWallpaper(wallpaperSetting(id, custom));
+  const BACKGROUND_NOT_SAVED = 'Couldn’t save your background. Try again.';
+  // Shown at once; a save that fails puts the last background back and says so
   const chooseWallpaper = (id: string | null) => {
+    const before = useUIStore.getState().wallpaper;
     setWallpaper(id);
-    // None is saved as its own value: nothing saved means the default photo
-    saveWallpaper(id ?? NO_WALLPAPER).catch(err => console.error('Saving the background failed:', err));
+    saveBackground(id, customWallpaper).catch(err => {
+      console.error('Saving the background failed:', err instanceof Error ? err.message : err);
+      setWallpaper(before);
+      showFlash(BACKGROUND_NOT_SAVED);
+    });
+  };
+  const setOwnWallpaper = async (image: EntryImage | null) => {
+    const old = customWallpaper;
+    const before = useUIStore.getState().wallpaper;
+    // Removed while it was showing: back to the theme's default photo
+    const choice = image ? CUSTOM_WALLPAPER : before === CUSTOM_WALLPAPER ? DEFAULT_CHOICE : before;
+    setCustomWallpaper(image);
+    setWallpaper(choice);
+    pinImageKeys('wallpaper', storedImageKeys(image));
+    // The photo it replaces leaves the bucket only once this is saved
+    const saved = await replaceStoredImage({
+      old, next: image,
+      save: () => saveBackground(choice, image),
+      repin: () => pinImageKeys('wallpaper', storedImageKeys(old)),
+    });
+    if (saved) return;
+    setCustomWallpaper(old);
+    setWallpaper(before);
+    showFlash(BACKGROUND_NOT_SAVED);
   };
   const setThemePreference = useUIStore(s => s.setThemePreference);
   const navigate = useNavigate();
@@ -1389,9 +1426,14 @@ export function SettingsView() {
           <ColorSectionTitle>Background</ColorSectionTitle>
           <ColorSectionDesc>
             A photo across the top of every page. Pick another, or None for a plain page.
+            {imagesReady && <> You can also use a photo of your own. Upload one, or take one from your library. It is encrypted and kept in your image storage like an entry’s photos.</>}
             {wallpaperById(wallpaper)?.by && <> Showing a photo by {wallpaperById(wallpaper)!.by} on Unsplash.</>}
           </ColorSectionDesc>
-          <WallpaperPicker value={wallpaperById(wallpaper) ? wallpaper : null} onChange={chooseWallpaper} />
+          <WallpaperPicker value={wallpaperById(wallpaper) || wallpaper === CUSTOM_WALLPAPER ? wallpaper : null} onChange={chooseWallpaper}
+            extra={imagesReady ? (
+              <CustomPhotoTile image={customWallpaper} chosen={wallpaper === CUSTOM_WALLPAPER && !!customWallpaper}
+                onPick={() => chooseWallpaper(CUSTOM_WALLPAPER)} onSet={image => { void setOwnWallpaper(image); }} onRemove={() => { void setOwnWallpaper(null); }} />
+            ) : undefined} />
         </ColorSection>
       </SettingsCard>
       </Section>

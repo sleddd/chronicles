@@ -3,10 +3,15 @@
    `goalCategories` setting. A goal carries one (`goalCategory`); its
    milestones, tasks and habits linked to it take the goal's. Pure helpers. */
 
+import type { EntryImage } from '../services/imageStorage.js';
+import { parseStoredImage, storedImageKeys } from './storedImage.js';
+
 export const DEFAULT_GOAL_CATEGORIES = ['Health', 'Career', 'Finances', 'Relationships', 'Growth', 'Home'] as const;
 
 /** A category shown as an area on the Planning dashboard: its vision and header photo (a wallpaper id) */
-export interface AreaInfo { vision?: string; photo?: string; shown?: boolean }
+export interface AreaInfo { vision?: string; photo?: string; shown?: boolean; /** The person's own photo, shown while `photo` is CUSTOM_AREA_PHOTO (kept while a stock photo is chosen) */ photoImage?: EntryImage }
+/** `photo` when the area shows the person's own photo */
+export const CUSTOM_AREA_PHOTO = 'custom';
 
 /** What's saved: categories the person added, built-in ones they hid, and each area's vision / photo
     (keyed by the category's lower-cased name) */
@@ -27,10 +32,12 @@ export function parseGoalCategories(raw: unknown): GoalCategoryConfig {
     for (const [k, v] of Object.entries(o.areas as Record<string, unknown>)) {
       if (!v || typeof v !== 'object') continue;
       const a = v as Record<string, unknown>;
+      const photoImage = parseStoredImage(a.photoImage);
       areas[key(k)] = {
         ...(typeof a.vision === 'string' ? { vision: a.vision.slice(0, 600) } : {}),
         ...(typeof a.photo === 'string' ? { photo: a.photo.slice(0, 80) } : {}),
         ...(a.shown === true ? { shown: true } : {}),
+        ...(photoImage ? { photoImage } : {}),
       };
     }
   }
@@ -125,4 +132,9 @@ export function groupByCategory<T>(items: T[], categoryOf: (item: T) => string, 
     category, items: items.filter(i => (category ? sameCategory(categoryOf(i), category) : !categoryOf(i).trim())),
   }));
   return groups.filter(g => g.items.length > 0);
+}
+
+/** Every object key the areas' own photos use (so deleting an entry never deletes one) */
+export function areaImageKeys(config: GoalCategoryConfig | null | undefined): string[] {
+  return Object.values(config?.areas ?? {}).flatMap(a => storedImageKeys(a.photoImage));
 }

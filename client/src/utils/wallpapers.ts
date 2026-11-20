@@ -7,6 +7,9 @@
  * "Photo by <name> on Unsplash", linking to the photo's page.
  */
 
+import type { EntryImage } from '../services/imageStorage.js';
+import { parseStoredImage } from './storedImage.js';
+
 export interface Wallpaper {
   id: string;
   /** The photographer, as Unsplash credits them. None on our own photos */
@@ -119,11 +122,39 @@ export const DEFAULT_CHOICE = 'default';
  *  which means the default */
 export const NO_WALLPAPER = 'none';
 
-/** The choice a saved value stands for: None → null, a known photo → it, nothing
- *  saved (or a photo that's since been removed) → DEFAULT_CHOICE, the theme's default */
-export function resolveWallpaper(saved: string | null | undefined): string | null {
+/** The choice "my own photo" (only while Entry Images is on and set up): the photo
+ *  itself is kept beside the choice in the sealed setting */
+export const CUSTOM_WALLPAPER = 'custom';
+
+/** The sealed `wallpaper` setting: just the choice (a photo's id / NO_WALLPAPER), or —
+ *  once the person has a photo of their own — the choice with that photo, which is kept
+ *  while another background is chosen so it can be picked again */
+export type WallpaperSetting = string | { choice: string; custom: EntryImage } | null;
+
+/** The person's own photo in a saved value (null: none) */
+export function customWallpaperFrom(saved: unknown): EntryImage | null {
+  return saved && typeof saved === 'object' ? parseStoredImage((saved as { custom?: unknown }).custom) : null;
+}
+
+/** What to save for a choice, keeping the person's own photo with it */
+export function wallpaperSetting(choice: string | null, custom: EntryImage | null): WallpaperSetting {
+  const value = choice ?? NO_WALLPAPER;
+  return custom ? { choice: value, custom } : value;
+}
+
+/** The choice a saved value stands for: None → null, a known photo → it, the person's
+ *  own photo → CUSTOM_WALLPAPER, nothing saved (or a photo that's since been removed)
+ *  → DEFAULT_CHOICE, the theme's default */
+export function resolveWallpaper(saved: unknown): string | null {
+  if (saved && typeof saved === 'object') {
+    const choice = (saved as { choice?: unknown }).choice;
+    if (choice === CUSTOM_WALLPAPER) return customWallpaperFrom(saved) ? CUSTOM_WALLPAPER : DEFAULT_CHOICE;
+    return resolveWallpaper(typeof choice === 'string' ? choice : null);
+  }
   if (saved === NO_WALLPAPER) return null;
-  return wallpaperById(saved) ? saved! : DEFAULT_CHOICE;
+  // The browser's remembered choice: the photo itself arrives with the settings
+  if (saved === CUSTOM_WALLPAPER) return CUSTOM_WALLPAPER;
+  return typeof saved === 'string' && wallpaperById(saved) ? saved : DEFAULT_CHOICE;
 }
 
 /** The photo to show for a choice in a theme (null = none) */

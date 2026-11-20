@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { useUIStore } from '../../stores/uiStore.js';
-import { shownWallpaper, wallpaperById, wallpaperSrc } from '../../utils/wallpapers.js';
+import { CUSTOM_WALLPAPER, DEFAULT_WALLPAPERS, shownWallpaper, wallpaperById, wallpaperSrc } from '../../utils/wallpapers.js';
+import { useImagesReady } from '../../hooks/useImagesReady.js';
+import { useDecryptedImage } from '../../hooks/useDecryptedImage.js';
+import { useEntriesStore } from '../../stores/entriesStore.js';
 
 /* The chosen wallpaper (Settings → Theme → Background, off by default): the
    photo across the top of the page it's placed in, fading into the page
@@ -163,10 +166,33 @@ const STANDARD_HEIGHT = 'min(520px, 60vh)';
  *  own (a full-height overflow box), not the element the photo sits in, so the
  *  photo follows that panel's scroll (smaller scrolling boxes — tables, the
  *  menu grid — are ignored). The journal passes false: its title row stays put. */
-export function Wallpaper({ height = STANDARD_HEIGHT, follow = true, solid, wash = true }: { height?: string; follow?: boolean; solid?: number; wash?: boolean } = {}) {
-  const id = useUIStore(s => shownWallpaper(s.wallpaper, s.themeMode));
-  const paper = wallpaperById(id);
-  const src = paper ? wallpaperSrc(paper.id) : '';
+type LayerProps = { height?: string; follow?: boolean; solid?: number; wash?: boolean };
+
+export function Wallpaper(props: LayerProps = {}) {
+  const choice = useUIStore(s => shownWallpaper(s.wallpaper, s.themeMode));
+  // The person's own photo has its own component: only it needs the key to open the photo
+  if (choice === CUSTOM_WALLPAPER) return <OwnWallpaper {...props} />;
+  const stock = wallpaperById(choice);
+  return <PhotoLayer {...props} paper={stock?.id ?? null} src={stock ? wallpaperSrc(stock.id) : ''} />;
+}
+
+/* The person's own photo: opened from their bucket, only while Entry Images is on and set up.
+   When it can't be shown (photos switched off, the photo gone) the theme's default shows
+   instead — but nothing while it is still on its way, so no other photo flashes first */
+function OwnWallpaper(props: LayerProps) {
+  const fallback = useUIStore(s => DEFAULT_WALLPAPERS[s.themeMode]);
+  const own = useUIStore(s => s.customWallpaper);
+  const synced = useUIStore(s => s.wallpaperSynced);
+  const settled = useEntriesStore(s => s.isInitialized);
+  const imagesReady = useImagesReady();
+  const opened = useDecryptedImage(imagesReady && own ? own.key : null, own?.iv ?? null, own?.mimeType ?? null);
+  if (opened.url) return <PhotoLayer {...props} paper={CUSTOM_WALLPAPER} src={opened.url} />;
+  const lost = !!opened.error || (synced && (!own || (settled && !imagesReady)));
+  const stock = lost ? wallpaperById(fallback) : undefined;
+  return <PhotoLayer {...props} paper={stock?.id ?? null} src={stock ? wallpaperSrc(stock.id) : ''} />;
+}
+
+function PhotoLayer({ height = STANDARD_HEIGHT, follow = true, solid, wash = true, paper, src }: LayerProps & { paper: string | null; src: string }) {
   const [loaded, setLoaded] = useState<string | null>(null);
   const [shade, setShade] = useState(0);
   const layerRef = useRef<HTMLDivElement>(null);
@@ -190,7 +216,7 @@ export function Wallpaper({ height = STANDARD_HEIGHT, follow = true, solid, wash
   useEffect(() => {
     if (!paper) return;
     const root = document.documentElement;
-    root.setAttribute('data-wallpaper', paper.id);
+    root.setAttribute('data-wallpaper', paper);
     return () => { root.removeAttribute('data-wallpaper'); };
   }, [paper]);
 

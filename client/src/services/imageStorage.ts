@@ -14,6 +14,7 @@ import { presignR2, type R2Config } from './r2Signer.js';
 import { processImage } from '../utils/processImage.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
 import { isSealed, openSetting, sealSetting } from './settingCipher.js';
+import { isImageKey } from '../utils/storedImage.js';
 
 export type { R2Config };
 
@@ -83,11 +84,8 @@ const inflight = new Map<string, Promise<string>>();
 // can't put a decrypted URL back into the cache afterwards
 let lockEpoch = 0;
 
-/** The only object keys this app makes: `img/<uuid>` and its `-t` thumbnail. */
-const IMAGE_KEY = /^img\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(-t)?$/;
-export function isImageKey(key: string): boolean {
-  return IMAGE_KEY.test(key);
-}
+// The only object keys this app makes (`img/<uuid>` and its `-t` thumbnail): one pattern, in utils/storedImage
+export { isImageKey };
 
 // Uploads are re-encoded to JPEG; anything else named in metadata is shown as
 // JPEG, never as a type a browser would run (text/html, image/svg+xml)
@@ -282,6 +280,8 @@ export function clearImageCache(): void {
   }
   objectUrlCache.clear();
   inflight.clear();
+  // The next sign-in reads the settings again before anything may be deleted
+  pinned.clear();
   r2Config = null;
   // The draft is kept — unsaved form input must survive the tab-away
   // auto-lock, or entering credentials in stages becomes impossible — but
@@ -290,12 +290,34 @@ export function clearImageCache(): void {
   notifyConfigListeners();
 }
 
+/* Photos a setting uses (the custom background, a Vision area's photo). They may be an
+   entry's own photos, picked from the library, so deleting that entry must leave them
+   in the bucket: every delete goes through bestEffortDeleteImages, which skips them. */
+export const PIN_OWNERS = ['wallpaper', 'areas'] as const;
+export type PinOwner = typeof PIN_OWNERS[number];
+// An owner is in the map once its setting has been read, with an empty set when it uses no
+// photo. Until every owner is there nothing is deleted: "no setting uses it" isn't known yet
+const pinned = new Map<PinOwner, Set<string>>();
+/** The object keys one owner is using now (replaces its last list). Also says its setting has been read */
+export function pinImageKeys(owner: PinOwner, keys: string[]): void {
+  pinned.set(owner, new Set(keys));
+}
+const pinsKnown = () => PIN_OWNERS.every(owner => pinned.has(owner));
+const isPinned = (key: string) => { for (const set of pinned.values()) if (set.has(key)) return true; return false; };
+
 /** Best-effort R2 object deletion — never throws. Skips silently when the
  *  config is unavailable (locked); orphans sit in the user's own bucket. */
 export async function bestEffortDeleteImages(allKeys: string[]): Promise<void> {
   // Only keys this app makes: never sign a DELETE for some other object in
   // the bucket because an entry's metadata named it
-  const keys = allKeys.filter(isImageKey);
+  const wanted = allKeys.filter(isImageKey);
+  if (wanted.length === 0) return;
+  if (!pinsKnown()) {
+    // Safe direction: the objects stay in the bucket rather than risk one a background uses
+    console.warn(`Image cleanup skipped for ${wanted.length} object(s) — the settings that may use them aren't read yet`);
+    return;
+  }
+  const keys = wanted.filter(k => !isPinned(k));
   if (keys.length === 0) return;
   const cfg = activeConfig();
   if (!cfg) {

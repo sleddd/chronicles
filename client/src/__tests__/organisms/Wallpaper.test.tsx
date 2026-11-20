@@ -6,9 +6,54 @@ import { Wallpaper } from '@/components/organisms/Wallpaper';
 import { WallpaperPicker } from '@/components/molecules/WallpaperPicker';
 import { useUIStore } from '@/stores/uiStore';
 
-afterEach(() => { act(() => useUIStore.getState().setWallpaper(null)); });
+// The person's own photo is opened from their bucket: here, a fixed address once asked for
+const opened = vi.hoisted(() => ({ error: null as string | null }));
+vi.mock('@/hooks/useDecryptedImage', () => ({
+  useDecryptedImage: (key: string | null) => ({ url: key && !opened.error ? `blob:${key}` : null, loading: false, error: key ? opened.error : null }),
+}));
+
+const OWN = { key: 'img/11111111-2222-3333-4444-555555555555', iv: 'aXY=', thumbKey: 'img/11111111-2222-3333-4444-555555555555-t', thumbIv: 'dGl2', mimeType: 'image/jpeg', size: 1 };
+
+afterEach(() => {
+  opened.error = null;
+  act(() => {
+    useUIStore.getState().setWallpaper(null);
+    useUIStore.getState().setCustomWallpaper(null);
+    useUIStore.setState({ imagesEnabled: false, imagesConfigured: false });
+  });
+});
 
 describe('Wallpaper', () => {
+  it('shows the person’s own photo while Entry Images is on and set up', () => {
+    act(() => {
+      useUIStore.setState({ imagesEnabled: true, imagesConfigured: true });
+      useUIStore.getState().setCustomWallpaper(OWN);
+      useUIStore.getState().setWallpaper('custom');
+    });
+    renderWithTheme(<MemoryRouter><Wallpaper /></MemoryRouter>);
+    expect(document.documentElement.getAttribute('data-wallpaper')).toBe('custom');
+  });
+
+  it('falls back to the theme’s default photo when the person’s own can’t be opened', () => {
+    opened.error = 'gone';
+    act(() => {
+      useUIStore.setState({ imagesEnabled: true, imagesConfigured: true });
+      useUIStore.getState().setCustomWallpaper(OWN);
+      useUIStore.getState().setWallpaper('custom');
+    });
+    renderWithTheme(<MemoryRouter><Wallpaper /></MemoryRouter>);
+    expect(document.documentElement.getAttribute('data-wallpaper')).toBe('own-2');
+  });
+
+  it('shows nothing, rather than another photo, while the person’s own is still on its way', () => {
+    act(() => {
+      useUIStore.setState({ wallpaperSynced: false, customWallpaper: null });
+      useUIStore.getState().setWallpaper('custom');
+    });
+    const { container } = renderWithTheme(<MemoryRouter><Wallpaper /></MemoryRouter>);
+    expect(container.firstChild).toBeNull();
+  });
+
   it('draws nothing and leaves the page plain with None chosen', () => {
     act(() => useUIStore.getState().setWallpaper(null));
     const { container } = renderWithTheme(<MemoryRouter><Wallpaper /></MemoryRouter>);

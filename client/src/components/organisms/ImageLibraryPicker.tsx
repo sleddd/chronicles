@@ -120,9 +120,11 @@ interface ImageLibraryPickerProps {
   remainingSlots: number;
   onSelect: (images: EntryImage[]) => void;
   onClose: () => void;
+  /** Pick one photo to use somewhere (a background), not photos to add to an entry */
+  single?: boolean;
 }
 
-export function ImageLibraryPicker({ excludeKeys, remainingSlots, onSelect, onClose }: ImageLibraryPickerProps) {
+export function ImageLibraryPicker({ excludeKeys, remainingSlots, onSelect, onClose, single = false }: ImageLibraryPickerProps) {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -147,6 +149,7 @@ export function ImageLibraryPicker({ excludeKeys, remainingSlots, onSelect, onCl
   const toggle = (key: string) => {
     setSelected(prev => {
       const next = new Set(prev);
+      if (single) return next.has(key) ? new Set() : new Set([key]);
       if (next.has(key)) next.delete(key);
       else if (next.size < remainingSlots) next.add(key);
       return next;
@@ -160,14 +163,14 @@ export function ImageLibraryPicker({ excludeKeys, remainingSlots, onSelect, onCl
   };
 
   return (
-    <Modal open onClose={onClose} title="Add from library">
+    <Modal open onClose={onClose} title={single ? 'Choose from library' : 'Add from library'}>
       {library.length === 0 ? (
         <EmptyText>No images yet — photos you attach to entries appear here so you can reuse them.</EmptyText>
       ) : (
         <>
           <EmptyText>
-            Pick from images already attached to your entries.
-            {remainingSlots < 7 && ` This entry has room for ${remainingSlots} more.`}
+            {single ? 'Pick one of the images attached to your entries.' : 'Pick from images already attached to your entries.'}
+            {!single && remainingSlots < 7 && ` This entry has room for ${remainingSlots} more.`}
           </EmptyText>
           <Grid>
             {library.map(img => (
@@ -191,8 +194,8 @@ export function ImageLibraryPicker({ excludeKeys, remainingSlots, onSelect, onCl
         <CancelBtn type="button" onClick={onClose}>Cancel</CancelBtn>
         {library.length > 0 && (
           <AddBtn type="button" disabled={selected.size === 0} onClick={handleAdd}>
-            <Icon name="plus" size={13} strokeWidth={2.5} />
-            Add {selected.size > 0 ? `(${selected.size})` : ''}
+            {!single && <Icon name="plus" size={13} strokeWidth={2.5} />}
+            {single ? 'Use photo' : <>Add {selected.size > 0 ? `(${selected.size})` : ''}</>}
           </AddBtn>
         )}
       </FooterRow>
