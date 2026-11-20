@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react';
 import styled from 'styled-components';
+import { glassPill } from '../styles/wallpaper.js';
 import { Icon } from '../components/atoms/core/Icon.jsx';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
@@ -118,6 +119,18 @@ const WeekNav = styled.div`
   padding: 0 10px;
   border: 1px solid var(--border-card);
   border-radius: 999px;
+  /* On the background photo: the same smoked glass as the page's buttons, its words and arrows white */
+  ${glassPill}
+  html[data-wallpaper] & {
+    --text-secondary: #fff;
+    --text-soft: rgba(255, 255, 255, 0.82);
+    --text-primary: #fff;
+  }
+`;
+
+/* The header's pills (Make shopping list, Save menu): smoked glass on the photo, like every page's main action */
+const HeadPills = styled.span.attrs({ className: 'page-action' })`
+  display: contents;
 `;
 
 const WeekLabel = styled.span`
@@ -148,6 +161,7 @@ const Divider = styled.span`
   width: 1px;
   height: 34px;
   background: var(--border-card);
+  html[data-wallpaper] & { background: rgba(255, 255, 255, 0.28); }
   @media (max-width: 768px) { display: none; }
 `;
 
@@ -854,6 +868,7 @@ export function MenuView() {
                 </NavBtn>
               </WeekNav>
               <Divider aria-hidden="true" />
+              <HeadPills>
               {/* Same small pill as Save menu, with a grey outline */}
               <PillButton type="button" $variant="neutral" onClick={handleGenerateShoppingList} disabled={isGenerating}>
                 {isGenerating ? 'Making list…' : 'Make shopping list'}
@@ -862,6 +877,7 @@ export function MenuView() {
               <PillButton type="button" onClick={handleSave} disabled={isSaving}>
                 {isSaving ? 'Saving…' : 'Save menu'}
               </PillButton>
+              </HeadPills>
             </HeadActions>
           </Head>
 

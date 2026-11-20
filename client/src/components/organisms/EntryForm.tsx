@@ -869,7 +869,9 @@ const JournalHead = styled.div<{ $expanded?: boolean; $roomy?: boolean }>`
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 28px ${({ $expanded }) => ($expanded ? '76px' : '28px')} ${({ $roomy }) => ($roomy ? '28px' : '4px')} 36px;
+  /* 28px on the right puts the close ×'s glyph on the content's 36px edge (its button is 34px round an 18px icon).
+     Full width needs no extra room: the corner reminders bell isn't shown over a full-width editor */
+  padding: 28px 28px ${({ $roomy }) => ($roomy ? '28px' : '4px')} 36px;
   ${NAV_COMPACT} { padding-right: 24px; }
   @media (max-width: 640px) { padding: 20px 12px ${({ $roomy }) => ($roomy ? '18px' : '4px')} 20px; }
 `;

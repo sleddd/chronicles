@@ -126,8 +126,9 @@ const Description = styled.p`
 const StatsRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
+  /* Firmer than a row hairline, so the band reads under the title (--border-subtle all but vanished in dark) */
+  border-top: 1px solid var(--border-card);
+  border-bottom: 1px solid var(--border-card);
   margin-bottom: 20px;
 `;
 
@@ -137,7 +138,7 @@ const StatCell = styled.div`
   min-width: 90px;
   padding: 14px 18px 16px;
   &:first-child { padding-left: 0; }
-  & + & { border-left: 1px solid var(--border-subtle); }
+  & + & { border-left: 1px solid var(--border-card); }
 `;
 
 const StatLabel = styled.div`
