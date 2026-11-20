@@ -24,8 +24,15 @@ const Content = styled.div<{ $size: string }>`
     $size === 'lg' ? '600px' :
     $size === 'xl' ? '800px' : '480px'};
   margin: 0 16px;
+  /* Never taller than the screen: the title and the buttons stay put and the
+     body between them scrolls (a long list used to run off the bottom, out of reach) */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   background: var(--paper-surface, ${({ theme }) => theme.colors.surface});
-  border: 1px solid var(--ink, ${({ theme }) => theme.colors.text});
+  /* The quiet edge the app's other floating panels have (it was a bright line in the text colour) */
+  border: 1px solid var(--border-pop, var(--border-card));
   border-radius: var(--r-lg, ${({ theme }) => theme.borderRadius.lg}px);
   box-shadow: var(--shadow-3, ${({ theme }) => theme.shadow.lg});
   overflow: hidden;
@@ -34,6 +41,7 @@ const Content = styled.div<{ $size: string }>`
 `;
 
 const Header = styled.div`
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -69,6 +77,12 @@ const CloseButton = styled.button`
 `;
 
 const Body = styled.div`
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
   padding: var(--s-5, 20px);
   color: var(--text-secondary);
   font-size: 14.5px;
@@ -76,6 +90,7 @@ const Body = styled.div`
 `;
 
 const Footer = styled.div`
+  flex: none;
   display: flex;
   justify-content: flex-end;
   gap: var(--s-2, 10px);
@@ -91,9 +106,11 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   children: ReactNode;
   footer?: ReactNode;
+  /** False when a stray click outside must not close it (work that would be lost). Escape and × still do */
+  closeOnBackdrop?: boolean;
 }
 
-export function Modal({ open, onClose, title, size = 'md', children, footer }: ModalProps) {
+export function Modal({ open, onClose, title, size = 'md', children, footer, closeOnBackdrop = true }: ModalProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
@@ -120,7 +137,7 @@ export function Modal({ open, onClose, title, size = 'md', children, footer }: M
   if (!open) return null;
 
   return createPortal(
-    <Overlay onClick={onClose}>
+    <Overlay onClick={closeOnBackdrop ? onClose : undefined}>
       <Content
         ref={contentRef}
         $size={size}

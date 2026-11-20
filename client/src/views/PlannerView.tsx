@@ -5,6 +5,8 @@ import { PlanningShell, TodayBtn } from '../components/organisms/PlanningShell.j
 import { PlannerBoard, type PlannerCard, type PlannerEvent, type PlannerLane } from '../components/organisms/PlannerBoard.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { HabitsToday } from '../components/organisms/HabitsToday.js';
+import { AiPlanReview } from '../components/organisms/AiPlanReview.js';
+import { useAiFeatureEnabled } from '../hooks/useAiReady.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
 import { FilterPick } from '../components/molecules/FilterPick.js';
@@ -19,8 +21,7 @@ import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJourna
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { showFlash } from '../services/flashNotice.js';
 import { toDateStr, formatTime12h } from '../utils/dateUtils.js';
-import { calendarDayFor, isEventTopic } from '../utils/calendarItems.js';
-import { repeatRuleOf, occurrencesBetween } from '../utils/recurrence.js';
+import { eventOccurrences } from '../utils/plannerEvents.js';
 import { entryTitleText } from '../utils/entryTitle.js';
 import { builtinEntryName } from '../utils/stripHtml.js';
 import { EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, categoriesInUse, sameCategory, type GoalCategoryConfig } from '../utils/goalCategories.js';
@@ -67,14 +68,6 @@ const DayTitle = styled.h2`
 `;
 
 type Planned = PlanTask & PlannerTask;
-
-/** "14:30" → minutes from midnight; anything else → undefined */
-function minutesOf(hhmm: string): number | undefined {
-  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
-  if (!m) return undefined;
-  const mins = Number(m[1]) * 60 + Number(m[2]);
-  return mins >= 0 && mins < 24 * 60 ? mins : undefined;
-}
 
 export function PlannerView() {
   const { goals, milestones, tasks, taskTopicId } = usePlanData();
@@ -125,32 +118,15 @@ export function PlannerView() {
   // Events and meetings on the days shown (repeats included)
   const eventsByDay = useMemo(() => {
     const map = new Map<string, PlannerEvent[]>();
-    const names = new Map(allTopics.map(t => [t.id, t.name]));
-    const from = days[0];
-    const to = days[days.length - 1];
-    for (const e of entries) {
-      const meta = e.metadata as Record<string, unknown> | undefined;
-      const name = names.get(meta?._taxonomyId as number);
-      if (!isEventTopic(name)) continue;
-      const first = calendarDayFor(e, name);
-      if (!first) continue;
-      const cf = (meta?._customFields as Record<string, unknown>) ?? {};
-      const rule = repeatRuleOf(cf);
-      const on = rule ? occurrencesBetween(first, rule, from, to) : first >= from && first <= to ? [first] : [];
-      const time = typeof cf.startTime === 'string' && cf.startTime && !cf.allDay ? cf.startTime : '';
-      // Its place on the day's scale (an hour long when it has no end, or an end before its start)
-      const start = minutesOf(time);
-      const endAt = minutesOf(typeof cf.endTime === 'string' ? cf.endTime : '');
-      const end = start === undefined ? undefined : endAt !== undefined && endAt > start ? endAt : start + 60;
-      for (const day of on) {
-        const list = map.get(day) ?? [];
-        list.push({
-          key: `${e.id}:${day}`, id: e.id, title: entryTitleText(e.content) || builtinEntryName(cf) || name || 'Event',
-          when: `${time ? formatTime12h(time) : 'All day'} · ${name}`,
-          start, end, // no start: all day, under the day's name
-        });
-        map.set(day, list.sort((a, b) => a.when.localeCompare(b.when)));
-      }
+    for (const o of eventOccurrences(entries, allTopics, days[0], days[days.length - 1])) {
+      const list = map.get(o.day) ?? [];
+      list.push({
+        key: `${o.entry.id}:${o.day}`, id: o.entry.id,
+        title: entryTitleText(o.entry.content) || builtinEntryName(o.fields) || o.topicName || 'Event',
+        when: `${o.time ? formatTime12h(o.time) : 'All day'} · ${o.topicName}`,
+        start: o.start, end: o.end, // no start: all day, under the day's name
+      });
+      map.set(o.day, list.sort((x, y) => x.when.localeCompare(y.when)));
     }
     return map;
   }, [entries, allTopics, days]);
@@ -254,6 +230,9 @@ export function PlannerView() {
     }).then(id => { if (id === null) showFlash('That task didn’t save. Try again.'); });
   };
 
+  const aiPlanOn = useAiFeatureEnabled('aiPlan');
+  const [aiPlanOpen, setAiPlanOpen] = useState(false);
+
   const step = mode === 'week' ? 7 : 1;
   const pillLabel = mode === 'week' ? weekLabel(days) : dayLabel(anchor);
 
@@ -262,12 +241,19 @@ export function PlannerView() {
       <FilterTabs options={MODES} active={mode} onChange={setMode} />
       <MonthPill label={pillLabel} onPrev={() => setAnchor(a => addDays(a, -step))} onNext={() => setAnchor(a => addDays(a, step))} />
       <TodayBtn type="button" onClick={() => setAnchor(today)}>Today</TodayBtn>
+      {/* Only while AI task planning is on and agreed to in this browser (Settings → In-App AI) */}
+      {aiPlanOn && (
+        <PillButton type="button" $variant="neutral" onClick={() => setAiPlanOpen(true)}>
+          {phone ? 'AI plan' : 'AI plan my unscheduled tasks'}
+        </PillButton>
+      )}
       {taskTopicId && (
         <TopBarAction>
           <PillButton type="button" onClick={() => newEntry(taskTopicId, mode === 'day' ? { scheduledDate: anchor } : undefined)}>New Task</PillButton>
         </TopBarAction>
       )}
     </>}>
+      {aiPlanOpen && <AiPlanReview onClose={() => setAiPlanOpen(false)} />}
       {mode === 'day' && <DayTitle>{longDayLabel(anchor)}</DayTitle>}
       <PlannerBoard
         lanes={lanes} overdue={left.overdue.map(card)} open={left.open.map(card)} ideas={left.ideas.map(card)}

@@ -69,3 +69,17 @@ export function contentWithName(html: string, name: string): string {
   const line = `<p>${escapeHtml(n)}</p>`;
   return html && html.trim() ? line + html : line;
 }
+
+/** The content with its first line replaced by `name` (a rename): the rest of the writing is kept.
+ *  The first line is replaced only when it is the entry's name now (`current`) — when it is
+ *  other writing, or the content doesn't open with a plain paragraph or heading, the name is
+ *  put in front instead, so nothing written is lost */
+export function contentRenamed(html: string, name: string, current: string): string {
+  const n = name.trim();
+  if (!n) return html;
+  const line = `<p>${escapeHtml(n)}</p>`;
+  const opening = /^\s*<(p|h[1-6])(\s[^>]*)?>[\s\S]*?<\/\1>/i;
+  const opensWithName = opening.test(html) && nameFromContent(html) === current.trim().slice(0, NAME_MAX);
+  // A function, not a string: "$1,000" in a title would be read as a capture group
+  return opensWithName ? html.replace(opening, () => line) : contentWithName(html, n);
+}

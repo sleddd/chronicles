@@ -6,7 +6,7 @@ import { Icon } from '../atoms/core/Icon.jsx';
    (shown whether the AI is on or off), with the chat consent status under it.
    Props only. Change the date and the change log whenever the text changes. */
 
-export const PROTOCOL_DATE = 'Nov 15, 2026';
+export const PROTOCOL_DATE = 'Nov 19, 2026';
 
 const Wrap = styled.div`
   padding: 16px 0 4px;
@@ -133,8 +133,22 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
             part of it, or the whole conversation, into a journal entry.
           </p>
           <p>
-            The AI cannot read your journal entries or saved chats. It sees only the conversation in front of it and the
-            names of your topics, so it can suggest where to save something.
+            The AI chat cannot read your journal entries or saved chats. It sees only the conversation in front of it and
+            the names of your topics, so it can suggest where to save something.
+          </p>
+
+          <h4>AI insights</h4>
+          <p>
+            AI insights is a separate, optional feature that is off until you turn it on and agree to its notice. When
+            you press its button and choose OK, the text of your Journal entries for the period you pick is sent to your
+            provider, and the AI writes a short reflection with prompts. It is for adults 18 and over, it is an AI
+            model and not a person or a therapist, and nothing it writes is kept unless you copy it or write from it.
+          </p>
+          <p>
+            The entries are checked inside Chronicles for the same risk signs as chat messages before they are sent, and
+            the AI’s reflection is screened like a chat reply before you see it. When it touches a sensitive subject, that screening is a second request to your provider with the reflection and the start of the writing that was sent. A reflection that could cause harm is
+            withheld, and the support resources are shown instead. When your writing shows a risk sign, the resources are
+            shown with the reflection.
           </p>
 
           <h4>Who can use it</h4>
@@ -253,6 +267,7 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
           <table>
             <thead><tr><th>Date</th><th>Change</th></tr></thead>
             <tbody>
+              <tr><td>November 19, 2026</td><td>Added AI insights, an optional feature that reads the Journal entries you choose to send. Its reflections are screened like chat replies, and support resources are shown when your writing shows a risk sign.</td></tr>
               <tr><td>October 20, 2026</td><td>Cravings, treats, comfort food and eating to cope are no longer treated as a risk sign, and the AI no longer mentions crisis lines for an ordinary bad day. After a risk sign, the AI brings up the resources when risk shows again or you ask, instead of in every reply. The resources stay shown in the chat.</td></tr>
               <tr><td>October 19, 2026</td><td>Screening no longer treats a bad food day, regret about a meal, venting about a hard day, or fear of eating because of a food allergy or a medical reason as a risk sign. Eating concerns are flagged only for an ongoing, distressing pattern.</td></tr>
               <tr><td>October 2026</td><td>First version published.</td></tr>

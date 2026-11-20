@@ -12,7 +12,10 @@
 import { isBedrockRegion } from '@shared/validation/awsRegions.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
 import { isSealed, openSetting, sealSetting, seenRevision } from './settingCipher.js';
-import { aiChosenHere, grandfatherAi, reconcileAi, recordAiChoice } from './deviceConsent.js';
+import {
+  aiChosenHere, aiFeatureChosenHere, grandfatherAi, reconcileAi, reconcileAiFeature, recordAiChoice, recordAiFeatureChoice,
+  type AiFeature,
+} from './deviceConsent.js';
 import {
   bedrockConverse,
   fallbackBedrockModels,
@@ -29,6 +32,8 @@ import { NUTRIENTS, NUTRIENT_KEYS, nutrientSourceOf, type NutrientKey, type Nutr
 
 export type { BedrockAuth, BedrockModelOption };
 export type AiProvider = 'anthropic' | 'bedrock' | 'openai';
+
+export type { AiFeature };
 
 export interface AiConfig {
   enabled: boolean;
@@ -50,6 +55,10 @@ export interface AiConfig {
   chatNotes: string;
   /** The floating AI chat — its own switch, off until chosen; estimates work without it */
   chatEnabled: boolean;
+  /** AI task planning: sends tasks, goals and visions when its button is pressed (off until agreed to) */
+  planEnabled: boolean;
+  /** AI insights: sends Journal entries when its button is pressed (off until agreed to) */
+  insightsEnabled: boolean;
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -67,6 +76,8 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   weightUnit: 'lb',
   chatNotes: '',
   chatEnabled: false,
+  planEnabled: false,
+  insightsEnabled: false,
 };
 
 /** Suggested models per provider — the Settings form also accepts any model ID. */
@@ -173,6 +184,29 @@ export function isAiChatEnabled(): boolean {
   return !!aiConfig && aiConfig.enabled && aiConfig.chatEnabled === true && aiChosenHere();
 }
 
+const FEATURE_SWITCH: Record<AiFeature, 'planEnabled' | 'insightsEnabled'> = { aiPlan: 'planEnabled', aiInsights: 'insightsEnabled' };
+
+/** The feature is switched on, agreed to in this browser, and AI itself is ready: its button shows and may send. */
+export function isAiFeatureEnabled(feature: AiFeature): boolean {
+  return isAiReady() && aiConfig?.[FEATURE_SWITCH[feature]] === true && aiFeatureChosenHere(feature);
+}
+
+/** On in the saved config but not agreed to in this browser (Settings offers "Turn on here"). */
+export function isAiFeatureOnButNotHere(feature: AiFeature): boolean {
+  return !!aiConfig && aiConfig.enabled && aiConfig[FEATURE_SWITCH[feature]] === true && !aiFeatureChosenHere(feature);
+}
+
+/** The owner agreed to the feature's notice in this browser, or turned it off (Settings). */
+export function chooseAiFeatureHere(feature: AiFeature, on: boolean): void {
+  recordAiFeatureChoice(feature, on);
+  notify();
+}
+
+/** The name to show for where data goes ("Claude (Anthropic API)"), or '' with no config. */
+export function aiProviderName(): string {
+  return aiConfig ? AI_PROVIDER_LABELS[aiConfig.provider] : '';
+}
+
 /** Latest stored config for the Settings form (null when none / locked). */
 export function getAiConfigValue(): AiConfig | null {
   return aiConfig;
@@ -206,7 +240,15 @@ export async function loadAiConfig(value: unknown, decryptBytes: DecryptBytesFn)
     // Off, missing or unopenable: this browser's choice goes with it, so a
     // config replayed later finds no record here
     reconcileAi(!!aiConfig && aiConfig.enabled);
+    reconcileAiFeatures();
     notify();
+  }
+}
+
+/** A feature that isn't on in the config just read loses this browser's agreement to it */
+function reconcileAiFeatures(): void {
+  for (const feature of ['aiPlan', 'aiInsights'] as const) {
+    reconcileAiFeature(feature, !!aiConfig && aiConfig.enabled && aiConfig[FEATURE_SWITCH[feature]] === true);
   }
 }
 
@@ -227,7 +269,7 @@ export function ensureAiConfig(decryptBytes: DecryptBytesFn, loadSettings: () =>
       const row = (await loadSettings()).find(r => r.key === 'aiConfig');
       if (row && !aiConfig) await loadAiConfig(row.value, decryptBytes);
     }
-    if (!aiConfig) { checkedNone = true; reconcileAi(false); }
+    if (!aiConfig) { checkedNone = true; reconcileAi(false); reconcileAiFeatures(); }
   })().catch(err => console.warn('AI settings could not be reloaded:', err)).finally(() => { reloading = null; });
   return reloading;
 }
@@ -289,7 +331,11 @@ export interface ChatTurn {
 interface CompleteOptions {
   /** Short JSON answers (estimates) vs free-form chat replies */
   mode: 'json' | 'chat';
+  /** Room for the answer, when the mode's usual amount isn't enough (a plan for many tasks) */
+  maxTokens?: number;
 }
+
+const maxTokensFor = (opts: CompleteOptions): number => opts.maxTokens ?? (opts.mode === 'chat' ? 4096 : 2048);
 
 async function completeClaude(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
@@ -299,12 +345,13 @@ async function completeClaude(cfg: AiConfig, system: string, turns: ChatTurn[], 
   const model = cfg.model.trim();
   const params = {
     model,
-    max_tokens: opts.mode === 'chat' ? 4096 : 2048,
+    max_tokens: maxTokensFor(opts),
     system,
     messages: turns.map(t => ({ role: t.role, content: t.content })),
-    // A one-number estimate is a simple task — low effort keeps it fast and cheap;
-    // chat keeps the model's default
-    ...(opts.mode === 'json' && isClaude5(model) ? { output_config: { effort: 'low' as const } } : {}),
+    // A one-number estimate is a simple task — low effort keeps it fast and cheap.
+    // A planning or insights answer (which sets its own room) gets medium, so the
+    // model's own working doesn't use up the room its answer needs. Chat keeps the default
+    ...(opts.mode === 'json' && isClaude5(model) ? { output_config: { effort: opts.maxTokens === undefined ? 'low' as const : 'medium' as const } } : {}),
   };
   try {
     const res = supportsServerFallback(model)
@@ -342,9 +389,11 @@ export function suggestedBedrockModels(region: string): BedrockModelOption[] {
 }
 
 async function completeBedrock(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
-  return bedrockConverse(bedrockCreds(cfg), cfg.model, system, turns, opts.mode === 'chat' ? 4096 : 2048);
+  return bedrockConverse(bedrockCreds(cfg), cfg.model, system, turns, maxTokensFor(opts));
 }
 
+// No token limit is sent to OpenAI: without one a model may write up to its own
+// maximum, which is the most room there is (`opts.maxTokens` is for the others)
 async function completeOpenAI(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -380,6 +429,38 @@ async function completeTurns(cfg: AiConfig, system: string, turns: ChatTurn[], o
 /** One-shot JSON request (calorie/nutrient estimates). */
 function complete(cfg: AiConfig, system: string, prompt: string): Promise<string> {
   return completeTurns(cfg, system, [{ role: 'user', content: prompt }], { mode: 'json' });
+}
+
+/** The answer room every supported model allows */
+const FEATURE_TOKENS_FLOOR = 4096;
+
+/**
+ * One JSON answer for AI task planning or AI insights. Refused unless that
+ * feature is switched on and agreed to in this browser — the check lives here,
+ * beside the request, so no caller can send without it.
+ */
+export async function aiFeatureJson(feature: AiFeature, system: string, prompt: string, maxTokens = 4096): Promise<string> {
+  const cfg = requireReady();
+  if (!isAiFeatureEnabled(feature)) throw new Error('This AI feature isn’t turned on in this browser');
+  const turns: ChatTurn[] = [{ role: 'user', content: prompt }];
+  try {
+    return await completeTurns(cfg, system, turns, { mode: 'json', maxTokens });
+  } catch (err) {
+    // A model that can't write that much says so: ask again for what every model can
+    const tooMuch = maxTokens > FEATURE_TOKENS_FLOOR && err instanceof Error && /max[_ ]?tokens|maximum (output )?tokens|output token/i.test(err.message);
+    if (!tooMuch) throw err;
+    return completeTurns(cfg, system, turns, { mode: 'json', maxTokens: FEATURE_TOKENS_FLOOR });
+  }
+}
+
+/**
+ * The safety review of a feature's answer (AI insights). It sends the answer and
+ * the start of what was sent, so it is refused like the request itself unless
+ * the feature is still on and agreed to in this browser.
+ */
+export async function classifyFeatureReply(feature: AiFeature, reply: string, sent: string): Promise<RiskKind | null> {
+  if (!isAiFeatureEnabled(feature)) throw new Error('This AI feature isn’t turned on in this browser');
+  return classifyReply(reply, sent);
 }
 
 /** Free-form reply to an ongoing (unsaved) chat with the user's configured model. */

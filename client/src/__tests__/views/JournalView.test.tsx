@@ -6,6 +6,8 @@ import { renderWithTheme } from '../testUtils';
 import { useEncryption } from '@/contexts/EncryptionContext';
 import { entries as entriesApi } from '@/services/api';
 
+// AI insights' button shows only while its switch is on and agreed to: off here
+vi.mock('@/hooks/useAiReady', () => ({ useAiReady: () => false, useAiChatEnabled: () => false, useAiFeatureEnabled: () => false }));
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => vi.fn()),
   useLocation: vi.fn(() => ({ pathname: '/journal', state: null })),

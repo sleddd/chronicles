@@ -131,6 +131,25 @@ const FEATURES: Feature[] = [
       'Savings funds with each balance and its progress toward a target',
     ],
   },
+  {
+    label: 'AI planning and insights', title: 'An AI planner\nthat asks first.',
+    body: 'Bring your own AI key and let it plan your week or reflect on your journal. It runs only when you press the button, and only on what you agree to share.',
+    points: [],
+    facts: [
+      { label: 'Plan', text: 'It reads your tasks, goals and calendar, then suggests a schedule, new tasks and a fuller roadmap. You review every change before anything is saved.' },
+      { label: 'Reflect', text: 'Ask for insights on your journal and get a short reflection with prompts to write about.' },
+      { label: 'Consent', text: 'Off until you turn it on. Every run lists exactly what will be shared, and nothing is stored unencrypted.' },
+    ],
+    // Each share prompt comes before the result it leads to, as it does in the app
+    shot: ['ai-plan-share', 'ai-plan', 'ai-plan-roadmap', 'ai-insights-share', 'ai-insights'], size: [1268, 900],
+    alt: [
+      'The prompt before anything is sent, listing the tasks, goals, milestones, visions and events that will be shared',
+      'The AI plan to review: tasks placed on days and new tasks for goals, each with a tick, before Apply',
+      'More of the AI plan: a goal’s status, a milestone’s new target date, and new milestones that fill out the roadmap',
+      'The prompt before journal insights run, listing the journal entries that will be shared',
+      'AI insights on the journal: a short reflection written from recent entries, with prompts underneath',
+    ],
+  },
 ];
 
 const MODULES = [
@@ -715,7 +734,7 @@ export function LandingView() {
           </Container>
         </Band>
 
-        <Band $tone="page" aria-labelledby="more-title">
+        <Band $tone="white" aria-labelledby="more-title">
           <Container>
             <div data-reveal>
               <H2 id="more-title">Everything your days touch.</H2>

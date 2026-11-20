@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { ensureAiConfig, isAiChatEnabled, isAiReady, subscribeAi } from '../services/aiAssistant.js';
+import { ensureAiConfig, isAiChatEnabled, isAiFeatureEnabled, isAiReady, subscribeAi, type AiFeature } from '../services/aiAssistant.js';
 import { settings as settingsApi } from '../services/api.js';
 import { useOptionalEncryption } from '../contexts/EncryptionContext.js';
 
@@ -20,4 +20,10 @@ export function useAiReady(): boolean {
 export function useAiChatEnabled(): boolean {
   useAiReady(); // loads the saved AI settings when unlocked
   return useSyncExternalStore(subscribeAi, isAiChatEnabled, () => false);
+}
+
+/** True when an opt-in sharing feature (AI task planning, AI insights) is on, agreed to in this browser, and AI is ready. */
+export function useAiFeatureEnabled(feature: AiFeature): boolean {
+  useAiReady(); // loads the saved AI settings when unlocked
+  return useSyncExternalStore(subscribeAi, () => isAiFeatureEnabled(feature), () => false);
 }

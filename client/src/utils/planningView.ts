@@ -91,3 +91,12 @@ export function parseSavedViews(raw: unknown): SavedPlanView[] {
     !!v && typeof v === 'object' && typeof (v as SavedPlanView).id === 'string'
     && typeof (v as SavedPlanView).name === 'string' && tabs.includes((v as SavedPlanView).tab));
 }
+
+/** A board's cards in the person's own order: ones not yet placed keep their given order on top; placed ones follow in the saved order */
+export function inPlanOrder<T extends { id: number }>(list: T[], ids: number[] | undefined): T[] {
+  if (!ids?.length) return list;
+  const rank = new Map(ids.map((id, i) => [id, i]));
+  const unplaced = list.filter(x => !rank.has(x.id));
+  const placed = list.filter(x => rank.has(x.id)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+  return [...unplaced, ...placed];
+}

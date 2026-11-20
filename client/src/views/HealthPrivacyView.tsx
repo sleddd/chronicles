@@ -79,7 +79,7 @@ export function HealthPrivacyView() {
           <tr><td>{D.hostingProvider}</td><td>Runs our server, so your encrypted data passes through it, plus the readable items listed above</td><td>Always, as our server host</td><td><a href={D.hostingPrivacy} target="_blank" rel="noopener noreferrer">Render Privacy Policy</a></td></tr>
           <tr><td>{D.databaseProvider}</td><td>Stores our database: your encrypted data, which it cannot read, plus the readable items listed above</td><td>Always, as our database host</td><td><a href={D.databasePrivacy} target="_blank" rel="noopener noreferrer">Prisma Privacy Policy</a></td></tr>
           <tr><td>Google</td><td>Titles, times and locations of event and meeting entries (never notes, attendees or phone numbers)</td><td>Only if you connect Google Calendar</td><td><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Privacy Policy</a></td></tr>
-          <tr><td>Your AI provider (Anthropic, OpenAI or Amazon Bedrock)</td><td>Only what you type into the chat or ask it to estimate, sent straight from your browser with your own key</td><td>Only if you turn on In-App AI and give consent</td><td>Your provider’s privacy page</td></tr>
+          <tr><td>Your AI provider (Anthropic, OpenAI or Amazon Bedrock)</td><td>What you type into the chat or ask it to estimate. If you turn on AI task planning, your unscheduled tasks and the tasks already planned, your goals and milestones, the notes on those tasks, goals and milestones, your visions, the names of your goal categories and task types, and the names and times of your events and meetings for the next 14 days (not their notes, places or attendees). If you turn on AI insights, the text of your Journal entries for the period you choose, and the start of that text once more when the AI’s reflection is checked for safety. All of it is decrypted in your browser and sent straight from it with your own key, as readable text.</td><td>Only if you turn on In-App AI and give consent. AI task planning and AI insights each have their own switch and consent, and send only when you press their button and choose OK.</td><td>Your provider’s privacy page</td></tr>
           <tr><td>Your own Cloudflare R2 bucket</td><td>Encrypted photos, which only you can see. Photos are never shared.</td><td>Only if you add your bucket</td><td><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer">Cloudflare Privacy Policy</a></td></tr>
           <tr><td>Resend</td><td>Feedback or a bug report you send: what you wrote, the part of the app, your device and browser, and a reply address if you gave one. For a beta invitation, your email address and first name.</td><td>When you send feedback or a bug report, or when we invite you to the beta</td><td><a href="https://resend.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer">Resend Privacy Policy</a></td></tr>
           <tr><td>Open-Meteo</td><td>The city you enter, to show weather</td><td>When the dashboard shows weather</td><td><a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener noreferrer">Open-Meteo terms</a></td></tr>
@@ -96,6 +96,14 @@ export function HealthPrivacyView() {
         When you create an account, we ask for your consent to collect health data. That consent is its own step,
         separate from accepting our terms. Google Calendar and In-App AI each ask for their own consent before anything
         is shared.
+      </p>
+      <p>
+        AI task planning and AI insights are off until you turn each one on in Settings and agree to its notice. They
+        remove the usual privacy barrier between your journal and your AI provider. When you press their button, a
+        prompt lists exactly what will be shared, and nothing is sent unless you choose OK. Your entries stay encrypted
+        in Chronicles, and Chronicles stores nothing unencrypted: not what was sent, and not the AI’s answer. We send
+        only what the feature needs, but there is no guarantee of privacy for anything sent this way. What your AI
+        provider does with it is governed by your provider’s own terms and privacy policy, not by us.
       </p>
       <p>You can withdraw consent at any time. Disconnect Google Calendar in Settings, turn off In-App AI, or delete your account.</p>
 

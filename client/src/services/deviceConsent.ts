@@ -17,6 +17,8 @@
  * switch has to be turned on here again.
  */
 
+import { AI_SHARING_CONSENT_VERSION } from '../utils/chatDisclosure.js';
+
 export const EGRESS_STORE = 'chronicles.egress.v1';
 
 export const EGRESS_KEYS = ['calendarSyncEnabled', 'icsFeedEnabled', 'icsIncludeDetails'] as const;
@@ -53,7 +55,7 @@ function records(): Record<string, true> {
   }
 }
 
-type RecordName = EgressKey | typeof PUBLIC_SHELF_RECORD | typeof PUBLIC_SHELF_OFF_RECORD | typeof AI_RECORD | typeof AI_GRANDFATHER_RECORD;
+type RecordName = EgressKey | typeof PUBLIC_SHELF_RECORD | typeof PUBLIC_SHELF_OFF_RECORD | typeof AI_RECORD | typeof AI_GRANDFATHER_RECORD | AiFeatureRecord;
 const recordKey = (key: RecordName) => `${account}|${key}`;
 
 // A switch turned on a moment ago: its save may not have reached the server
@@ -122,6 +124,32 @@ const PUBLIC_SHELF_OFF_RECORD = 'publicShelfOff';
  */
 const AI_RECORD = 'aiConfig';
 const AI_GRANDFATHER_RECORD = 'aiConfig:checked';
+
+/*
+ * AI task planning and AI insights send decrypted entries (tasks, goals,
+ * visions / journal text) to the provider. Each has its own switch in the
+ * sealed aiConfig and, like AI itself, is used only on a browser where the
+ * owner read the notice and agreed. The record names the version of the
+ * wording agreed to (`AI_SHARING_CONSENT_VERSION`), so new wording asks again.
+ */
+export type AiFeature = 'aiPlan' | 'aiInsights';
+type AiFeatureRecord = `${AiFeature}:v${number}`;
+const featureRecord = (feature: AiFeature): AiFeatureRecord => `${feature}:v${AI_SHARING_CONSENT_VERSION}`;
+
+/** The owner agreed to the sharing notice for this feature in this browser (or turned it off). */
+export function recordAiFeatureChoice(feature: AiFeature, on: boolean): void {
+  setRecord(featureRecord(feature), on);
+}
+
+/** Whether this feature may send anything from this browser: only after its own consent, to the current wording. */
+export function aiFeatureChosenHere(feature: AiFeature): boolean {
+  return account !== null && records()[recordKey(featureRecord(feature))] === true;
+}
+
+/** The settings were read: the feature off there (or AI off, missing, unopenable) ends this browser's record. */
+export function reconcileAiFeature(feature: AiFeature, onThere: boolean): void {
+  if (!onThere) dropIfStale(featureRecord(feature));
+}
 
 /** The user turned AI on (or off) in this browser. */
 export function recordAiChoice(on: boolean): void {

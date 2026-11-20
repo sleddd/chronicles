@@ -13,7 +13,7 @@ import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { ViewMenu, type ViewMenuItem } from '../components/molecules/ViewMenu.js';
 import { PlanningTabBar } from '../components/molecules/PlanningTabBar.js';
 import {
-  searchAndSort, PLAN_SORTS, PLAN_TAB_PATHS, isSameView, parseSavedViews,
+  searchAndSort, inPlanOrder, PLAN_SORTS, PLAN_TAB_PATHS, isSameView, parseSavedViews,
   type PlanSort, type PlanRow, type SavedPlanView, type PlanViewState, type PlanTabKey,
 } from '../utils/planningView.js';
 import { usePrivateSettings } from '../services/privateSettings.js';
@@ -1116,11 +1116,3 @@ export function GoalsView() {
 type PlanOrder = Partial<Record<PlanTabKey, number[]>>;
 const NO_PLAN_ORDER: PlanOrder = {};
 
-/** Cards not yet placed keep their given order on top; placed ones follow in the saved order */
-function inPlanOrder<T extends { id: number }>(list: T[], ids: number[] | undefined): T[] {
-  if (!ids?.length) return list;
-  const rank = new Map(ids.map((id, i) => [id, i]));
-  const unplaced = list.filter(x => !rank.has(x.id));
-  const placed = list.filter(x => rank.has(x.id)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
-  return [...unplaced, ...placed];
-}

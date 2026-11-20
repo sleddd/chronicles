@@ -47,6 +47,8 @@ import { ENTRIES_SEAL_MARKER, olderEntriesAllowed, resealOlderEntries, setOlderE
 import { decryptEntriesInBatches } from '../utils/decryptEntries.js';
 import { NAME_IN_TEXT_MARKER, moveNamesIntoTextOnce } from '../services/nameIntoText.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
+import { AiInsights } from '../components/organisms/AiInsights.js';
+import { useAiFeatureEnabled } from '../hooks/useAiReady.js';
 import { useTimeStore } from '../stores/timeStore.js';
 import { startTimer } from '../utils/timeTracking.js';
 
@@ -203,6 +205,7 @@ export function JournalView() {
   const setSelectedEntryId = useUIStore(s => s.setSelectedEntryId);
   const showMobileEditor = useUIStore(s => s.showMobileEditor);
   const setShowMobileEditor = useUIStore(s => s.setShowMobileEditor);
+  const aiInsightsOn = useAiFeatureEnabled('aiInsights');
   const viewMode = useUIStore(s => s.viewMode);
   // Topic filter (from a row's topic label or the search panel) — shown as a bar with Clear
   const selectedTopicId = useUIStore(s => s.selectedTopicId);
@@ -662,6 +665,18 @@ export function JournalView() {
     loadedStateRef.current = { content: '', customFields: JSON.stringify(fields ?? {}), images: imagesSig([], null) };
     setLastSavedAt(null);
   }, []);
+
+  // AI insights' "Write about this": a new Journal entry that opens with the
+  // prompt as its first line. Like a preset, it isn't an edit yet — nothing is
+  // saved until something is written under it
+  const writeFromPrompt = useCallback((prompt: string) => {
+    const html = `<p>${prompt.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p><p></p>`;
+    setSelectedEntryId(null);
+    showBlankEntry();
+    setEditorContent(html);
+    loadedStateRef.current = { ...loadedStateRef.current, content: html };
+    setShowMobileEditor(true);
+  }, [showBlankEntry, setSelectedEntryId, setShowMobileEditor]);
 
   // Unsaved writing survives the session ending under it (the server expired
   // it, 15 minutes away, a reload): sealed a moment after each change, offered
@@ -1143,6 +1158,11 @@ export function JournalView() {
               <Icon name="plus" size={14} strokeWidth={2} aria-hidden="true" />
               New entry
             </NewEntryPill>
+            {/* Only while AI insights is on and agreed to in this browser (Settings → In-App AI) */}
+            {aiInsightsOn && (
+              <AiInsights onWrite={writeFromPrompt}
+                trigger={open => <NewEntryPill type="button" onClick={open} style={{ padding: '0 12px' }}>AI insights</NewEntryPill>} />
+            )}
           </TopBarAction>
         )}
         sidePanel={

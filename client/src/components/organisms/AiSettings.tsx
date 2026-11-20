@@ -12,6 +12,7 @@ import { Spinner } from '../atoms/Spinner.js';
 import { Textarea } from '../atoms/Textarea.js';
 import { MAX_CHAT_NOTES } from '../../utils/chatSave.js';
 import { AiSafetyProtocol } from '../molecules/AiSafetyProtocol.js';
+import { AiFeatureConsent } from '../molecules/AiFeatureConsent.js';
 import { useAiChatStore } from '../../stores/aiChatStore.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../../services/api.js';
@@ -22,6 +23,8 @@ import {
   AI_PROVIDER_LABELS,
   DEFAULT_AI_CONFIG,
   chooseAiHere,
+  chooseAiFeatureHere,
+  isAiFeatureOnButNotHere,
   isAiOnButNotHere,
   encryptAiConfig,
   estimateMealCalories,
@@ -33,11 +36,28 @@ import {
   suggestedBedrockModels,
   subscribeAi,
   type AiConfig,
+  type AiFeature,
   type AiProvider,
   type BedrockModelOption,
 } from '../../services/aiAssistant.js';
 
 const CUSTOM = '__custom__';
+
+/* The two features that send decrypted entries: each has its own switch and its own notice */
+const FEATURES: Record<AiFeature, { key: 'planEnabled' | 'insightsEnabled'; title: string; on: string; off: string }> = {
+  aiPlan: {
+    key: 'planEnabled',
+    title: 'AI task planning',
+    on: 'On. The Planner has an “AI plan my unscheduled tasks” button. It asks before it sends anything.',
+    off: 'Off. Turning it on lets the AI read your tasks, goals, visions and events when you press its button.',
+  },
+  aiInsights: {
+    key: 'insightsEnabled',
+    title: 'AI insights',
+    on: 'On. The Journal has an “AI insights” button. It asks before it sends anything.',
+    off: 'Off. Turning it on lets the AI read your Journal entries when you press its button.',
+  },
+};
 
 /**
  * AI assistant settings — bring your own Claude, Amazon Bedrock, or OpenAI
@@ -66,6 +86,12 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
   // is sent to the provider from here until it does (deviceConsent.ts)
   const [notHere, setNotHere] = useState(isAiOnButNotHere);
   useEffect(() => subscribeAi(() => setNotHere(isAiOnButNotHere())), []);
+
+  // AI task planning / AI insights: which one's notice is open, and which are
+  // on in the saved config without this browser having agreed
+  const [consenting, setConsenting] = useState<AiFeature | null>(null);
+  const [featureNotHere, setFeatureNotHere] = useState(() => ({ aiPlan: isAiFeatureOnButNotHere('aiPlan'), aiInsights: isAiFeatureOnButNotHere('aiInsights') }));
+  useEffect(() => subscribeAi(() => setFeatureNotHere({ aiPlan: isAiFeatureOnButNotHere('aiPlan'), aiInsights: isAiFeatureOnButNotHere('aiInsights') })), []);
 
   // Prefill once the config finishes decrypting (init/unlock are async)
   useEffect(() => {
@@ -107,6 +133,19 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (immediate) void persist(next, byHand);
     else debounceRef.current = setTimeout(() => { void persist(next, byHand); }, 500);
+  };
+
+  /** A sharing feature's switch: on only opens its notice — it is saved once the notice is agreed to */
+  const setFeature = (feature: AiFeature, on: boolean) => {
+    if (on) { setConsenting(feature); return; }
+    setConsenting(null);
+    chooseAiFeatureHere(feature, false);
+    update({ [FEATURES[feature].key]: false }, true);
+  };
+  const agreeToFeature = (feature: AiFeature) => {
+    setConsenting(null);
+    chooseAiFeatureHere(feature, true);
+    update({ [FEATURES[feature].key]: true }, true);
   };
 
   const handleProviderChange = (provider: AiProvider) => {
@@ -254,6 +293,30 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
             action={<Toggle checked={cfg.chatEnabled === true} onChange={v => update({ chatEnabled: v }, true)} aria-label="AI chat" />}
           />
         )}
+        {/* Sharing features: off until their notice is read and agreed to, in this browser */}
+        {cfg.enabled && (Object.keys(FEATURES) as AiFeature[]).map(feature => {
+          const f = FEATURES[feature];
+          const savedOn = cfg[f.key] === true;
+          const waiting = savedOn && featureNotHere[feature];
+          return (
+            <SettingsActionRow
+              key={feature}
+              title={f.title}
+              description={waiting ? 'On, but not used from this browser. Read the notice here to use it, or turn it off everywhere.' : savedOn ? f.on : f.off}
+              action={waiting
+                ? (<>
+                  <RowPill type="button" onClick={() => setFeature(feature, false)}>Turn off</RowPill>
+                  <RowPill type="button" $tone="accent" onClick={() => setConsenting(feature)}>Turn on here</RowPill>
+                </>)
+                : <Toggle checked={savedOn} onChange={v => setFeature(feature, v)} aria-label={f.title} />}
+            >
+              {consenting === feature && (
+                <AiFeatureConsent feature={feature} provider={providerName}
+                  onAgree={() => agreeToFeature(feature)} onCancel={() => setConsenting(null)} />
+              )}
+            </SettingsActionRow>
+          );
+        })}
       </SettingsGroup>
 
       {cfg.enabled && (
@@ -261,6 +324,8 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
           <SettingsGroup label="Provider">
             <SettingsNotice>
               Your key is encrypted with your master key. Chat messages, topic names, and the food and exercise you log go from your browser straight to {providerName}.
+              {cfg.planEnabled && ' With AI task planning on, so do your tasks, goals and milestones with their notes, your visions, the names of your goal categories and task types, and the names and times of your events when you press its button.'}
+              {cfg.insightsEnabled && ' With AI insights on, so do your Journal entries when you press its button.'}
             </SettingsNotice>
             <SettingsGroupRow label="Provider">
               <Select value={cfg.provider} onChange={e => handleProviderChange(e.target.value as AiProvider)} aria-label="Provider">
