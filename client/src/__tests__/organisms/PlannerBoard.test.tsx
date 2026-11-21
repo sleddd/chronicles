@@ -12,7 +12,7 @@ function render(lanes: PlannerLane[]) {
 }
 /** The top of each hour line down a day, in px */
 const lineTops = (day: string, container: HTMLElement) =>
-  [...container.querySelectorAll<HTMLElement>(`[data-day="${day}"] i`)].map(el => parseFloat(el.style.top));
+  [...container.querySelectorAll<HTMLElement>(`[data-day="${day}"] [data-hour-line]`)].map(el => parseFloat(el.style.top));
 
 describe('PlannerBoard', () => {
   it('a crowded hour stretches only its own day', () => {

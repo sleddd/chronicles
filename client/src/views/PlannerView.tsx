@@ -231,8 +231,10 @@ export function PlannerView() {
   const resize = (id: number, hours: number) => {
     const t = planned.find(x => x.id === id);
     if (!t) return;
-    void saveFields(t.entry, lengthPatch(t.fields, hours)).then(ok => {
+    // The board hears whether it saved, and puts the card back when it didn't
+    return saveFields(t.entry, lengthPatch(t.fields, hours)).then(ok => {
       if (!ok) showFlash('Couldn’t save that, so the task is back as it was. Try again.');
+      return ok;
     });
   };
 

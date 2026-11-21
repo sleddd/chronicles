@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, TouchEvent as ReactTouchEvent } from 'react';
 
 /* Paging a sideways view by gesture instead of its ‹ › buttons (the Planner):
@@ -9,7 +10,9 @@ import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, 
      so a wide week still scrolls natively first
    - trackpad / sideways wheel: the same, once the view can't scroll further
    `busy()` says a card is being dragged (or was a moment ago), so a card drag
-   never pages. Presses on buttons, fields, links and cards are left alone. */
+   never pages. Presses on buttons, fields, links and cards are left alone.
+   `boardRef` is the board inside the scroller: the hook moves it sideways itself
+   while it is pulled past the edge (no re-render per pixel). */
 
 const INTERACTIVE = 'button, a, input, textarea, select, label, [role="button"], [contenteditable="true"]';
 /** How far past the edge (px) a drag or swipe has to go to page */
@@ -17,15 +20,23 @@ const PAGE_AT = 70;
 /** Sideways wheel travel (px) past the edge that pages */
 const WHEEL_AT = 120;
 
-export function usePagePan(onPrev: () => void, onNext: () => void, busy: () => boolean = () => false) {
+/** The board has glided back: take our transition off it. Cards inside have transitions of their
+ *  own, and their `transitionend` bubbles up here — only the board's own transform counts */
+function clearGlide(e: TransitionEvent) {
+  const board = e.currentTarget as HTMLElement;
+  if (e.target !== board || e.propertyName !== 'transform') return;
+  board.style.transition = '';
+  board.removeEventListener('transitionend', clearGlide);
+}
+
+export function usePagePan(boardRef: RefObject<HTMLElement | null>, onPrev: () => void, onNext: () => void, busy: () => boolean = () => false) {
   const [el, setEl] = useState<HTMLDivElement | null>(null);
-  /** How far the board is pulled past the edge while a mouse drags it */
-  const [pull] = useState(0);
   /** A mouse is dragging the board sideways (for the cursor) — set once at the start, not every pixel */
   const [panning, setPanning] = useState(false);
   /** Bumps on each page, with the side the new days come in from (for the slide-in) */
   const [entered, setEntered] = useState<{ from: 'left' | 'right'; n: number } | null>(null);
   const drag = useRef<{ x: number; y: number; scroll: number; moved: boolean; id: number } | null>(null);
+  /** How far the board is pulled past the edge while a mouse drags it */
   const pullRef = useRef(0);
   const swallowClick = useRef(false);
   const touch = useRef<{ x: number; y: number; atStart: boolean; atEnd: boolean } | null>(null);
@@ -37,11 +48,17 @@ export function usePagePan(onPrev: () => void, onNext: () => void, busy: () => b
   const pullFrame = useRef(0);
   /** The board inside the scroller, pulled sideways (`ease`: glide back into place) */
   const drawPull = useCallback((x: number, ease = false) => {
-    const board = elRef.current?.firstElementChild as HTMLElement | null;
+    const board = boardRef.current;
     if (!board) return;
-    board.style.transition = ease ? 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none';
+    // Gliding back only when it was pulled: with nothing to animate, no transition would end
+    const glide = ease && !x && board.style.transform !== '';
+    board.style.transition = glide ? 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1)' : x ? 'none' : '';
     board.style.transform = x ? `translateX(${x}px)` : '';
-  }, []);
+    // Nothing of ours stays on the board once it's back in place (the same listener each time, so
+    // it is only ever added once)
+    if (glide) board.addEventListener('transitionend', clearGlide);
+  }, [boardRef]);
+  useEffect(() => () => cancelAnimationFrame(pullFrame.current), []);
   const page = useCallback((dir: 'prev' | 'next') => {
     if (dir === 'next') handlers.current.onNext(); else handlers.current.onPrev();
     setEntered(e => ({ from: dir === 'next' ? 'right' : 'left', n: (e?.n ?? 0) + 1 }));
@@ -159,7 +176,6 @@ export function usePagePan(onPrev: () => void, onNext: () => void, busy: () => b
     el,
     /** Page by hand (a card held at the edge) — with the same slide-in */
     page,
-    pull,
     entered,
     panning,
     bind: {

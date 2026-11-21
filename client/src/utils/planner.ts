@@ -188,7 +188,11 @@ export function lengthPatch(cf: Record<string, unknown>, hours: number): Record<
   return out;
 }
 
-/** Rounded to the half hour and kept in range */
+/** Whether two lengths (hours) are the same to the minute. Lengths are kept in hours, so five
+ *  minutes is a repeating fraction — compare with this, never `===` */
+export const sameLength = (a: number, b: number): boolean => Math.round(a * 60) === Math.round(b * 60);
+
+/** Rounded to five minutes and kept in range */
 export const clampHours = (h: number): number => Math.min(MAX_HOURS, Math.max(MIN_HOURS, Math.round(h * 12) / 12));
 
 /** "30 min", "1 h", "1 h 30" */

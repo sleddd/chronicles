@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
+import { sameLength,
   plannerFacts, hoursOf, hoursLabel, priorityIndex, layoutDay, timeOf, hhmm, partOf, partOfTime, effectiveDay, hasMigrated, weekOf, parsePlannerOrder, tasksByDay, unscheduled, placeIn, movedOrder,
   weekLabel, laneLabel, longDayLabel, estimateOf, estimateLabel, type PlannerTask,
 } from './planner.js';
@@ -97,6 +97,9 @@ describe('planner', () => {
     expect(hoursOf({ scheduledHours: 5 / 60 })).toBeCloseTo(5 / 60);
     expect(hoursOf({ scheduledHours: 0.01 })).toBeCloseTo(5 / 60);
     expect(hoursOf({ scheduledHours: 40 })).toBe(12);
+    // Five minutes is a repeating fraction of an hour: lengths are compared to the minute
+    expect(sameLength(5 / 60 + 5 / 60 + 5 / 60, 0.25)).toBe(true);
+    expect(sameLength(0.25, 20 / 60)).toBe(false);
     expect(hoursOf({ scheduledHours: 'x' })).toBe(1);
     expect(hoursLabel(0.5)).toBe('30 min');
     expect(hoursLabel(1)).toBe('1 h');
