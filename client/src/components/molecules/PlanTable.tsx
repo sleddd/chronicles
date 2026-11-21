@@ -263,7 +263,7 @@ const BareBtn = styled.button`
 export function PlanTick({ done, title, onToggle }: { done: boolean; title: string; onToggle: () => void }) {
   return (
     <BareBtn type="button" role="checkbox" aria-checked={done} aria-label={`${title}: done`} onClick={onToggle}>
-      <TickMark checked={done} size={18} />
+      <TickMark checked={done} size={16} />
     </BareBtn>
   );
 }

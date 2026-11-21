@@ -61,6 +61,7 @@ import { UpdatePrompt } from './components/organisms/UpdatePrompt.js';
 import { pageTitleFor } from './utils/pageTitle.js';
 import { IdleWarning } from './components/organisms/IdleWarning.js';
 import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.js';
+import { RECIPE_COLUMNS, recipeNote } from './components/organisms/kitchenTables.js';
 import { HealthReportingView } from './views/HealthReportingView.js';
 import { MenuView } from './views/MenuView.js';
 import { ShoppingListsView } from './views/ShoppingListsView.js';
@@ -640,6 +641,9 @@ function R({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Recipes as the topic page's table: Prep, Cook, Serves, Difficulty; the description muted beside the name */
+const RECIPE_TABLE = { label: 'Recipes', columns: RECIPE_COLUMNS, noteOf: recipeNote, prefsKey: 'recipe-list-v1' };
+
 export function App() {
   const accentColor = useUIStore(s => s.accentColor);
   const themeMode = useUIStore(s => s.themeMode);
@@ -770,7 +774,7 @@ export function App() {
               <Route path="/goals/habits" element={<Navigate to="/health/habits" replace />} />
               <Route path="/goals/filter" element={<R><PlannerFilterView /></R>} />
               <Route path="/menu" element={<R><MenuView /></R>} />
-              <Route path="/menu/recipes" element={<R><HealthView topicNames={['Recipe', 'Recipes']} metaFields={[{ key: 'category', label: 'Category' }, { key: 'servings', label: 'Serves' }, { key: 'prepTime', label: 'Prep' }, { key: 'cookTime', label: 'Cook' }]} showDateFilter={false} title={KITCHEN_TITLE} tabBar={<MealsTabBar />} extraAction={<RecipeFromIngredientsButton />} /></R>} />
+              <Route path="/menu/recipes" element={<R><HealthView topicNames={['Recipe', 'Recipes']} metaFields={[{ key: 'category', label: 'Category' }, { key: 'servings', label: 'Serves' }, { key: 'prepTime', label: 'Prep' }, { key: 'cookTime', label: 'Cook' }]} showDateFilter={false} title={KITCHEN_TITLE} tabBar={<MealsTabBar />} extraAction={<RecipeFromIngredientsButton />} table={RECIPE_TABLE} /></R>} />
               <Route path="/kitchen" element={<R><KitchenDashboardView /></R>} />
               <Route path="/menu/meals" element={<Navigate to="/health/food" replace />} />
               <Route path="/shopping" element={<R><ShoppingListsView /></R>} />

@@ -48,7 +48,9 @@ const Head = styled.header`
   /* Phones/tablets: the top bar names the page and holds New entry — this row
      is only the back caret, while an entry is open */
   ${NAV_COMPACT} {
-    padding: 4px 16px;
+    /* Snug under the top bar: just a few px of the page's 26px of room above it */
+    padding: 0 16px;
+    margin-top: -20px;
     &:not([data-back]) { display: none; }
     /* Just the back caret here, under the top bar's own hairline */
     html:not([data-wallpaper]) & { border-bottom: none; }
@@ -66,23 +68,21 @@ const TitleBlock = styled.div`
 const BackBtn = styled.button`
   display: none;
   align-items: center;
-  justify-content: center;
-  height: 44px;
-  margin-left: -14px;
-  margin-right: -6px;
-  padding: 0;
+  gap: 2px;
+  height: 40px;
+  margin-left: -8px;
+  padding: 0 8px 0 0;
   background: transparent;
   border: none;
   color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 15px;
   cursor: pointer;
-  /* A touch lower, level with the title's letters */
-  position: relative;
-  top: 3px;
   &:hover { color: var(--color-accent); }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 6px; }
   ${NAV_COMPACT} { display: flex; }
-  /* The title's weight (200), in both themes */
-  & > span { font-weight: 200; font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 48; }
+  /* The icon at the app's usual weight (300) */
+  & > span { font-weight: 300; font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
 `;
 
 const TitleAside = styled.div`
@@ -201,8 +201,9 @@ export function JournalTemplate({ sidePanel, editorPanel, title = 'Journal', tit
       <Head data-back={onBack ? '' : undefined}>
         <TitleBlock>
           {onBack && (
-            <BackBtn type="button" onClick={onBack} aria-label="Back to entries">
-              <MaterialIcon $size={48} aria-hidden="true">chevron_left</MaterialIcon>
+            <BackBtn type="button" onClick={onBack}>
+              <MaterialIcon $size={28} aria-hidden="true">chevron_left</MaterialIcon>
+              Entry list
             </BackBtn>
           )}
           <Title>{title}</Title>

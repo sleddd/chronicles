@@ -1,23 +1,16 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PillButton } from '../components/atoms/PillButton.js';
 import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
-import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
-import { EntryListCard } from '../components/molecules/EntryListCard.js';
-import { MonthGroups } from '../components/molecules/MonthGroups.js';
-import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
-import { deleteEntryWithImages } from '../utils/entryActions.js';
-import { builtinEntryName } from '../utils/stripHtml.js';
-import { SwipeActions } from '../components/molecules/SwipeActions.js';
-import { entries as entriesApi } from '../services/api.js';
+import { EntryTableList } from '../components/organisms/EntryTableList.js';
+import { SHOPPING_COLUMNS } from '../components/organisms/kitchenTables.js';
+import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
-import { useUIStore } from '../stores/uiStore.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import type { ShoppingItem } from '../types/fields.js';
-import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { topicEntries } from '../utils/topicIndex.js';
 
@@ -65,12 +58,9 @@ const SubTabs = styled.div`
   padding: 24px 0 4px; /* room between the section tabs and the sub-sub tabs */
 `;
 
-const List = styled.div`
-  display: flex;
-  flex-direction: column;
-  /* Room above every entry list (sitewide spacing) */
-  margin-top: 16px;
-`;
+
+/** A shopping list has no line under its name (its items are the Items count) */
+const noNote = () => undefined;
 
 /* ── Tabs ── */
 
@@ -86,17 +76,10 @@ export function ShoppingListsView() {
   const { isReady, isLoading } = useInitializeData();
   const entries   = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
-  const openInJournal = useOpenInJournal();
 
   const [tab, setTab] = useState<Tab>('current');
   const newEntry = useNewEntryInJournal();
 
-  const handleDelete = useCallback(async (id: number) => {
-    try {
-      await deleteEntryWithImages(id);
-    } catch (err) { console.error('Failed to delete entry:', err); }
-  }, []);
 
   const shoppingListTopic = useMemo(
     () => allTopics.find(t => t.name.toLowerCase() === 'shopping list'),
@@ -116,8 +99,8 @@ export function ShoppingListsView() {
       .sort((a, b) => new Date(b.entry.createdAt).getTime() - new Date(a.entry.createdAt).getTime());
   }, [entries, shoppingListTopic]);
 
-  const visible = useMemo(
-    () => lists.filter(l => tab === 'completed' ? l.completed : !l.completed),
+  const visibleEntries = useMemo(
+    () => lists.filter(l => tab === 'completed' ? l.completed : !l.completed).map(l => l.entry),
     [lists, tab]
   );
 
@@ -152,33 +135,10 @@ export function ShoppingListsView() {
           </SubTabs>
 
 
-          {visible.length === 0 ? (
-            <EmptyState
-              message={tab === 'completed' ? 'No completed lists yet.' : 'No current shopping lists.'}
-              submessage={tab === 'current' ? 'Use “New list” above to create your first shopping list.' : undefined}
-            />
-          ) : (
-            <List>
-              <MonthGroups items={visible} keyOf={v => v.entry.id} dateOf={v => (v.entry.createdAt instanceof Date ? v.entry.createdAt : new Date(v.entry.createdAt))}>{({ entry, completed }) => {
-                const created = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt);
-                return (
-                  <SwipeActions
-                    key={entry.id}
-                    accentColor={accentColor}
-                    onDelete={() => handleDelete(entry.id)}
-                  >
-                    <EntryListCard
-                      content={entry.content}
-                      createdAt={created}
-                      completed={completed}
-                      fallbackTitle={builtinEntryName((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)}
-                      onClick={() => openInJournal(entry.id)}
-                    />
-                  </SwipeActions>
-                );
-              }}</MonthGroups>
-            </List>
-          )}
+          {/* The topic page's table: the list's name, its item count and the date */}
+          <EntryTableList label="Shopping lists" entries={visibleEntries} columns={SHOPPING_COLUMNS}
+            noteOf={noNote} prefsKey="shopping-list-v1"
+            emptyMessage={tab === 'completed' ? 'No completed lists yet.' : 'No current shopping lists. Use “New list” above to start one.'} />
         </Inner>
       </Page>
     </ContentTemplate>

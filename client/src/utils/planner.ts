@@ -134,9 +134,6 @@ export function hoursOf(cf: Record<string, unknown> | undefined): number {
 
 /* ── Estimated time: how long a task is expected to take (`estimatedMinutes`) ── */
 
-/** The choices offered for an estimate, in minutes */
-export const ESTIMATE_OPTIONS: readonly number[] = [15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 960];
-
 /** A task's estimate in minutes, or undefined when it has none (anything odd is ignored) */
 export function estimateOf(cf: Record<string, unknown> | undefined): number | undefined {
   const n = typeof cf?.estimatedMinutes === 'number' ? cf.estimatedMinutes : Number(cf?.estimatedMinutes);
@@ -151,6 +148,38 @@ export function estimateLabel(minutes: number): string {
   const m = minutes % 60;
   return m ? `${h} h ${m} min` : `${h} h`;
 }
+/**
+ * A typed estimate in minutes: "45" or "45 min", "1.5 h", "1 h 30 min", "1h30", "1:30",
+ * "2 days" (a day = 8 working hours, as estimateLabel shows it). A bare number is minutes.
+ * '' → null (no estimate); anything it can't read, or over a week → undefined.
+ */
+export function parseEstimate(text: string): number | null | undefined {
+  const t = text.trim().toLowerCase();
+  if (!t || t === 'none') return null;
+  const clock = /^(\d+):([0-5]\d)$/.exec(t);
+  let total = 0;
+  if (clock) total = Number(clock[1]) * 60 + Number(clock[2]);
+  else {
+    const re = /(\d+(?:\.\d+)?)\s*(days?|d|hours?|hrs?|h|minutes?|mins?|m)?\s*/gy;
+    let m: RegExpExecArray | null;
+    let read = 0;
+    while (read < t.length && (m = re.exec(t))) {
+      if (!m[0]) break;
+      const n = Number(m[1]);
+      const unit = m[2] ?? '';
+      if (unit.startsWith('d')) total += n * 8 * 60;
+      else if (unit.startsWith('h')) total += n * 60;
+      else if (unit.startsWith('m')) total += n;
+      // "1h30": a bare number after hours is minutes; on its own it is minutes too
+      else total += n;
+      read = re.lastIndex;
+    }
+    if (read !== t.length) return undefined;
+  }
+  const minutes = Math.round(total);
+  return minutes > 0 && minutes <= 7 * 24 * 60 ? minutes : undefined;
+}
+
 /** The fields after moving a task's start to `start` (minutes), its same-day end time moved with it */
 export function startPatch(cf: Record<string, unknown>, start: number): Record<string, unknown> {
   const end = sameDayEnd(cf);

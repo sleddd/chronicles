@@ -7,7 +7,7 @@ import { MaterialIcon } from '../../atoms/MaterialIcon.js';
 import { Toggle } from '../../atoms/Toggle.js';
 import type { TaskFieldValues } from '../../../types/fields.js';
 import type { GoalOption, MilestoneOption } from '../../../types/ui.js';
-import { BoxText } from './formKit.js';
+import { BoxText, BoxInput } from './formKit.js';
 import { cardLabel } from '../../../styles/cardLabel.js';
 import { sameTaskType } from '../../../utils/taskTypes.js';
 import { checklistOf } from '../../../utils/taskLists.js';
@@ -15,7 +15,7 @@ import { usePopover } from '../../../hooks/usePopover.js';
 import { ChecklistSection } from './ChecklistSection.js';
 import { taskStatusOf, taskFieldsForStatus, type TaskStatus } from '../../../types/goals.js';
 import { toDateStr } from '../../../utils/dateUtils.js';
-import { ESTIMATE_OPTIONS, estimateLabel, estimateOf } from '../../../utils/planner.js';
+import { estimateLabel, estimateOf, parseEstimate } from '../../../utils/planner.js';
 
 /* The task card (journal and Quick entry): a header with the topic picker and the
    Single task | To-do list switch, the title in a box with its Priority and tools, then
@@ -407,7 +407,6 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
 
   /* Estimate: how long it's expected to take */
   const estimate = estimateOf(values as unknown as Record<string, unknown>);
-  const estimateList = estimate && !ESTIMATE_OPTIONS.includes(estimate) ? [...ESTIMATE_OPTIONS, estimate].sort((a, b) => a - b) : ESTIMATE_OPTIONS;
 
   /* Type: the list, "No type", and "+ New type…" (a name box in its place) */
   const taskType = values.taskType?.trim() ?? '';
@@ -496,17 +495,7 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
           until it's given a length of its own; AI planning reads it) */}
       <TaskRow data-inline="" style={{ paddingTop: 16, paddingBottom: 16 }}>
         <TaskRowName>Time estimate</TaskRowName>
-        <Picks>
-          <PillPick>
-            <span className="value">{estimate ? estimateLabel(estimate) : 'None'}</span>
-            <Icon name="chevron-down" size={14} strokeWidth={2} />
-            <select aria-label="Estimated time" value={estimate ? String(estimate) : ''}
-              onChange={e => set({ estimatedMinutes: e.target.value ? Number(e.target.value) : undefined })}>
-              <option value="">None</option>
-              {estimateList.map(m => <option key={m} value={m}>{estimateLabel(m)}</option>)}
-            </select>
-          </PillPick>
-        </Picks>
+        <EstimateBox value={estimate} onChange={m => set({ estimatedMinutes: m })} />
       </TaskRow>
 
       {/* When: Starts (the day it's planned for, and a time) and Deadline (and a time) in one box,
@@ -611,3 +600,49 @@ export function TimerPopButton({ timer, running = false }: { timer: ReactNode; r
     </>
   );
 }
+
+/* Time estimate as a typed box: "45 min", "1.5 h", "1 h 30 min", "2 days" (a bare number is
+   minutes). Read when it's left or on Enter and shown back in the app's words; blank clears it,
+   something it can't read puts the last value back with a note */
+function EstimateBox({ value, onChange }: { value: number | undefined; onChange: (minutes: number | undefined) => void }) {
+  const shown = value ? estimateLabel(value) : '';
+  const [draft, setDraft] = useState(shown);
+  const [editing, setEditing] = useState(false);
+  const [bad, setBad] = useState(false);
+  const cancelled = useRef(false);
+  useEffect(() => { if (!editing) setDraft(shown); }, [shown, editing]);
+  const commit = () => {
+    setEditing(false);
+    if (cancelled.current) { cancelled.current = false; setDraft(shown); return; }
+    const m = parseEstimate(draft);
+    if (m === undefined) { setBad(true); setDraft(shown); return; }
+    setBad(false);
+    if ((m ?? undefined) !== value) onChange(m ?? undefined);
+    setDraft(m ? estimateLabel(m) : '');
+  };
+  return (
+    <EstimateWrap>
+      <BoxInput aria-label="Time estimate" placeholder="e.g. 45 min, 1.5 h, 2 days" value={draft}
+        aria-invalid={bad || undefined}
+        onFocus={() => { setEditing(true); setBad(false); }}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+          if (e.key === 'Escape') { e.preventDefault(); cancelled.current = true; (e.target as HTMLInputElement).blur(); }
+        }} />
+      {bad && <EstimateNote role="status">Try a time like 45 min, 1.5 h or 2 days.</EstimateNote>}
+    </EstimateWrap>
+  );
+}
+
+const EstimateWrap = styled.div`
+  width: 100%;
+  max-width: 260px;
+`;
+
+const EstimateNote = styled.p`
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+`;

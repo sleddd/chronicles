@@ -116,7 +116,11 @@ describe('EntryForm', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ isInProgress: true }));
     // Goal, Milestone and Type are three pickers
     for (const label of ['Goal', 'Milestone', 'Type']) expect(screen.getByLabelText(label)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Estimated time'), { target: { value: '90' } });
+    // Time estimate is typed: read when the box is left
+    const est = screen.getByLabelText('Time estimate');
+    fireEvent.focus(est);
+    fireEvent.change(est, { target: { value: '1.5 h' } });
+    fireEvent.blur(est);
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ estimatedMinutes: 90 }));
     // When: Starts (planned day + time) and Ends (the deadline) in one box, with All day
     expect(screen.getByLabelText('Planned for')).toBeInTheDocument();

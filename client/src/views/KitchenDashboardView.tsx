@@ -91,13 +91,20 @@ const Note = styled.p`
   margin: 0;
 `;
 
+/* Like the home dashboard's cards: no outline, the light even shadow instead */
+const ShadowCard = styled.div`
+  & > section { border: none; box-shadow: var(--shadow-card); }
+  /* A little room between the card's title and the line under it (the list's name, the day) */
+  && > section > p { margin-top: 14px; }
+`;
+
 function DashCard(props: { id: string; title: string; subtitle?: ReactNode; action?: ReactNode; children: ReactNode }) {
-  return <CollapsibleCard storageKey={CARDS_KEY} {...props} />;
+  return <ShadowCard><CollapsibleCard storageKey={CARDS_KEY} {...props} /></ShadowCard>;
 }
 
 /* ── Today's meals ── */
 
-/* One planned meal: slot name in muted grey, the meal beside it. No rules
+/* One planned meal: slot name in muted grey, the meal beside it, a hairline
    between rows; a row lifts onto a soft fill on hover (recipe rows open it). */
 const MealRow = styled.button<{ $link: boolean }>`
   display: grid;
@@ -133,6 +140,10 @@ const MealName = styled.span`
 const Meals = styled.div`
   display: flex;
   flex-direction: column;
+  /* A hairline over every meal (the first too), set on the list (a recipe row and a plain row are different
+     classes, so a row-after-row rule on the row itself never matched) */
+  && > button { border-top: 1px solid color-mix(in srgb, var(--border-strong) 35%, transparent); border-radius: 0; }
+  html[data-theme='light'] && > button { border-top-color: color-mix(in srgb, var(--border-default) 35%, transparent); }
   margin-top: -20px; /* rows start close under the header */
 `;
 
@@ -145,9 +156,9 @@ function useUpcomingMeals() {
   const next = useMemo(() => upcomingMeals(menuDays(entries, menuTopicId), today), [entries, menuTopicId, today]);
   // The card title: "Today", or the day the shown meals are planned for
   const title = next && next.day !== today ? longDay(next.day) : 'Today';
-  // "Sat, Oct 17 · 2 meals planned"
+  // "Sat, Oct 17" (no count)
   const subtitle = next
-    ? `${new Date(`${next.day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${next.meals.length} ${next.meals.length === 1 ? 'meal' : 'meals'} planned`
+    ? new Date(`${next.day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
     : undefined;
   return { next, title, subtitle };
 }
@@ -404,7 +415,7 @@ export function KitchenDashboardView() {
             <DashCard
               id="shopping"
               title="Shopping list"
-              subtitle={shopping.list ? `${shopping.title} · ${shopping.left} left to get` : undefined}
+              subtitle={shopping.list ? shopping.title : undefined}
               action={shopping.list
                 ? <HeadLink type="button" onClick={() => openInJournal(shopping.list!.id)}>Open list</HeadLink>
                 : seeAll('/shopping')}

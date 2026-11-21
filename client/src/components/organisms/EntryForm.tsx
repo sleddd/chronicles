@@ -242,10 +242,7 @@ const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean; $titled?: b
       border-bottom: 1px solid var(--border-subtle);
     }
     .tiptap > p + p { margin-top: 1em; }
-    /* A readable line length: about two thirds of a wide editor, never the full width.
-       In px, not em: an em here is each block's own font size, so the 28px title
-       ran far wider than the 16px text under it */
-    .tiptap > * { max-width: 672px; }
+    /* No line length of its own: the writing runs the card's width (TEXT_ROW_MAX, 1000px) */
   ` : '')}
   display: ${({ $hidden }) => ($hidden ? 'none' : 'flex')};
   flex-direction: column;
@@ -372,7 +369,7 @@ const TaskHead = styled.div`
   z-index: 5; /* the topic menu drops over the rows */
   /* The journal: full screen / close 30px in from the pane's edge */
   /* …and a little more room under the row, above its rule */
-  &[data-journal] { padding-right: 30px; padding-bottom: 14px; margin-bottom: 12px; }
+  &[data-journal] { padding-right: 30px; padding-bottom: 14px; margin-bottom: 32px; }
   /* The journal: a rule under the row, between the content's edges (--head-x: 26px on a task card, the card's 36px elsewhere) */
   &[data-journal]::after {
     content: '';
@@ -384,7 +381,9 @@ const TaskHead = styled.div`
     pointer-events: none;
   }
   /* Full width: room between the topic picker / close row and the entry under it */
-  @media (min-width: 1025px) { &[data-full] { margin-bottom: 24px; } }
+  @media (min-width: 1025px) { &[data-full] { margin-bottom: 32px; } }
+  /* Phones / tablets: snug under the "Entry list" row above it */
+  ${NAV_COMPACT} { &[data-journal] { padding-top: 6px; } }
   /* The Quick entry: the topic picker a little further down from the card's top */
   &:not([data-journal]) { padding-top: 26px; }
   /* Close: a round button with the reminders bell's fill and a light outline round its edge —
@@ -495,13 +494,15 @@ const QuickCard = styled.div`
 const CARD_X = '36px';
 const LABEL_COL = '200px';
 /** The widest a field gets beside its label: a topic's fields stay a readable width in a wide editor
-    (a topic that is only text — Journal — has no fields, and its writing keeps the full width) */
+    (a topic that is only text — Journal — has no fields; its card is TEXT_ROW_MAX wide instead) */
 const FIELD_MAX = '600px';
 const FIELD_COL = `minmax(0, ${FIELD_MAX})`;
 /** A card with fields (journal) as wide as its rows: label, gap, field and the card's sides — its head, rules and foot with it (a text-only topic keeps the full width) */
-const FIELDS_ROW_MAX = `calc(${LABEL_COL} + 24px + ${FIELD_MAX} + 2 * ${CARD_X})`;
+export const FIELDS_ROW_MAX = `calc(${LABEL_COL} + 24px + ${FIELD_MAX} + 2 * ${CARD_X})`;
 /** The same for the task card: its 140px names and 26px sides (TaskRow, TaskBody) */
-const TASK_ROW_MAX = `calc(140px + 24px + ${FIELD_MAX} + 2 * 26px)`;
+export const TASK_ROW_MAX = `calc(140px + 24px + ${FIELD_MAX} + 2 * 26px)`;
+/** A topic that is only text (Journal, a plain topic): its card in the journal is at most 1000px */
+export const TEXT_ROW_MAX = '1000px';
 
 /* Every other topic's text: a row like the fields' (their 200px label column), the writing area
    in the task card's box with the tools under it */
@@ -510,7 +511,7 @@ const TextRow = styled.div`
   grid-template-columns: ${LABEL_COL} ${FIELD_COL};
   column-gap: 24px;
   align-items: start;
-  padding: 20px ${CARD_X} 22px;
+  padding: 20px ${CARD_X} 32px;
   & > :first-child { ${cardLabel} padding-top: 22px; }
   @container entrycard (max-width: 600px) {
     grid-template-columns: minmax(0, 1fr);
@@ -918,7 +919,7 @@ const JournalHead = styled.div<{ $expanded?: boolean; $roomy?: boolean }>`
   /* 28px on the right puts the close ×'s glyph on the content's 36px edge (its button is 34px round an 18px icon).
      Full width needs no extra room: the corner reminders bell isn't shown over a full-width editor */
   padding: 28px 28px 14px 36px;
-  margin-bottom: ${({ $roomy }) => ($roomy ? '24px' : '12px')};
+  margin-bottom: 32px;
   /* A rule under the row, between the content's edges (the row's own padding differs left and right) */
   position: relative;
   &::after {
@@ -929,9 +930,9 @@ const JournalHead = styled.div<{ $expanded?: boolean; $roomy?: boolean }>`
     bottom: 0;
     border-bottom: 1px solid var(--border-card);
   }
-  ${NAV_COMPACT} { padding-right: 24px; }
+  ${NAV_COMPACT} { padding-right: 24px; padding-top: 8px; }
   @media (max-width: 640px) {
-    padding: 20px 12px 12px 20px;
+    padding: 8px 12px 12px 20px;
     margin-bottom: ${({ $roomy }) => ($roomy ? '18px' : '8px')};
     &::after { left: 20px; right: 20px; }
   }
@@ -1177,6 +1178,8 @@ interface EntryFormProps {
   /** Recipe view actions (injected by JournalView) */
   /** Full-screen editor toggle in the toolbar (journal only — other views open expanded) */
   expanded?: boolean;
+  /** Lay out full width (defaults to expanded) — false in the journal's modal card, where it's still "expanded" */
+  fullWidth?: boolean;
   onToggleExpand?: () => void;
   /** × at the end of the toolbar (edit view: close and go back) */
   onClose?: () => void;
@@ -1217,7 +1220,7 @@ interface EntryFormProps {
 export function EntryForm({
   entryId, content, onContentChange, topicId, onTopicChange, topics,
   customFields, onCustomFieldsChange, onSave, onSaveAndStartTimer, onAutoSave, onDelete, onNew,
-  onBookmark, onShare, onDuplicate, onBack, expanded, onToggleExpand, onClose,
+  onBookmark, onShare, onDuplicate, onBack, expanded, fullWidth = expanded, onToggleExpand, onClose,
   isEditing, isSaving, saveStatus, lastSavedAt, placeholder = 'Start writing...',
   dictationControlRef,
   images = [], featuredKey = null, onImagesSelected, onExistingImagesSelected, onImageRemoved, onSetFeatured, onImageFocus,
@@ -2031,7 +2034,7 @@ export function EntryForm({
   const taskBody = (
     <TaskBody>
       {imageError && <ImageErrorText>{imageError}</ImageErrorText>}
-      <TaskRow style={{ alignItems: 'start', paddingTop: 2, paddingBottom: 22 }}>
+      <TaskRow style={{ alignItems: 'start', paddingTop: 2, paddingBottom: 32 }}>
         <TaskRowName style={{ paddingTop: 18 }}>Title</TaskRowName>
         <TitleBox>
           <EditorArea $quick={quick}>{editorEl}</EditorArea>
@@ -2154,10 +2157,10 @@ export function EntryForm({
     <FormWrapper>
       {/* No top bar: the question, the writing area, the fields and the tool row all in one scroll */}
       <ScrollArea>
-        <EdBody $full={!quick && !!expanded}>
+        <EdBody $full={!quick && !!fullWidth}>
           {isTaskCard ? (
           <EntryCard $flat data-task-card="" style={{ maxWidth: TASK_ROW_MAX }}>
-            <TaskHead data-journal="" data-full={expanded ? '' : undefined}>
+            <TaskHead data-journal="" data-full={fullWidth ? '' : undefined}>
               <JournalPrompt>
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
                   label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
@@ -2193,8 +2196,8 @@ export function EntryForm({
             </QuickFoot>
           </EntryCard>
           ) : framed ? (
-          <EntryCard $flat data-framed="" style={textOnly ? undefined : { maxWidth: FIELDS_ROW_MAX }}>
-            <TaskHead data-journal="" data-full={expanded ? '' : undefined} style={{ paddingLeft: CARD_X, '--head-x': CARD_X } as CSSProperties}>
+          <EntryCard $flat data-framed="" style={{ maxWidth: textOnly ? TEXT_ROW_MAX : FIELDS_ROW_MAX }}>
+            <TaskHead data-journal="" data-full={fullWidth ? '' : undefined} style={{ paddingLeft: CARD_X, '--head-x': CARD_X } as CSSProperties}>
               <JournalPrompt>
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
                   label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
@@ -2217,7 +2220,7 @@ export function EntryForm({
           </EntryCard>
           ) : (
           <EntryCard $flat>
-            <JournalHead $expanded={!!expanded} $roomy={editorHidden && !recipeViewMode}>
+            <JournalHead $expanded={!!fullWidth} $roomy={editorHidden && !recipeViewMode}>
               <JournalPrompt>
                 {/* Just the picker (no question). No topic picked asks for one ("choose a topic ⌄") rather than naming
                     Journal — saved without one (the autosave too) it still goes under Journal */}

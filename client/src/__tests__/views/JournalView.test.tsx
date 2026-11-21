@@ -8,6 +8,9 @@ import { entries as entriesApi } from '@/services/api';
 
 // AI insights' button shows only while its switch is on and agreed to: off here
 vi.mock('@/hooks/useAiReady', () => ({ useAiReady: () => false, useAiChatEnabled: () => false, useAiFeatureEnabled: () => false }));
+// Wide screen unless a test says otherwise (the modal card is for wide screens only)
+const media = vi.hoisted(() => ({ compact: false }));
+vi.mock('@/hooks/useMediaQuery', () => ({ useMediaQuery: () => media.compact }));
 vi.mock('react-router-dom', () => ({
   useNavigate: vi.fn(() => vi.fn()),
   useLocation: vi.fn(() => ({ pathname: '/journal', state: null })),
@@ -144,6 +147,8 @@ vi.mock('@/components/organisms/EntryList', () => ({
 }));
 
 vi.mock('@/components/organisms/EntryForm', () => ({
+  FIELDS_ROW_MAX: '896px',
+  TASK_ROW_MAX: '816px',
   EntryForm: ({ onContentChange, onSave, onNew, onClose, onDelete, topicId }: any) => (
     <div data-testid="entry-form" data-topic={String(topicId)}>
       {onDelete && <button onClick={onDelete}>delete</button>}
@@ -258,6 +263,65 @@ describe('JournalView (edit view — opened from another view)', () => {
     fireEvent.click(screen.getByTitle('Close'));
     expect(nav).toHaveBeenCalledWith('/topics/4');
   });
+
+  // A task (an entry with fields) opened from another page
+  const withTask = (fn: () => void) => {
+    const entry = { id: 9, content: '<p>Call</p>', metadata: { _taxonomyId: 5 }, isEncrypted: true, createdAt: new Date(), updatedAt: new Date() };
+    entriesState.decryptedEntries = [entry];
+    entriesState.topics = [{ id: 5, name: 'Task' }];
+    (uiState as any).selectedEntryId = 9;
+    try { fn(); } finally {
+      entriesState.decryptedEntries = [];
+      entriesState.topics = [];
+      (uiState as any).selectedEntryId = null;
+    }
+  };
+
+  it('on a wide screen shows an entry with fields as a modal card; Escape returns, a used Escape does not', () => withTask(() => {
+    unlocked();
+    const nav = vi.fn();
+    vi.mocked(useNavigate).mockReturnValue(nav);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/goals/tasks' }, key: 'm1' } as any);
+    renderWithTheme(<JournalView />);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    // A pop-up inside the editor that handled Escape closes only itself
+    const used = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+    used.preventDefault();
+    window.dispatchEvent(used);
+    expect(nav).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(nav).toHaveBeenCalledWith('/goals/tasks');
+  }));
+
+  it('a click on the dim behind the card does not close it', () => withTask(() => {
+    unlocked();
+    const nav = vi.fn();
+    vi.mocked(useNavigate).mockReturnValue(nav);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/goals/tasks' }, key: 'm2' } as any);
+    renderWithTheme(<JournalView />);
+    fireEvent.click(screen.getByRole('dialog').parentElement!);
+    expect(nav).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  }));
+
+  it('text-only writing opens full width, not as a card', () => {
+    unlocked();
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/topics/4' }, key: 'm4' } as any);
+    renderWithTheme(<JournalView />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Close')).toBeInTheDocument();
+  });
+
+  it('phones and tablets keep the full-screen editor (no card)', () => withTask(() => {
+    unlocked();
+    media.compact = true;
+    try {
+      vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/goals/tasks' }, key: 'm3' } as any);
+      renderWithTheme(<JournalView />);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByTitle('Close')).toBeInTheDocument();
+    } finally { media.compact = false; }
+  }));
 
   it('returns to the originating view after deleting the entry', async () => {
     unlocked();

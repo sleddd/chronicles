@@ -2,7 +2,17 @@ import { useEffect, useRef, type RefObject } from 'react';
 
 const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
-export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active: boolean, onClose?: () => void) {
+/* Pop-ups portalled to <body> from inside a trapped panel (menus, a time panel, a
+   confirm dialog): Tab inside them is theirs, never pulled back into the panel */
+const OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+
+export function useFocusTrap(
+  containerRef: RefObject<HTMLElement | null>,
+  active: boolean,
+  onClose?: () => void,
+  /** autoFocus: false leaves focus where it is (an editor that places its own cursor) */
+  { autoFocus = true }: { autoFocus?: boolean } = {},
+) {
   const previousFocus = useRef<HTMLElement | null>(null);
   // Read through a ref: callers pass a fresh onClose each render, and re-running
   // the effect for it would move focus back to the first button on every keystroke
@@ -16,7 +26,7 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active
 
     // Focus first focusable element
     const focusable = containerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
-    if (focusable.length > 0) {
+    if (autoFocus && focusable.length > 0) {
       focusable[0].focus();
     }
 
@@ -38,6 +48,8 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active
       // The focused control can leave the page (a dialog's step changing its buttons),
       // dropping focus to <body>: Tab then comes back in, never onto the page behind
       if (!containerRef.current.contains(document.activeElement)) {
+        const held = document.activeElement;
+        if (held instanceof Element && held.closest(OVERLAY)) return;
         e.preventDefault();
         (e.shiftKey ? last : first).focus();
         return;
@@ -58,5 +70,5 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active
       document.removeEventListener('keydown', handleKeyDown);
       previousFocus.current?.focus();
     };
-  }, [active, containerRef]);
+  }, [active, containerRef, autoFocus]);
 }

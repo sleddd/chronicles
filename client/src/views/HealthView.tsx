@@ -23,6 +23,8 @@ import { entryTopicIds, hasMixedTopics } from '../utils/mixedTopics.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 import { tableColumnRules } from '../styles/columnRules.js';
 import { TopBarAction } from '../components/organisms/TopBarAction.js';
+import { EntryTableList, type EntryTableColumn } from '../components/organisms/EntryTableList.js';
+import type { DecryptedPost } from '@shared/crypto/types';
 
 const DATE_FILTERS = [
   { value: 'all' as const, label: 'All' },
@@ -204,6 +206,8 @@ interface HealthViewProps {
   newLabel?: string;
   /** One more page action beside New (Recipes: Recipe from ingredients); renders nothing when it has nothing to show */
   extraAction?: React.ReactNode;
+  /** Show the entries as the topic page's table (Recipes: Prep, Cook, Serves, Difficulty) */
+  table?: { label: string; columns: EntryTableColumn[]; noteOf?: (e: DecryptedPost) => string | undefined; prefsKey: string };
 }
 
 /**
@@ -212,7 +216,7 @@ interface HealthViewProps {
  * reveal Delete; clicking opens the entry in the journal editor — its
  * breadcrumb leads back here.
  */
-export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar, newLabel, extraAction }: HealthViewProps) {
+export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar, newLabel, extraAction, table }: HealthViewProps) {
   const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -368,7 +372,12 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
             </PrintReport>
           )}
 
-          {sortedEntries.length === 0 ? (
+          {table ? (
+            <div data-print-hide={printable || undefined}>
+              <EntryTableList label={table.label} entries={sortedEntries} columns={table.columns} noteOf={table.noteOf}
+                prefsKey={table.prefsKey} emptyMessage="No entries yet." />
+            </div>
+          ) : sortedEntries.length === 0 ? (
             <div data-print-hide={printable || undefined}><EmptyState message="No entries yet." /></div>
           ) : (
             <List data-print-hide={printable || undefined}>

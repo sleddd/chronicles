@@ -79,13 +79,13 @@ describe('JournalTemplate back caret (phones/tablets, entry open)', () => {
     const onBack = vi.fn();
     renderWithTheme(<JournalTemplate sidePanel={<div />} editorPanel={<div />} onBack={onBack} />);
     // display:none on desktop widths (jsdom), so include hidden elements
-    fireEvent.click(screen.getByLabelText('Back to entries'));
+    fireEvent.click(screen.getByText('Entry list'));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
   it('has no back caret (and no "Entries" bar) without onBack', () => {
     renderWithTheme(<JournalTemplate sidePanel={<div />} editorPanel={<div />} />);
-    expect(screen.queryByLabelText('Back to entries')).not.toBeInTheDocument();
+    expect(screen.queryByText('Entry list')).not.toBeInTheDocument();
     expect(screen.queryByText('Entries')).not.toBeInTheDocument();
   });
 });

@@ -16,7 +16,7 @@ import { LoadingCenter } from '../components/atoms/LoadingCenter.js';
 import { SidePadding } from '../components/atoms/SidePadding.js';
 import { ViewTabs } from '../components/organisms/ViewTabs.js';
 import { EntryList } from '../components/organisms/EntryList.js';
-import { EntryForm } from '../components/organisms/EntryForm.js';
+import { EntryForm, FIELDS_ROW_MAX, TASK_ROW_MAX } from '../components/organisms/EntryForm.js';
 import { EntryBreadcrumb } from '../components/molecules/EntryBreadcrumb.js';
 import { getEntryTrail } from '../utils/topicBreadcrumb.js';
 import type { DictationControls } from '../components/organisms/Editor.js';
@@ -51,6 +51,10 @@ import { AiInsights } from '../components/organisms/AiInsights.js';
 import { useAiFeatureEnabled } from '../hooks/useAiReady.js';
 import { useTimeStore } from '../stores/timeStore.js';
 import { startTimer } from '../utils/timeTracking.js';
+import { useMediaQuery } from '../hooks/useMediaQuery.js';
+import { NAV_COMPACT_QUERY } from '../styles/breakpoints.js';
+import { useFocusTrap } from '../hooks/useFocusTrap.js';
+import { topicKind } from '../utils/topicKind.js';
 
 const NewEntryDateNote = styled.div`
   margin: 16px 20px 0;
@@ -111,11 +115,16 @@ const editorExpandIn = keyframes`
   to   { opacity: 1;   transform: scale(1); }
 `;
 
+const backdropIn = keyframes`
+  from { opacity: 0; }
+  to   { opacity: 1; }
+`;
+
 /* Wraps the editor panel content. Full-screen focus overlay when expanded:
    in the journal only via the toolbar's Expand button; an entry opened from
    another view starts expanded (and clicking into its text re-expands it).
    Collapsed again on save/Escape/close. */
-const EditorFocusWrap = styled.div<{ $expanded?: boolean }>`
+const EditorFocusWrap = styled.div<{ $expanded?: boolean; $modal?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
@@ -129,6 +138,38 @@ const EditorFocusWrap = styled.div<{ $expanded?: boolean }>`
     background: var(--bg-app);
     animation: ${editorExpandIn} 160ms ease-out;
   `}
+
+  /* Wide screens, an entry with fields (or opened from another page): not full
+     width but a card the width of its fields, centred over the dimmed journal.
+     A click on the dim does nothing — ×, Escape, Save or Delete close it. */
+  ${({ $modal }) => $modal && css`
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 48px 24px;
+    overflow: auto;
+    background: rgba(0, 0, 0, 0.45);
+    animation: ${backdropIn} 160ms ease-out;
+  `}
+`;
+
+/* The entry itself in modal view: the editor's own surface, its own scroll inside */
+const ModalCard = styled.div<{ $on: boolean; $max: string }>`
+  display: ${({ $on }) => ($on ? 'flex' : 'contents')};
+  flex-direction: column;
+  width: 100%;
+  /* Exactly as wide as the entry's own card (its fields beside their labels) */
+  max-width: ${({ $max }) => $max};
+  max-height: calc(100dvh - 96px);
+  min-height: 0;
+  background: var(--bg-editor, var(--bg-app));
+  border-radius: 16px;
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  animation: ${editorExpandIn} 160ms ease-out;
 `;
 
 
@@ -188,6 +229,23 @@ const NewEntryPill = styled.button`
 const imagesSig = (imgs: EntryImage[], featured: string | null) =>
   JSON.stringify([imgs.map(i => [i.key, i.focusX ?? 50, i.focusY ?? 50]), featured]);
 
+
+/* The editor's wrapper: the modal card when it shows as one, else flattened
+   away (display: contents), so switching never remounts the editor */
+function ModalSlot({ modal, cardRef, label, maxWidth, children }: {
+  modal: boolean;
+  maxWidth: string;
+  cardRef: React.RefObject<HTMLDivElement | null>;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <ModalCard ref={cardRef} $on={modal} $max={maxWidth} role={modal ? 'dialog' : undefined}
+      aria-modal={modal ? true : undefined} aria-label={modal ? label : undefined}>
+      {children}
+    </ModalCard>
+  );
+}
 
 export function JournalView() {
   const { isUnlocked, decryptPosts, encryptPost, encryptNewPost, encryptBytes, decryptBytes } = useEncryption();
@@ -533,12 +591,29 @@ export function JournalView() {
       navigate(originPath);
     }
   };
+  /* Modal view: on wide screens an expanded entry with fields (a task, meal, goal,
+     a topic with fields of the person's own) — opened from another page or with
+     the journal's Expand — shows as a card the width of its fields over the dimmed
+     journal, with a × to dismiss it. Text-only writing (Journal, a plain topic)
+     keeps the full width; phones / tablets full screen. */
+  const wide = !useMediaQuery(NAV_COMPACT_QUERY);
+  const editorTopicName = topics.find(t => t.id === editorTopicId)?.name;
+  const hasFields = !!topicKind(editorTopicName)
+    || (editorTopicId != null && (topicCustomFields[editorTopicId]?.length ?? 0) > 0);
+  const editorKind = topicKind(editorTopicName);
+  const asModal = wide && editorExpanded && hasFields;
+  const modalRef = useRef<HTMLDivElement>(null);
+  // No Escape of its own (the journal's Escape closes it); the editor keeps its own focus
+  useFocusTrap(modalRef, asModal, undefined, { autoFocus: false });
+
   const collapseEditorRef = useRef(collapseEditor);
   collapseEditorRef.current = collapseEditor;
 
   useEffect(() => {
     if (!editorExpanded) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') collapseEditorRef.current(); };
+    // An Escape a pop-up inside the editor already used (a menu, the Time panel, a
+    // name box) closes only that, never the whole entry
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) collapseEditorRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [editorExpanded]);
@@ -1178,10 +1253,13 @@ export function JournalView() {
         editorPanel={
           <EditorPanel visibleMobile={showMobileEditor}>
             <EditorFocusWrap
-              $expanded={editorExpanded}
+              $expanded={editorExpanded && !asModal}
+              $modal={asModal}
               onFocus={originPath ? e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); } : undefined}
               onPointerDown={originPath ? e => { if ((e.target as HTMLElement).closest?.('.tiptap')) setEditorExpanded(true); } : undefined}
             >
+            <ModalSlot modal={asModal} cardRef={modalRef} label={editorTopicName ?? 'Entry'}
+              maxWidth={editorKind === 'task' ? TASK_ROW_MAX : FIELDS_ROW_MAX}>
             {draft.found && <JournalDraftNote savedAt={draft.found.savedAt} onRestore={restoreDraft} onDiscard={draft.discard} />}
             {pendingEntryDate && selectedEntryId === null && (
               <NewEntryDateNote>
@@ -1209,9 +1287,12 @@ export function JournalView() {
               onBack={handleMobileBack}
               // Plain journal: expand only on request; edit view (from another page) is already full screen
               expanded={editorExpanded}
-              onToggleExpand={originPath ? undefined : () => (editorExpanded ? collapseEditor() : setEditorExpanded(true))}
+              // Inside the modal card the full-width padding doesn't apply
+              fullWidth={editorExpanded && !asModal}
+              onToggleExpand={originPath || asModal ? undefined : () => (editorExpanded ? collapseEditor() : setEditorExpanded(true))}
               // Edit view's full screen closes from the toolbar (the journal uses Exit full screen)
-              onClose={originPath && editorExpanded ? collapseEditor : undefined}
+              // The modal card always has a × (back to the list + editor, or to the page it came from)
+              onClose={(originPath && editorExpanded) || asModal ? collapseEditor : undefined}
               isEditing={selectedEntryId !== null}
               isSaving={isSaving}
               saveStatus={saveStatus}
@@ -1228,6 +1309,7 @@ export function JournalView() {
               imageError={imageError}
               imagesReady={imagesReady}
             />
+            </ModalSlot>
             </EditorFocusWrap>
           </EditorPanel>
         }

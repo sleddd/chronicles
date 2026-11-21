@@ -1,11 +1,11 @@
 import { QuickSymptomForm } from '../components/organisms/HealthQuickLog.js';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  DndContext, KeyboardSensor, PointerSensor, closestCenter, closestCorners, useDroppable, useSensor, useSensors,
-  type DragEndEvent, type DragOverEvent, type UniqueIdentifier,
+  DndContext, KeyboardSensor, PointerSensor, closestCenter, closestCorners, pointerWithin, useDroppable, useSensor, useSensors,
+  type CollisionDetection, type DragEndEvent, type DragOverEvent, type UniqueIdentifier,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { topRowSpans } from '../utils/dashboardRows.js';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { gridFrom, flattenGrid, dropOnCard, dropOnGap, type GridRow } from '../utils/dashboardGrid.js';
 import { CSS } from '@dnd-kit/utilities';
 import styled, { css } from 'styled-components';
 import { glassCard, glassPill, onPhoto } from '../styles/wallpaper.js';
@@ -144,10 +144,17 @@ interface DashboardConfig {
   glanceWinsSetup?: boolean;
   /** …and the Shopping list card, once it moved inside it too */
   glanceShoppingSetup?: boolean;
+  /** The zones in thirds (under the Quick entry, Your Agenda's top row): their rows of columns,
+      each column a stack of cards (utils/dashboardGrid) */
+  grids?: { head?: GridRow[]; top?: GridRow[] };
 }
+
+
 
 /** The columns cards are dragged between */
 const COLS = ['head', 'top', 'left', 'right', 'side'] as const;
+/** The zones laid out in thirds, where a drop also sets a card's width */
+const THIRDS: ReadonlySet<string> = new Set(['head', 'top']);
 type ColId = typeof COLS[number];
 /** `head`: full width above the world clocks (empty until a card is dragged there);
     `top`: across both columns under the schedule and priorities; `left` / `right`: the two columns;
@@ -582,10 +589,35 @@ const Col = styled.div`
 `;
 
 /* A card's place in the top row: one, two or all three thirds */
-const TopCell = styled.div<{ $span: number }>`
+/* A row of a zone in thirds: up to three columns, each a stack of cards (one column on phones) */
+const ThirdsRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 32px;
+  /* Every column as tall as the row, so the space under a short column's cards takes a drop too */
+  align-items: stretch;
+  @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); row-gap: var(--zone-gap); }
+`;
+const ThirdsCellBox = styled.div<{ $span: number; $over: boolean }>`
   grid-column: span ${({ $span }) => $span};
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: var(--zone-gap);
   min-width: 0;
+  border-radius: 16px;
+  /* Dragged over the space under its cards: a dashed outline round the column */
+  outline: ${({ $over }) => ($over ? '1px dashed var(--color-accent)' : 'none')};
+  outline-offset: 4px;
   @media (max-width: 760px) { grid-column: 1 / -1; }
+`;
+/* Between two rows: the rows' gap — and, while a card is dragged, a strip to drop it on as a full-width row */
+const ThirdsGap = styled.div<{ $dragging: boolean; $over: boolean; $edge: boolean }>`
+  height: ${({ $dragging, $edge }) => ($dragging ? '28px' : $edge ? '0' : 'var(--zone-gap)')};
+  margin: ${({ $dragging }) => ($dragging ? '4px 0' : '0')};
+  border-radius: 10px;
+  border: ${({ $dragging, $over }) => ($dragging ? `1px dashed ${$over ? 'var(--color-accent)' : 'var(--border-dashed, var(--border-default))'}` : 'none')};
+  background: ${({ $over }) => ($over ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : 'transparent')};
 `;
 
 /* The dashboard's card: lifted a step off the page (--bg-panel) with a
@@ -618,6 +650,7 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
   /* The title row is the chevron's 30px tall, its link centred, so the link and chevron line up */
   & > section > :first-child { align-items: center; padding-right: 64px; }
   @media (max-width: 480px) { & > section > :first-child { padding-right: 58px; } }
+
   && > section > :first-child { margin-bottom: 6px; }
   /* Titles: the dashboards' card label (small tracked grey capitals), on the chevron's 30px line */
   & > section > :first-child h2 {
@@ -2702,13 +2735,67 @@ function SortableCard({ id, collapsed, label, plain, open, wide, spaced, childre
   );
 }
 
+const stayPut = () => null;
+
+/* What a dragged card is over: a strip between rows first, then the card under the pointer, then the
+   nearest — so letting go on a card's edge or half reads as that card */
+const dashCollision: CollisionDetection = args => {
+  const hits = pointerWithin(args);
+  const strip = hits.find(h => String(h.id).startsWith('gap:'));
+  if (strip) return [strip];
+  const onCard = hits.find(h => !(COLS as readonly UniqueIdentifier[]).includes(h.id) && !String(h.id).startsWith('cell:'));
+  if (onCard) return [onCard];
+  const inColumn = hits.find(h => String(h.id).startsWith('cell:'));
+  if (inColumn) return [inColumn];
+  return hits.length ? hits : closestCorners(args);
+};
+
+/* A column of a zone in thirds: let go in the space under its cards and the card goes at its foot */
+function ThirdsCell({ zone, span, keys, children }: { zone: ColId; span: number; keys: string[]; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `cell:${zone}:${keys[keys.length - 1]}` });
+  return <ThirdsCellBox ref={setNodeRef} $span={span} $over={isOver}>{children}</ThirdsCellBox>;
+}
+
+/* A strip between two rows of a zone in thirds: drop a card here for a full-width row */
+function GapDrop({ zone, index, dragging, edge }: { zone: ColId; index: number; dragging: boolean; edge: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `gap:${zone}:${index}` });
+  return <ThirdsGap ref={setNodeRef} $dragging={dragging} $over={isOver} $edge={edge} aria-hidden="true" />;
+}
+
+/* A zone in thirds: its rows of columns, a drop strip between rows while dragging */
+function ThirdsZone({ id, rows, gap, dragging, render }: { id: ColId; rows: GridRow[]; gap: number; dragging: boolean; render: (k: SectionKey, full: boolean) => ReactNode }) {
+  const items = flattenGrid(rows) as SectionKey[];
+  return (
+    <DropCol id={id} items={items} dragging={dragging} grid>
+      <div style={{ '--zone-gap': `${gap}px`, gridColumn: '1 / -1' } as CSSProperties}>
+        {rows.map((row, r) => (
+          <Fragment key={row.map(c => c.keys.join('+')).join('|')}>
+            <GapDrop zone={id} index={r} dragging={dragging} edge={r === 0} />
+            <ThirdsRow>
+              {row.map(cell => (
+                <ThirdsCell key={cell.keys.join('+')} zone={id} span={cell.w} keys={cell.keys}>
+                  {cell.keys.map(k => render(k as SectionKey, cell.w === 3))}
+                </ThirdsCell>
+              ))}
+            </ThirdsRow>
+          </Fragment>
+        ))}
+        {rows.length > 0 && <GapDrop zone={id} index={rows.length} dragging={dragging} edge />}
+      </div>
+    </DropCol>
+  );
+}
+
 /* A column cards can be dropped into — even when it's empty */
 function DropCol({ id, items, gap, dragging, grid, children }: { id: ColId; items: SectionKey[]; gap?: number; dragging?: boolean; grid?: boolean; children: ReactNode }) {
   const { setNodeRef } = useDroppable({ id });
+  // A zone in thirds doesn't shuffle cards while one is dragged — where it's let go decides
+  // (beside a card, or a row of its own)
   return (
-    <SortableContext id={id} items={items} strategy={grid ? rectSortingStrategy : verticalListSortingStrategy}>
+    <SortableContext id={id} items={items} strategy={grid ? stayPut : verticalListSortingStrategy}>
       {/* Empty, it still takes a drop: a strip while a card is being dragged */}
-      <Col ref={setNodeRef} data-grid={grid || undefined} style={{ minHeight: items.length ? undefined : dragging ? 80 : 0, gap }}>{children}</Col>
+      {/* A grid zone keeps its column gap; `gap` sets the space between its rows */}
+      <Col ref={setNodeRef} data-grid={grid || undefined} style={{ minHeight: items.length ? undefined : dragging ? 80 : 0, ...(grid ? { rowGap: gap } : { gap }) }}>{children}</Col>
     </SortableContext>
   );
 }
@@ -2761,10 +2848,64 @@ export function DashboardView() {
       return { ...l, [from]: l[from].filter(k => k !== key), [to]: target };
     });
   };
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
+  // Where the dragged card started (a zone in thirds needs it to free its old partner)
+  const dragFrom = useRef<ColId | null>(null);
+  const onDragEnd = ({ active, over, delta, activatorEvent }: DragEndEvent) => {
     setDragging(false);
-    let next = layout;
+    const from = dragFrom.current;
+    dragFrom.current = null;
     const col = colOf(active.id);
+    // The zones in thirds (under the Quick entry, the top row): where it's let go decides its place —
+    // on a card's left / right side a column beside it, on its top / bottom half above / below it,
+    // on the strip between rows a full-width row (utils/dashboardGrid)
+    const point = activatorEvent && 'clientX' in activatorEvent
+      ? { x: (activatorEvent as PointerEvent).clientX + delta.x, y: (activatorEvent as PointerEvent).clientY + delta.y }
+      : null;
+    const key = active.id as SectionKey;
+    const gap = over && typeof over.id === 'string' && over.id.startsWith('gap:') ? over.id.split(':') : null;
+    // The space under a column's cards: at the foot of that column (under its last card)
+    const foot = over && typeof over.id === 'string' && over.id.startsWith('cell:') ? over.id.split(':') : null;
+    const zone = (gap ? gap[1] : foot ? foot[1] : col) as ColId | null;
+    if (zone && THIRDS.has(zone) && over && (gap || point)) {
+      const saved = fullLayout(config.layout);
+      // The zone's rows as they were, without the card if it came from elsewhere
+      const shownIn = (z: ColId) => saved[z].filter(k => visible(k) && (z === zone || k !== key));
+      let rows = gridFrom(config.grids?.[zone as 'head' | 'top'], shownIn(zone));
+      if (gap) rows = dropOnGap(rows, key, Number(gap[2]));
+      else if (foot) {
+        const last = foot.slice(2).join(':');
+        if (last === key) { setLayout(saved); return; }
+        rows = dropOnCard(rows, key, last, 'below');
+      } else {
+        const target = over.id !== zone && over.id !== key && layout[zone].includes(over.id as SectionKey) ? over.id as SectionKey : null;
+        if (!target) {
+          // Let go on itself or the zone's empty space: back where it was, or a full row at the end
+          if (from === zone) { setLayout(saved); return; }
+          rows = dropOnGap(rows, key, rows.length);
+        } else {
+          const r = over.rect;
+          const inside = point!.y >= r.top && point!.y <= r.top + r.height;
+          const place = inside && point!.x < r.left + r.width * 0.3 ? 'before'
+            : inside && point!.x > r.left + r.width * 0.7 ? 'after'
+            : point!.y < r.top + r.height / 2 ? 'above' : 'below';
+          rows = dropOnCard(rows, key, target, place);
+        }
+      }
+      const grids = { ...config.grids, [zone]: rows };
+      const order = flattenGrid(rows) as SectionKey[];
+      // Out of every other zone; hidden cards keep their places at the end of this one's list
+      const next = { ...saved };
+      for (const c of COLS) next[c] = saved[c].filter(k => k !== key);
+      next[zone] = [...order, ...next[zone].filter(k => !order.includes(k))];
+      // Left another zone in thirds: that zone's rows close up without it
+      for (const z of ['head', 'top'] as const) {
+        if (z !== zone && from === z) grids[z] = gridFrom(config.grids?.[z], next[z].filter(visible));
+      }
+      setLayout(next);
+      void saveConfig({ ...config, layout: next, grids });
+      return;
+    }
+    let next = layout;
     if (over && col && colOf(over.id) === col && over.id !== active.id && over.id !== col) {
       const list = layout[col];
       next = { ...layout, [col]: arrayMove(list, list.indexOf(active.id as SectionKey), list.indexOf(over.id as SectionKey)) };
@@ -3065,17 +3206,13 @@ export function DashboardView() {
   left.push(...cols.left.map(k => card(k)));
   right.push(...cols.right.map(k => card(k)));
 
-  // How wide each card in the top row is (dashboardRows: wellness 2/3 beside Shortcuts, else full…)
-  const topSpans = topRowSpans(cols.top);
+  // The zones in thirds: their rows of columns, kept to the cards showing there
+  const topRows = gridFrom(config.grids?.top, cols.top);
+  const headRows = gridFrom(config.grids?.head, cols.head);
   // The widgets inside Your Agenda: a row across both columns, the two columns, and its third column —
   // cards drag between all four (one DndContext around the whole panel)
   const widgetColumns = (<>
-    <DropCol id="top" items={cols.top} gap={32} dragging={dragging} grid>
-      {cols.top.map(k => {
-        const span = topSpans.get(k) ?? 3;
-        return <TopCell key={k} $span={span}>{card(k, true, span === 3)}</TopCell>;
-      })}
-    </DropCol>
+    <ThirdsZone id="top" rows={topRows} gap={32} dragging={dragging} render={(k, full) => card(k, true, full)} />
     <Columns $rows={Math.max(1, cols.left.length, cols.right.length)}>
       <DropCol id="left" items={cols.left} dragging={dragging}>{left}</DropCol>
       <DropCol id="right" items={cols.right} dragging={dragging}>{right}</DropCol>
@@ -3211,13 +3348,14 @@ export function DashboardView() {
           )}
 
           {/* One drag-and-drop for every card from here down: a zone above the clocks, then Your Agenda's */}
-          <DndContext sensors={sensors} collisionDetection={closestCorners}
-            onDragStart={() => { setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
+          <DndContext sensors={sensors} collisionDetection={dashCollision}
+            onDragStart={({ active }) => { dragFrom.current = colOf(active.id); setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
             onDragCancel={() => { setDragging(false); setLayout(fullLayout(config.layout)); }}>
           {/* Under the Quick entry, full width: the world clocks to start with, and any card dragged here
               (the wellness check-in, say) — in whatever order they're dragged into */}
           <HeadZone $filled={cols.head.length > 0}>
-            <DropCol id="head" items={cols.head} gap={14} dragging={dragging}>{cols.head.map(k => card(k, true))}</DropCol>
+            {/* In thirds, like the top row: rows of up to three columns, a column a stack of cards */}
+            <ThirdsZone id="head" rows={headRows} gap={14} dragging={dragging} render={(k, full) => card(k, true, full)} />
           </HeadZone>
 
 
