@@ -91,10 +91,11 @@ describe('planner', () => {
     expect(movedOrder(order, 3, '', [], null, TODAY)).toEqual({ '2026-11-11': [1, 2] });
   });
 
-  it('reads a task’s length in hours, in half-hour steps', () => {
+  it('reads a task’s length in hours, in five-minute steps', () => {
     expect(hoursOf(undefined)).toBe(1);
-    expect(hoursOf({ scheduledHours: 2.4 })).toBe(2.5);
-    expect(hoursOf({ scheduledHours: 0.1 })).toBe(0.5);
+    expect(hoursOf({ scheduledHours: 2.4 })).toBeCloseTo(29 / 12);
+    expect(hoursOf({ scheduledHours: 5 / 60 })).toBeCloseTo(5 / 60);
+    expect(hoursOf({ scheduledHours: 0.01 })).toBeCloseTo(5 / 60);
     expect(hoursOf({ scheduledHours: 40 })).toBe(12);
     expect(hoursOf({ scheduledHours: 'x' })).toBe(1);
     expect(hoursLabel(0.5)).toBe('30 min');
@@ -194,7 +195,7 @@ describe('estimated time', () => {
   });
   it('sizes a task on the planner until it has a length of its own', () => {
     expect(hoursOf({ estimatedMinutes: 120 })).toBe(2);
-    expect(hoursOf({ estimatedMinutes: 20 })).toBe(0.5);
+    expect(hoursOf({ estimatedMinutes: 20 })).toBeCloseTo(20 / 60);
     expect(hoursOf({ estimatedMinutes: 120, scheduledHours: 3 })).toBe(3);
     expect(hoursOf({})).toBe(1);
   });

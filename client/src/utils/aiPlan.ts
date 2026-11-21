@@ -1,5 +1,5 @@
 import { approxTokens, cleanLine, firstJsonObject, type SharedLine } from './aiJson.js';
-import { clampHours, hhmm } from './planner.js';
+import { hhmm } from './planner.js';
 
 /*
  * AI task planning (pure): what is sent when the Planner's "AI plan" is
@@ -271,7 +271,8 @@ function dateFrom(value: unknown): string {
 }
 
 const hoursFrom = (value: unknown, fallback: number): number =>
-  (typeof value === 'number' && Number.isFinite(value) && value > 0 ? clampHours(value) : fallback);
+  // The AI plans in half hours (as it's asked to); lengths set by hand can be any five minutes
+  (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.min(12, Math.max(0.5, Math.round(value * 2) / 2)) : fallback);
 
 const rows = (value: unknown): Record<string, unknown>[] =>
   (Array.isArray(value) ? value : []).filter((r): r is Record<string, unknown> => !!r && typeof r === 'object' && !Array.isArray(r));

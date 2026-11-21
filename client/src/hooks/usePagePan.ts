@@ -20,7 +20,9 @@ const WHEEL_AT = 120;
 export function usePagePan(onPrev: () => void, onNext: () => void, busy: () => boolean = () => false) {
   const [el, setEl] = useState<HTMLDivElement | null>(null);
   /** How far the board is pulled past the edge while a mouse drags it */
-  const [pull, setPull] = useState(0);
+  const [pull] = useState(0);
+  /** A mouse is dragging the board sideways (for the cursor) — set once at the start, not every pixel */
+  const [panning, setPanning] = useState(false);
   /** Bumps on each page, with the side the new days come in from (for the slide-in) */
   const [entered, setEntered] = useState<{ from: 'left' | 'right'; n: number } | null>(null);
   const drag = useRef<{ x: number; y: number; scroll: number; moved: boolean; id: number } | null>(null);
@@ -32,6 +34,14 @@ export function usePagePan(onPrev: () => void, onNext: () => void, busy: () => b
 
   const elRef = useRef<HTMLDivElement | null>(null);
   elRef.current = el;
+  const pullFrame = useRef(0);
+  /** The board inside the scroller, pulled sideways (`ease`: glide back into place) */
+  const drawPull = useCallback((x: number, ease = false) => {
+    const board = elRef.current?.firstElementChild as HTMLElement | null;
+    if (!board) return;
+    board.style.transition = ease ? 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none';
+    board.style.transform = x ? `translateX(${x}px)` : '';
+  }, []);
   const page = useCallback((dir: 'prev' | 'next') => {
     if (dir === 'next') handlers.current.onNext(); else handlers.current.onPrev();
     setEntered(e => ({ from: dir === 'next' ? 'right' : 'left', n: (e?.n ?? 0) + 1 }));
@@ -63,6 +73,7 @@ export function usePagePan(onPrev: () => void, onNext: () => void, busy: () => b
       // Mostly up and down: not ours
       if (Math.abs(e.clientY - d.y) > Math.abs(dx)) { drag.current = null; return; }
       d.moved = true;
+      setPanning(true);
       el.setPointerCapture(e.pointerId);
       window.getSelection()?.removeAllRanges();
     }
@@ -72,7 +83,9 @@ export function usePagePan(onPrev: () => void, onNext: () => void, busy: () => b
     el.scrollLeft = scroll;
     // Past the edge the board follows at half speed (positive = pulled right)
     pullRef.current = (scroll - want) * 0.5;
-    setPull(pullRef.current);
+    // Moved straight on the board, once a frame: re-rendering the whole planner on every pixel
+    // (as before) was what made it choppy
+    if (!pullFrame.current) pullFrame.current = requestAnimationFrame(() => { pullFrame.current = 0; drawPull(pullRef.current); });
   };
 
   const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -84,7 +97,10 @@ export function usePagePan(onPrev: () => void, onNext: () => void, busy: () => b
     setTimeout(() => { swallowClick.current = false; }, 0);
     const p = pullRef.current;
     pullRef.current = 0;
-    setPull(0);
+    setPanning(false);
+    if (pullFrame.current) { cancelAnimationFrame(pullFrame.current); pullFrame.current = 0; }
+    // Back into place with a short glide (when it pages, the new days slide in as before)
+    drawPull(0, true);
     if (p > PAGE_AT / 2) page('prev');
     else if (p < -PAGE_AT / 2) page('next');
   };
@@ -145,7 +161,7 @@ export function usePagePan(onPrev: () => void, onNext: () => void, busy: () => b
     page,
     pull,
     entered,
-    panning: pull !== 0,
+    panning,
     bind: {
       onPointerDown, onPointerMove, onPointerUp: endDrag, onPointerCancel: endDrag,
       onClickCapture, onTouchStart, onTouchEnd,

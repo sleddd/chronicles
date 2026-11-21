@@ -123,8 +123,8 @@ export function hhmm(mins: number): string {
   return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 }
 
-/** A task's length on the planner: half-hour steps from half an hour to twelve hours */
-export const MIN_HOURS = 0.5;
+/** A task's length on the planner: five-minute steps from five minutes to twelve hours */
+export const MIN_HOURS = 5 / 60;
 export const MAX_HOURS = 12;
 export const DEFAULT_HOURS = 1;
 /** A same-day end time (the task's Ends time on its planned day, after its start), in minutes */
@@ -142,15 +142,15 @@ export function sameDayEnd(cf: Record<string, unknown> | undefined): number | un
 }
 
 /** A task's length in hours: from its start to a same-day end time when it has one (to the
- *  minute — 4:10 to 4:15 is 5 minutes), else its own length (half-hour steps), else an hour */
+ *  minute — 4:10 to 4:15 is 5 minutes), else its own length (five-minute steps), else its estimate, else an hour */
 export function hoursOf(cf: Record<string, unknown> | undefined): number {
   const end = sameDayEnd(cf);
   if (end !== undefined) return Math.min(MAX_HOURS, (end - timeOf(cf)!) / 60);
   const n = typeof cf?.scheduledHours === 'number' ? cf.scheduledHours : Number(cf?.scheduledHours);
   if (Number.isFinite(n) && n > 0) return clampHours(n);
-  // No length of its own yet: its estimate, to the half hour (a 20-minute task still takes half an hour)
+  // No length of its own yet: its estimate
   const est = estimateOf(cf);
-  return est ? clampHours(Math.round(est / 30) / 2) : DEFAULT_HOURS;
+  return est ? clampHours(est / 60) : DEFAULT_HOURS;
 }
 
 /* ── Estimated time: how long a task is expected to take (`estimatedMinutes`) ── */
@@ -189,7 +189,7 @@ export function lengthPatch(cf: Record<string, unknown>, hours: number): Record<
 }
 
 /** Rounded to the half hour and kept in range */
-export const clampHours = (h: number): number => Math.min(MAX_HOURS, Math.max(MIN_HOURS, Math.round(h * 2) / 2));
+export const clampHours = (h: number): number => Math.min(MAX_HOURS, Math.max(MIN_HOURS, Math.round(h * 12) / 12));
 
 /** "30 min", "1 h", "1 h 30" */
 export function hoursLabel(h: number): string {
