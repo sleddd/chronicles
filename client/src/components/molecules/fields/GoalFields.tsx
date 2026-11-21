@@ -5,15 +5,14 @@ import {
   FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BoxText,
 } from './formKit.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
-import { PillPick, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
+import { PillPick, StatusPick, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
 export type { GoalFieldValues } from '../../../types/fields.js';
 
 /* Goal fields — the same form in the journal editor and Quick Entry: the
-   objective as a big borderless title (an older goal's text fills it once),
-   then one outlined box of rows — Category (the person's own list: tap again
-   to clear, + Add, Edit), Type and Status as outline chips, Start date and
-   Target date (the two ends of its bar on the roadmap) — each with a muted
-   label on the left, then Notes. Props only. */
+   objective as the text's first line, its Category in the text box's foot
+   strip (GoalCategoryPick) and Status as the first row (where it's reached
+   for), then Type, When (Starts / Ends, the two ends of its roadmap bar) —
+   each with a muted label on the left — then Notes. Props only. */
 
 const TYPES: { value: GoalFieldValues['goalType']; label: string }[] = [
   { value: 'short_term', label: 'Short-term' },
@@ -30,9 +29,9 @@ const STATUSES: { value: GoalFieldValues['goalStatus']; label: string; dot: stri
 ];
 
 /** The goal's Status, for the text box's foot strip (like the task card's) */
-export function GoalStatusPick({ values, onChange }: { values: GoalFieldValues; onChange: (v: GoalFieldValues) => void }) {
+export function GoalStatusPick({ values, onChange, inRow }: { values: GoalFieldValues; onChange: (v: GoalFieldValues) => void; inRow?: boolean }) {
   const status = STATUSES.some(s => s.value === values.goalStatus) ? values.goalStatus : 'new';
-  return <StatusDropdown value={status} options={STATUSES} onChange={goalStatus => onChange({ ...values, goalStatus })} />;
+  return <StatusDropdown value={status} options={STATUSES} inRow={inRow} onChange={goalStatus => onChange({ ...values, goalStatus })} />;
 }
 
 const NEW_CATEGORY = '__new_category__';
@@ -72,12 +71,16 @@ interface GoalFieldsProps {
   /** The goal's Time panel, opened from a stopwatch in the When row's top-right corner */
   timer?: ReactNode;
   timerRunning?: boolean;
+  /** Category is picked in the text box's foot strip (the entry editor), so it has no row here */
+  categoryInFoot?: boolean;
 }
 
 /** A category as a pill dropdown: None, the list, then "+ New category…" (a name box with a × in its
     place) — the goal's and the habit's. `name` puts a muted "Category:" before the choice */
-export function CategoryPill({ value, categories, onPick, onAdd, name }: {
+export function CategoryPill({ value, categories, onPick, onAdd, name, foot }: {
   value: string; categories: string[]; onPick: (v: string) => void; onAdd?: (label: string) => void; name?: string;
+  /** In the text box's foot strip: no pill, like the other foot pickers */
+  foot?: boolean;
 }) {
   const list = value && !categories.some(c => c.toLowerCase() === value.toLowerCase()) ? [...categories, value] : categories;
   const shown = list.find(c => c.toLowerCase() === value.toLowerCase());
@@ -102,24 +105,32 @@ export function CategoryPill({ value, categories, onPick, onAdd, name }: {
       </button>
     </NameBox>
   );
-  return (
-    <div>
-      <PillPick>
-        {name && <span className="name">{name}</span>}
-        <span className="value">{shown ?? 'None'}</span>
-        <Icon name="chevron-down" size={14} strokeWidth={2} />
-        <select aria-label="Category" value={shown ?? ''}
-          onChange={e => { if (e.target.value === NEW_CATEGORY) setNaming(true); else onPick(e.target.value); }}>
-          <option value="">None</option>
-          {list.map(c => <option key={c} value={c}>{c}</option>)}
-          {onAdd && <option value={NEW_CATEGORY}>+ New category…</option>}
-        </select>
-      </PillPick>
-    </div>
+  const Shell = foot ? StatusPick : PillPick;
+  const picker = (
+    <Shell>
+      {name && <span className="name">{name}</span>}
+      <span className="value">{shown ?? 'None'}</span>
+      <Icon name="chevron-down" size={14} strokeWidth={2} />
+      <select aria-label="Category" value={shown ?? ''}
+        onChange={e => { if (e.target.value === NEW_CATEGORY) setNaming(true); else onPick(e.target.value); }}>
+        <option value="">None</option>
+        {list.map(c => <option key={c} value={c}>{c}</option>)}
+        {onAdd && <option value={NEW_CATEGORY}>+ New category…</option>}
+      </select>
+    </Shell>
   );
+  return foot ? picker : <div>{picker}</div>;
 }
 
-export function GoalFields({ values, onChange, categories = [], onAddCategory, timer, timerRunning }: GoalFieldsProps) {
+/** The goal's Category, for the text box's foot strip (Status has the row under the title) */
+export function GoalCategoryPick({ values, onChange, categories, onAddCategory }: {
+  values: GoalFieldValues; onChange: (v: GoalFieldValues) => void; categories: string[]; onAddCategory?: (label: string) => void;
+}) {
+  return <CategoryPill foot name="Category" value={values.goalCategory ?? ''} categories={categories}
+    onPick={goalCategory => onChange({ ...values, goalCategory })} onAdd={onAddCategory} />;
+}
+
+export function GoalFields({ values, onChange, categories = [], onAddCategory, timer, timerRunning, categoryInFoot }: GoalFieldsProps) {
   const set = (patch: Partial<GoalFieldValues>) => onChange({ ...values, ...patch });
   const notesId = useId();
 
@@ -136,10 +147,17 @@ export function GoalFields({ values, onChange, categories = [], onAddCategory, t
       </Section>
 
       <RowBox style={{ marginTop: 30 }}>
+        {/* Status first, where it's reached for */}
         <LabelledRow>
-          <RowLabel>Category</RowLabel>
-          <CategoryPill value={values.goalCategory ?? ''} categories={categories} onPick={goalCategory => set({ goalCategory })} onAdd={onAddCategory} />
+          <RowLabel>Status</RowLabel>
+          <GoalStatusPick values={values} onChange={onChange} inRow />
         </LabelledRow>
+        {!categoryInFoot && (
+          <LabelledRow>
+            <RowLabel>Category</RowLabel>
+            <CategoryPill value={values.goalCategory ?? ''} categories={categories} onPick={goalCategory => set({ goalCategory })} onAdd={onAddCategory} />
+          </LabelledRow>
+        )}
         <LabelledRow>
           <RowLabel>Type</RowLabel>
           <Chips role="radiogroup" aria-label="Type">

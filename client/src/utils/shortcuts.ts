@@ -35,11 +35,12 @@ export function shortcutCatalog(nav: NavLike[], topics: { id: number; name: stri
   for (const item of nav) {
     // A section with views is offered view by view, in its own group (its page is one of them)
     if (!item.views?.length) add({ path: item.path, label: item.label, icon: item.icon, group: 'Pages' });
+    // Each view and sub view is named on its own ("Training", not "Health · Exercise · Training"):
+    // the picker groups them under their section, and the chip carries the section's icon
     for (const v of item.views ?? []) {
-      const viewLabel = v.label === item.label ? v.label : `${item.label} · ${v.label}`;
-      add({ path: v.path, label: viewLabel, icon: item.icon, group: item.label });
+      add({ path: v.path, label: v.label, icon: item.icon, group: item.label });
       for (const sub of SUB_VIEWS[v.path] ?? []) {
-        add({ path: sub.path, label: `${viewLabel} · ${sub.label}`, icon: item.icon, group: item.label });
+        add({ path: sub.path, label: sub.label, icon: item.icon, group: item.label });
       }
     }
   }

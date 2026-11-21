@@ -10,20 +10,30 @@ describe('onboarding', () => {
 
   it('ticks nothing for the person: every item starts open, with a line on how to do it', () => {
     const items = gettingStarted({ state: {}, voiceSupported: true });
-    expect(items.map(i => i.key)).toEqual(['name', 'city', 'entry', 'health', 'voice', 'recovery']);
+    expect(items.map(i => i.key)).toEqual(['name', 'city', 'entry', 'recovery', 'ai', 'health', 'planning', 'kitchen', 'media', 'homescreen']);
     expect(items.every(i => !i.done)).toBe(true);
     expect(items.find(i => i.key === 'entry')!.how).toMatch(/Pick a topic in Quick entry/);
     expect(items.every(i => i.how && !i.how.includes(';'))).toBe(true);
-    expect(gettingStarted({ state: {}, voiceSupported: false }).map(i => i.key)).not.toContain('voice');
+    // No voice command item for now, even where the browser can do speech
+    expect(items.map(i => i.key)).not.toContain('voice');
   });
 
-  it('offers setting up a passkey, before the recovery key, only where the browser can use one', () => {
+  it('offers setting up a passkey, after the recovery key, only where the browser can use one', () => {
     const withPasskey = gettingStarted({ state: {}, voiceSupported: true, passkeySupported: true });
-    expect(withPasskey.map(i => i.key)).toEqual(['name', 'city', 'entry', 'health', 'voice', 'passkey', 'recovery']);
+    expect(withPasskey.map(i => i.key)).toEqual(['name', 'city', 'entry', 'recovery', 'passkey', 'ai', 'health', 'planning', 'kitchen', 'media', 'homescreen']);
     expect(withPasskey.find(i => i.key === 'passkey')).toMatchObject({ label: 'Set up a passkey', done: false });
     expect(gettingStarted({ state: {}, voiceSupported: true, passkeySupported: false }).map(i => i.key)).not.toContain('passkey');
     // Ticked by hand like the rest
     expect(gettingStarted({ state: { ticked: ['passkey'] }, voiceSupported: true, passkeySupported: true }).find(i => i.key === 'passkey')?.done).toBe(true);
+  });
+
+  it('offers adding Chronicles to the Home Screen, last, unless it was opened from there', () => {
+    const keys = gettingStarted({ state: {}, voiceSupported: true }).map(i => i.key);
+    expect(keys).toContain('homescreen');
+    expect(keys[keys.length - 1]).toBe('homescreen');
+    expect(gettingStarted({ state: {}, voiceSupported: true, installed: true }).map(i => i.key)).not.toContain('homescreen');
+    // Media journal only while Media is on
+    expect(gettingStarted({ state: {}, voiceSupported: true, mediaOff: true }).map(i => i.key)).not.toContain('media');
   });
 
   it('ticking one item ticks only that one (the last one too)', () => {

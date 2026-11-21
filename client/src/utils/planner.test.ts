@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   plannerFacts, hoursOf, hoursLabel, priorityIndex, layoutDay, timeOf, hhmm, partOf, partOfTime, effectiveDay, hasMigrated, weekOf, parsePlannerOrder, tasksByDay, unscheduled, placeIn, movedOrder,
-  weekLabel, laneLabel, longDayLabel, type PlannerTask,
+  weekLabel, laneLabel, longDayLabel, estimateOf, estimateLabel, type PlannerTask,
 } from './planner.js';
 
 const TODAY = '2026-11-12'; // a Thursday
@@ -176,5 +176,26 @@ describe('the month view', () => {
     expect(addMonths('2026-01-15', -1)).toBe('2025-12-01');
     expect(addMonths('2026-03-31', -1)).toBe('2026-02-01');
     expect(monthLabel('2026-11-19')).toBe('November 2026');
+  });
+});
+
+describe('estimated time', () => {
+  it('reads an estimate, ignoring anything odd', () => {
+    expect(estimateOf({ estimatedMinutes: 90 })).toBe(90);
+    expect(estimateOf({ estimatedMinutes: '45' })).toBe(45);
+    expect(estimateOf({ estimatedMinutes: -5 })).toBeUndefined();
+    expect(estimateOf({})).toBeUndefined();
+  });
+  it('writes it plainly', () => {
+    expect(estimateLabel(15)).toBe('15 min');
+    expect(estimateLabel(90)).toBe('1 h 30 min');
+    expect(estimateLabel(360)).toBe('6 h');
+    expect(estimateLabel(960)).toBe('2 days');
+  });
+  it('sizes a task on the planner until it has a length of its own', () => {
+    expect(hoursOf({ estimatedMinutes: 120 })).toBe(2);
+    expect(hoursOf({ estimatedMinutes: 20 })).toBe(0.5);
+    expect(hoursOf({ estimatedMinutes: 120, scheduledHours: 3 })).toBe(3);
+    expect(hoursOf({})).toBe(1);
   });
 });

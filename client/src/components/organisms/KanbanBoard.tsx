@@ -29,6 +29,8 @@ export interface BoardItem {
   kicker?: string;
   /** Shown in a flag chip, e.g. "Jul 2" */
   date?: string;
+  /** A task's estimated time, in a clock chip, e.g. "1 h 30 min" */
+  estimate?: string;
   /** "2/5" chip, e.g. milestones done of a goal's milestones */
   progress?: { done: number; total: number };
   completed?: boolean;
@@ -294,7 +296,7 @@ function CardAvatar({ image }: { image: NonNullable<BoardItem['image']> }) {
 function BoardCard({ item, onOpen, timeTracking }: { item: BoardItem; onOpen: (id: number) => void; timeTracking: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
-  const hasFoot = !!item.date || !!item.progress;
+  const hasFoot = !!item.date || !!item.progress || !!item.estimate;
   // Time tracked on the card: a timer chip at the foot (start / stop without opening it)
   const timer = useTimeTracking(timeTracking ? item.id : null);
   const timed = timeTracking && timer.loaded;
@@ -320,6 +322,12 @@ function BoardCard({ item, onOpen, timeTracking }: { item: BoardItem; onOpen: (i
       {(hasFoot || timed) && (
         <Foot>
           {item.date && <Chip><MaterialIcon $size={15} aria-hidden="true">flag</MaterialIcon>{item.date}</Chip>}
+          {item.estimate && (
+            <Chip title={`Estimated ${item.estimate}`}>
+              <MaterialIcon $size={15} aria-hidden="true">schedule</MaterialIcon>
+              <span className="sr-only">Estimated </span>{item.estimate}
+            </Chip>
+          )}
           {item.progress && (
             <Chip title={`${item.progress.done} of ${item.progress.total} done`}>
               <MaterialIcon $size={15} aria-hidden="true">check_circle</MaterialIcon>

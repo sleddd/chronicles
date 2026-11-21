@@ -17,7 +17,7 @@ import { eventOccurrences } from '../../utils/plannerEvents.js';
 import { entryTitleText } from '../../utils/entryTitle.js';
 import { builtinEntryName } from '../../utils/stripHtml.js';
 import { EMPTY_GOAL_CATEGORIES, areaInfo, goalCategoryList, parseGoalCategories, type GoalCategoryConfig } from '../../utils/goalCategories.js';
-import { addDays, dayLabel, hhmm, hoursLabel, lengthPatch, plannerFacts, startPatch, unscheduled } from '../../utils/planner.js';
+import { addDays, dayLabel, estimateOf, hhmm, hoursLabel, lengthPatch, plannerFacts, startPatch, unscheduled } from '../../utils/planner.js';
 import { taskFieldsForStatus } from '../../types/goals.js';
 import { taskTypeList, taskTypeOf } from '../../utils/taskTypes.js';
 import { repeatRuleOf } from '../../utils/recurrence.js';
@@ -200,7 +200,7 @@ export function AiPlanReview({ onClose }: { onClose: () => void }) {
       nowMinutes: now.getHours() * 60 + now.getMinutes(),
       tasks: [...left.overdue, ...left.open, ...left.ideas].map(t => ({
         id: t.id, title: t.title, priority: t.priority, deadline: t.deadline, hours: t.hours,
-        goalId: t.goalId, milestoneId: t.milestoneId, overdue: overdue.has(t.id), notes: text(t.fields.notes), type: taskTypeOf(t.fields),
+        goalId: t.goalId, milestoneId: t.milestoneId, overdue: overdue.has(t.id), notes: text(t.fields.notes), type: taskTypeOf(t.fields), estimate: estimateOf(t.fields),
         status: t.backlog ? 'idea' as const : t.fields.isInProgress || t.fields.isInReview ? 'in_progress' as const : 'todo' as const,
       })),
       // Already on a day in the range and not done: context for the AI, and time that is taken

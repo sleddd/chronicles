@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { Icon } from '../../atoms/core/Icon.jsx';
-import { PillPick, FootPick } from './TaskCardFields.js';
+import { PillPick } from './TaskCardFields.js';
 import { NutritionPanel, PillBtn } from '../NutritionPanel.js';
 import { nutrientSourceOf, withManualNutrient, type NutrientKey } from '../../../types/nutrition.js';
 import type { FoodFieldValues } from '../../../types/fields.js';
@@ -25,12 +25,6 @@ const MEALS: { value: FoodFieldValues['mealType']; label: string }[] = [
   { value: 'medication', label: 'Medication' },
 ];
 
-/** The meal (Breakfast, Lunch…), for the text box's foot strip — like a task's Status */
-export function MealPick({ values, onChange }: { values: FoodFieldValues; onChange: (v: FoodFieldValues) => void }) {
-  return <FootPick name="Meal" value={values.mealType ?? ''} options={MEALS} placeholder="Pick a meal"
-    onChange={mealType => onChange({ ...values, mealType })} />;
-}
-
 interface FoodFieldsProps {
   values: FoodFieldValues;
   onChange: (values: FoodFieldValues) => void;
@@ -42,11 +36,9 @@ interface FoodFieldsProps {
   compact?: boolean;
   /** Enter in a one-line box (Log a Meal: logs the meal) */
   onEnter?: () => void;
-  /** The meal is picked in the text box's foot strip (the entry editor), so it isn't repeated in the When row */
-  mealInFoot?: boolean;
 }
 
-export function FoodFields({ values, onChange, onEstimateCalories, estimatingCalories, calorieError, compact, onEnter, mealInFoot }: FoodFieldsProps) {
+export function FoodFields({ values, onChange, onEstimateCalories, estimatingCalories, calorieError, compact, onEnter }: FoodFieldsProps) {
   const raw = values as unknown as Record<string, unknown>;
   const set = (patch: Partial<FoodFieldValues>) => onChange({ ...values, ...patch });
   const setNutrient = (key: NutrientKey, v: string) =>
@@ -72,14 +64,14 @@ export function FoodFields({ values, onChange, onEstimateCalories, estimatingCal
         <SectionHead><SectionLabel>When</SectionLabel></SectionHead>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px 14px', minWidth: 0 }}>
           {/* Squared off like the date | time box beside it, the same height (its 50px row + border) */}
-          {!mealInFoot && <PillPick style={{ height: 52, borderRadius: 10, padding: '0 16px' }}>
+          <PillPick style={{ height: 52, borderRadius: 10, padding: '0 16px' }}>
             <span className="value">{MEALS.find(m => m.value === values.mealType)?.label ?? 'Pick a meal'}</span>
             <Icon name="chevron-down" size={14} strokeWidth={2} />
             <select aria-label="Meal" value={values.mealType ?? ''} onChange={e => set({ mealType: e.target.value as FoodFieldValues['mealType'] })}>
               {!MEALS.some(m => m.value === values.mealType) && <option value="">Pick a meal</option>}
               {MEALS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
-          </PillPick>}
+          </PillPick>
           <DateTimeBox style={{ flex: '1 1 260px', maxWidth: 400 }}>
             <DateTimeField type="date" aria-label="Date eaten" value={values.consumedDate} onChange={e => set({ consumedDate: e.target.value })} />
             <DateTimeField type="time" aria-label="Time eaten" value={values.consumedTime} onChange={e => set({ consumedTime: e.target.value })} />

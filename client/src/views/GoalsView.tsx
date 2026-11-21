@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PLANNING_FILTERS_STORE } from '../types/planner.js';
+import { estimateLabel, estimateOf } from '../utils/planner.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
 import styled from 'styled-components';
@@ -45,6 +46,8 @@ import {
   type GoalCategoryConfig,
 } from '../utils/goalCategories.js';
 import { topicEntries } from '../utils/topicIndex.js';
+/** A task's estimated time for its board card, or nothing without one */
+const estimateText = (cf: Record<string, unknown>) => { const m = estimateOf(cf); return m ? estimateLabel(m) : undefined; };
 
 /* ── Layout (mirrors Health) ── */
 
@@ -791,6 +794,7 @@ export function GoalsView() {
       badge: PRIORITY_BADGE[t.priority],
       detail: [taskTypeOf(t.customFields), parent].filter(Boolean).join(' · ') || undefined,
       date: shortDate(t.customFields.deadline),
+      estimate: estimateText(t.customFields as unknown as Record<string, unknown>),
       // A todo list shows how far along it is
       progress: checklistProgress(t.customFields),
       completed: t.isCompleted,

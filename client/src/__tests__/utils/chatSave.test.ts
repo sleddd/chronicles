@@ -51,6 +51,8 @@ describe('textToEntryHtml', () => {
 describe('chatSystemPrompt', () => {
   it('lists the user\'s topics for /save suggestions', () => {
     expect(chatSystemPrompt(['Journal', 'Meals'])).toContain('Journal, Meals');
+    // The medical rules are always there
+    expect(chatSystemPrompt(['Journal'])).toMatch(/you do not give medical advice/);
   });
 });
 

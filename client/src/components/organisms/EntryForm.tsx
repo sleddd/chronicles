@@ -18,17 +18,17 @@ import { TopicSelector } from './TopicSelector.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { FieldRowLayoutContext } from '../molecules/FormField.js';
 import { TaskFields, type TaskFieldValues } from '../molecules/fields/TaskFields.js';
-import { GoalFields, GoalStatusPick, type GoalFieldValues } from '../molecules/fields/GoalFields.js';
-import { MilestoneFields, MilestoneStatusPick, type MilestoneFieldValues } from '../molecules/fields/MilestoneFields.js';
+import { GoalFields, GoalCategoryPick, type GoalFieldValues } from '../molecules/fields/GoalFields.js';
+import { MilestoneFields, MilestoneGoalPick, type MilestoneFieldValues } from '../molecules/fields/MilestoneFields.js';
 import { HabitFields, type HabitFieldValues } from '../molecules/fields/HabitFields.js';
 import { HABIT_DEFAULTS } from '../../utils/habits.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
-import { FoodFields, MealPick, type FoodFieldValues } from '../molecules/fields/FoodFields.js';
+import { FoodFields, type FoodFieldValues } from '../molecules/fields/FoodFields.js';
 import { MedicationFields, type MedicationFieldValues } from '../molecules/fields/MedicationFields.js';
 import { MenuPlanFields, type MenuPlanFieldValues } from '../molecules/fields/MenuPlanFields.js';
 import { SymptomFields, type SymptomFieldValues } from '../molecules/fields/SymptomFields.js';
 import { TimeTracker } from '../molecules/fields/TimeTracker.js';
-import { TaskCardRows, TaskRow, TaskRowName, TaskStatusPick, TaskFormatToggle } from '../molecules/fields/TaskCardFields.js';
+import { TaskCardRows, TaskRow, TaskRowName, TaskPriorityPick, TaskFormatToggle } from '../molecules/fields/TaskCardFields.js';
 import { TimeTrackingFields, type TimeTrackingFieldValues } from '../molecules/fields/TimeTrackingFields.js';
 import { MediaFields, type MediaFieldValues } from '../molecules/fields/MediaFields.js';
 import { MEDIA_DEFAULTS, mediaTags, mediaTopicIds } from '../../utils/media.js';
@@ -1729,20 +1729,18 @@ export function EntryForm({
           <div>{nameTarget ? 'Title' : 'Text'}</div>
           <TitleBox>
             <EditorArea $quick={quick}>{editorEl}</EditorArea>
-            {/* A goal's Status sits here, like a task's; other topics just have the tools */}
-            {/* With a Status (goal, milestone) it leads and the tools go right; without one the tools start at the left, together */}
-            <TitleFoot style={customType === 'goal' || customType === 'milestone' || customType === 'food' ? undefined : { justifyContent: 'flex-start' }}>
+            {/* Status is the first field row (where it's reached for); the foot holds what was there —
+                a goal's Category, a milestone's Goal — leading, with the tools on the right. Other topics
+                (a meal's Breakfast / Lunch… is in its When row) just have the tools, at the left */}
+            <TitleFoot style={customType === 'goal' || customType === 'milestone' ? undefined : { justifyContent: 'flex-start' }}>
               {customType === 'milestone' && (
-                <MilestoneStatusPick values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues}
-                  onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />
+                <MilestoneGoalPick values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues}
+                  goalOptions={goalOptions} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />
               )}
               {customType === 'goal' && (
-                <GoalStatusPick values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues}
-                  onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />
-              )}
-              {/* A meal's Breakfast / Lunch… leads the same way, the tools on the right */}
-              {customType === 'food' && (
-                <MealPick values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues}
+                <GoalCategoryPick values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues}
+                  categories={goalCategoryNames}
+                  onAddCategory={categoriesLoaded ? l => { void saveCategories(addGoalCategory(goalCategories, l)); } : undefined}
                   onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />
               )}
               {taskTools}
@@ -1778,16 +1776,16 @@ export function EntryForm({
               {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions}
                 types={taskTypeList(taskTypes)} onAddType={taskTypesLoaded ? l => { void saveTaskTypes(addTaskType(taskTypes, l)); } : undefined}
                 onRemoveType={taskTypesLoaded ? l => { void saveTaskTypes(removeTaskType(taskTypes, l)); } : undefined} />}
-              {customType === 'goal' && <GoalFields values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
+              {customType === 'goal' && <GoalFields categoryInFoot values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
                 categories={goalCategoryNames} onAddCategory={categoriesLoaded ? l => { void saveCategories(addGoalCategory(goalCategories, l)); } : undefined}
                 onRemoveCategory={categoriesLoaded ? l => { void saveCategories(removeGoalCategory(goalCategories, l)); } : undefined}
                 timer={exerciseTimer} timerRunning={timer.running} />}
               {customType === 'habit' && <HabitFields values={{ ...HABIT_DEFAULTS, parentGoalId: null, ...customFields } as HabitFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions}
                 categories={goalCategoryNames} onAddCategory={categoriesLoaded ? l => { void saveCategories(addGoalCategory(goalCategories, l)); } : undefined}
                 onRemoveCategory={categoriesLoaded ? l => { void saveCategories(removeGoalCategory(goalCategories, l)); } : undefined} />}
-              {customType === 'milestone' && <MilestoneFieldsWithTasks values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} attachableTasks={attachableTasks} entryId={entryId}
+              {customType === 'milestone' && <MilestoneFieldsWithTasks goalInFoot values={{ milestoneStatus: 'not_started', targetDate: '', isCompleted: false, parentGoalId: null, ...customFields } as MilestoneFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} linkedTasks={linkedTasks} attachableTasks={attachableTasks} entryId={entryId}
                 timer={exerciseTimer} timerRunning={timer.running} />}
-              {customType === 'food' && <FoodFields mealInFoot values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
+              {customType === 'food' && <FoodFields values={{ mealType: 'breakfast', consumedDate: '', consumedTime: '', ingredients: '', calories: '', notes: '', ...customFields } as FoodFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onEstimateCalories={calorieEstimate.estimate} estimatingCalories={calorieEstimate.estimating} calorieError={calorieEstimate.error} />}
               {customType === 'medication' && <MedicationFields values={{ dosage: '', frequency: 'once_daily', scheduleTimes: ['08:00'], isActive: true, notes: '', ...customFields } as MedicationFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} entryName={(typeof customFields.medicationName === 'string' && customFields.medicationName.trim()) || content.replace(/<[^>]+>/g, ' ').trim()} />}
               {customType === 'routine' && <RoutineFields values={{ ...ROUTINE_DEFAULTS, duration: '', items: [], days: [], isActive: true, notes: '', ...customFields } as RoutineFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} categoryOptions={trainingCategoryOptions}
                 timer={exerciseTimer} timerRunning={timer.running} />}
@@ -2003,7 +2001,8 @@ export function EntryForm({
         <TitleBox>
           <EditorArea $quick={quick}>{editorEl}</EditorArea>
           <TitleFoot>
-            <TaskStatusPick values={taskValues} onChange={setTask} />
+            {/* Priority here; Status is the row under the title */}
+            <TaskPriorityPick values={taskValues} onChange={setTask} />
             {taskTools}
           </TitleFoot>
         </TitleBox>

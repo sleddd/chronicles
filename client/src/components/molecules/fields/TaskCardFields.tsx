@@ -14,6 +14,7 @@ import { checklistOf } from '../../../utils/taskLists.js';
 import { ChecklistSection } from './ChecklistSection.js';
 import { taskStatusOf, taskFieldsForStatus, type TaskStatus } from '../../../types/goals.js';
 import { toDateStr } from '../../../utils/dateUtils.js';
+import { ESTIMATE_OPTIONS, estimateLabel, estimateOf } from '../../../utils/planner.js';
 
 /* The task card (journal and Quick entry): a header with the topic picker and the
    Single task | To-do list switch, the title in a box with its Status and tools, then
@@ -264,8 +265,14 @@ export const PillPick = styled(Pick)`
   &:hover { border-color: var(--border-default); }
 `;
 
-/* The Status picker in the title box's foot: a dot, "Status" and the choice (no pill) */
-const StatusPick = styled(Pick)`
+/* Status in a field row: the outlined pill with its dot */
+const StatusPillPick = styled(PillPick)`
+  gap: 10px;
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+`;
+
+/* A picker in the title box's foot: its name and the choice (no pill) — Priority, Category, Goal */
+export const StatusPick = styled(Pick)`
   gap: 10px;
   font-size: 15px;
   .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
@@ -273,8 +280,24 @@ const StatusPick = styled(Pick)`
 `;
 
 /** A Status picker for the title box's foot: a dot, "Status" and the choice ⌄ (the task card's, the goal's) */
-export function StatusDropdown<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string; dot: string }[]; onChange: (v: T) => void }) {
+export function StatusDropdown<T extends string>({ value, options, onChange, inRow }: {
+  value: T; options: { value: T; label: string; dot: string }[]; onChange: (v: T) => void;
+  /** In a labelled field row: an outlined pill with the dot and the choice (the row already says "Status") */
+  inRow?: boolean;
+}) {
   const s = options.find(x => x.value === value) ?? options[0];
+  if (inRow) return (
+    <div>
+      <StatusPillPick>
+        <span className="dot" style={{ background: s.dot }} aria-hidden="true" />
+        <span className="value">{s.label}</span>
+        <Icon name="chevron-down" size={14} strokeWidth={2} />
+        <select aria-label="Status" value={value} onChange={e => onChange(e.target.value as T)}>
+          {options.map(x => <option key={x.value} value={x.value}>{x.label}</option>)}
+        </select>
+      </StatusPillPick>
+    </div>
+  );
   return (
     <StatusPick>
       <span className="dot" style={{ background: s.dot }} aria-hidden="true" />
@@ -306,20 +329,17 @@ export function FootPick<T extends string>({ name, value, options, placeholder, 
   );
 }
 
-export function TaskStatusPick({ values, onChange }: { values: TaskFieldValues; onChange: (v: TaskFieldValues) => void }) {
+export function TaskStatusPick({ values, onChange, inRow }: { values: TaskFieldValues; onChange: (v: TaskFieldValues) => void; inRow?: boolean }) {
   const status = taskStatusOf(values as unknown as Record<string, unknown>);
-  const s = STATUSES.find(x => x.value === status) ?? STATUSES[0];
-  return (
-    <StatusPick>
-      <span className="dot" style={{ background: s.dot }} aria-hidden="true" />
-      <span className="name">Status</span>
-      <span className="value">{s.label}</span>
-      <Icon name="chevron-down" size={14} strokeWidth={2} />
-      <select aria-label="Status" value={status} onChange={e => onChange({ ...values, ...taskFieldsForStatus(e.target.value as TaskStatus) })}>
-        {STATUSES.map(x => <option key={x.value} value={x.value}>{x.label}</option>)}
-      </select>
-    </StatusPick>
-  );
+  return <StatusDropdown value={status} options={STATUSES} inRow={inRow}
+    onChange={v => onChange({ ...values, ...taskFieldsForStatus(v as TaskStatus) })} />;
+}
+
+/** The task's Priority, for the title box's foot strip (Status has the row under the title) */
+export function TaskPriorityPick({ values, onChange }: { values: TaskFieldValues; onChange: (v: TaskFieldValues) => void }) {
+  const priority = PRIORITIES.some(p => p.value === values.priority) ? values.priority : 'none';
+  return <FootPick name="Priority" value={priority} options={PRIORITIES} placeholder="None"
+    onChange={p => onChange({ ...values, priority: p as TaskFieldValues['priority'] })} />;
 }
 
 /* Single task | To-do list: a pill pair beside the picker, the chosen one lifted */
@@ -376,23 +396,26 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
   const isList = values.taskFormat === 'list';
   const goalOf = (m: MilestoneOption) => (m as MilestoneOption & { parentGoalId?: number | null }).parentGoalId ?? null;
 
-  /* Goal · milestone as one picker: each goal (no milestone), then its milestones */
+  /* Goal and Milestone, each its own picker: the milestones offered are the chosen goal's (all of
+     them while no goal is chosen); picking a milestone sets its goal, and a new goal drops a
+     milestone that isn't under it */
   const goal = goalOptions.find(g => g.id === values.parentGoalId);
   const milestone = milestoneOptions.find(m => m.id === values.parentMilestoneId);
-  const partValue = milestone ? `m:${milestone.id}` : goal ? `g:${goal.id}` : '';
-  const partLabel = goal || milestone
-    ? `${goal?.title ?? 'No goal'} · ${milestone?.title ?? 'No milestone'}`
-    : 'None';
-  const pickPart = (v: string) => {
-    if (!v) { set({ parentGoalId: null, parentMilestoneId: null }); return; }
-    const id = parseInt(v.slice(2), 10);
-    if (v.startsWith('g:')) set({ parentGoalId: id, parentMilestoneId: null });
-    else {
-      const m = milestoneOptions.find(x => x.id === id);
-      set({ parentMilestoneId: id, parentGoalId: m ? goalOf(m) : values.parentGoalId });
-    }
+  const milestoneList = goal ? milestoneOptions.filter(m => goalOf(m) === goal.id) : milestoneOptions;
+  const pickGoal = (v: string) => {
+    const id = v ? parseInt(v, 10) : null;
+    const keep = milestone && id !== null && goalOf(milestone) === id;
+    set({ parentGoalId: id, parentMilestoneId: keep ? milestone.id : null });
   };
-  const looseMilestones = milestoneOptions.filter(m => !goalOf(m) || !goalOptions.some(g => g.id === goalOf(m)));
+  const pickMilestone = (v: string) => {
+    if (!v) { set({ parentMilestoneId: null }); return; }
+    const m = milestoneOptions.find(x => x.id === parseInt(v, 10));
+    set({ parentMilestoneId: m?.id ?? null, parentGoalId: m && goalOf(m) ? goalOf(m) : values.parentGoalId });
+  };
+
+  /* Estimate: how long it's expected to take */
+  const estimate = estimateOf(values as unknown as Record<string, unknown>);
+  const estimateList = estimate && !ESTIMATE_OPTIONS.includes(estimate) ? [...ESTIMATE_OPTIONS, estimate].sort((a, b) => a - b) : ESTIMATE_OPTIONS;
 
   /* Type: the list, "No type", and "+ New type…" (a name box in its place) */
   const taskType = values.taskType?.trim() ?? '';
@@ -405,8 +428,6 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
     setTypeDraft(''); setNaming(false);
   };
 
-  const priority = PRIORITIES.some(p => p.value === values.priority) ? values.priority : 'none';
-
   return (
     <>
       {isList && (
@@ -418,27 +439,26 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
       )}
 
       <TaskRow data-inline="" data-stack="" style={{ paddingTop: 20, paddingBottom: 22 }}>
-        <TaskRowName>Type</TaskRowName>
+        <TaskRowName>Category</TaskRowName>
         <Picks>
           <PillPick>
             <span className="name">Goal:</span>
-            <span className="value">{partLabel}</span>
+            <span className="value">{goal?.title ?? 'None'}</span>
             <Icon name="chevron-down" size={14} strokeWidth={2} />
-            <select aria-label="Goal and milestone" value={partValue} onChange={e => pickPart(e.target.value)}>
+            <select aria-label="Goal" value={goal ? String(goal.id) : ''} onChange={e => pickGoal(e.target.value)}>
               <option value="">None</option>
-              {goalOptions.map(g => (
-                <optgroup key={g.id} label={g.title}>
-                  <option value={`g:${g.id}`}>{g.title} · No milestone</option>
-                  {milestoneOptions.filter(m => goalOf(m) === g.id).map(m => (
-                    <option key={m.id} value={`m:${m.id}`}>{g.title} · {m.title}</option>
-                  ))}
-                </optgroup>
-              ))}
-              {looseMilestones.length > 0 && (
-                <optgroup label="No goal">
-                  {looseMilestones.map(m => <option key={m.id} value={`m:${m.id}`}>No goal · {m.title}</option>)}
-                </optgroup>
-              )}
+              {goalOptions.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+            </select>
+          </PillPick>
+          <PillPick>
+            <span className="name">Milestone:</span>
+            <span className="value">{milestone?.title ?? 'None'}</span>
+            <Icon name="chevron-down" size={14} strokeWidth={2} />
+            <select aria-label="Milestone" value={milestone ? String(milestone.id) : ''} onChange={e => pickMilestone(e.target.value)}>
+              <option value="">None</option>
+              {/* A milestone it's on stays listed even when it's under another goal */}
+              {(milestone && !milestoneList.includes(milestone) ? [milestone, ...milestoneList] : milestoneList)
+                .map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
             </select>
           </PillPick>
           {naming ? (
@@ -472,14 +492,26 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
         </Picks>
       </TaskRow>
 
+      {/* Status sits here, where it's reached for; Priority is in the title box's foot */}
       <TaskRow data-inline="" style={{ paddingTop: 20, paddingBottom: 16 }}>
-        <TaskRowName>Priority</TaskRowName>
+        <TaskRowName>Status</TaskRowName>
+        <Picks>
+          <TaskStatusPick values={values} onChange={onChange} inRow />
+        </Picks>
+      </TaskRow>
+
+      {/* Estimate: how long it should take (shown on its board card; the Planner sizes it by this
+          until it's given a length of its own; AI planning reads it) */}
+      <TaskRow data-inline="" style={{ paddingTop: 16, paddingBottom: 16 }}>
+        <TaskRowName>Estimate</TaskRowName>
         <Picks>
           <PillPick>
-            <span className="value">{PRIORITIES.find(p => p.value === priority)?.label}</span>
+            <span className="value">{estimate ? estimateLabel(estimate) : 'None'}</span>
             <Icon name="chevron-down" size={14} strokeWidth={2} />
-            <select aria-label="Priority" value={priority} onChange={e => set({ priority: e.target.value as TaskFieldValues['priority'] })}>
-              {PRIORITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            <select aria-label="Estimated time" value={estimate ? String(estimate) : ''}
+              onChange={e => set({ estimatedMinutes: e.target.value ? Number(e.target.value) : undefined })}>
+              <option value="">None</option>
+              {estimateList.map(m => <option key={m} value={m}>{estimateLabel(m)}</option>)}
             </select>
           </PillPick>
         </Picks>

@@ -19,7 +19,7 @@ import { MINOR_FALLBACK_REPLY, stripMinorTag, chatSystemPrompt, chatTranscriptHt
 import { getOrCreateTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { parseChatMarkdown, type Inline } from '../../utils/chatMarkdown.js';
 import { findBanned, limitEmojis, rewriteInstruction, scrubBanned } from '../../utils/chatStyle.js';
-import { AI_DISCLOSURE, AI_REMINDER, reminderDue } from '../../utils/chatDisclosure.js';
+import { AI_DISCLOSURE, AI_REMINDER, MEDICAL_DISCLAIMER, mentionsMedical, reminderDue } from '../../utils/chatDisclosure.js';
 import { maxRisk, minorPattern, patternScreen, replyNeedsReview, replyPatternScreen, NO_RISK, type RiskKind, type RiskResult } from '../../utils/chatSafety.js';
 import { useAiChatStore, hasCurrentConsent } from '../../stores/aiChatStore.js';
 import { Checkbox } from '../atoms/core/Checkbox.jsx';
@@ -380,6 +380,8 @@ export function AiChat() {
   const [busy, setBusy] = useState(false);
   // When the session began or the AI disclosure was last repeated (memory only)
   const disclosedAtRef = useRef(Date.now());
+  // The medical note shows once a session (memory only; Clear starts again)
+  const medicalNotedRef = useRef(false);
   // Safety (memory only, kept through Clear, gone with the session): once a
   // risk sign appears the AI answers under the safe conversation rules; an
   // urgent sign pins the crisis card at the top for the rest of the session
@@ -622,6 +624,11 @@ export function AiChat() {
       .filter(m => parseSaveCommand(m.text, topicRefs).kind === 'none')
       .map(m => ({ role: m.role, content: m.text }));
     push({ role: 'user', text });
+    // The first health-care question of the session gets the medical note (in the thread, never sent to the model)
+    if (!medicalNotedRef.current && mentionsMedical(text)) {
+      medicalNotedRef.current = true;
+      push({ role: 'note', text: MEDICAL_DISCLAIMER });
+    }
     setBusy(true);
     try {
       // Screening: the local pattern check, and the classifier through the
@@ -692,7 +699,7 @@ export function AiChat() {
           <Head>
             <Title>In-App AI<span>· Not a person.</span></Title>
             {messages.length > 0 && (
-              <HeadBtn type="button" onClick={() => { setMessages([]); setPaused(null); disclosedAtRef.current = Date.now(); }}>Clear</HeadBtn>
+              <HeadBtn type="button" onClick={() => { setMessages([]); setPaused(null); disclosedAtRef.current = Date.now(); medicalNotedRef.current = false; }}>Clear</HeadBtn>
             )}
             <HeadBtn type="button" onClick={() => setOpen(false)} aria-label="Close chat">
               <Icon name="x" size={18} strokeWidth={2} aria-hidden="true" />

@@ -4,6 +4,10 @@ import { ThemeProvider } from 'styled-components';
 import { lightTheme } from '@shared/theme/tokens';
 import { EntryForm } from '@/components/organisms/EntryForm';
 
+// A milestone's attached tasks save themselves (they need the encryption context)
+vi.mock('@/hooks/useSaveFields', () => ({ useSaveFields: () => vi.fn() }));
+vi.mock('@/hooks/useCreateEntry', () => ({ useCreateEntry: () => vi.fn() }));
+vi.mock('@/hooks/useOpenInJournal', () => ({ useOpenInJournal: () => vi.fn(), useNewEntryInJournal: () => vi.fn() }));
 vi.mock('@/hooks/useEncryptedSetting', () => ({
   useEncryptedSetting: (_key: string, fallback: unknown) => [fallback, vi.fn(), true],
 }));
@@ -94,15 +98,22 @@ describe('EntryForm', () => {
     saveStatus: '',
   };
 
-  it('a task opens in the task card: format switch, Status in the title box, then Type, Priority, Planned, Deadline and Notes', () => {
+  it('a task opens in the task card: format switch, Priority in the title box, then Category, Status, Estimate, When and Notes', () => {
     const onChange = vi.fn();
     renderWithTheme(<EntryForm {...defaultProps} topicId={9} topics={[{ id: 9, name: 'Task', icon: null, color: null } as never]}
       customFields={{ priority: 'none' }} onCustomFieldsChange={onChange} entryId={3} isEditing onDelete={vi.fn()} />);
     expect(screen.getByRole('radio', { name: 'Single task' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByLabelText('Status')).toBeInTheDocument();
     // ("Planned" is also a Status choice, so look for the row names as words on the card)
-    for (const row of ['Title', 'Type', 'Priority', 'When', 'Notes']) expect(screen.getAllByText(row).some(el => el.tagName === 'DIV')).toBe(true);
-    expect(screen.getByLabelText('Goal and milestone')).toBeInTheDocument();
+    for (const row of ['Title', 'Category', 'Status', 'Estimate', 'When', 'Notes']) expect(screen.getAllByText(row).some(el => el.tagName === 'DIV')).toBe(true);
+    // Priority moved into the title box's foot: no row of its own
+    expect(screen.queryAllByText('Priority').some(el => el.tagName === 'DIV')).toBe(false);
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'in_progress' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ isInProgress: true }));
+    // Goal, Milestone and Type are three pickers
+    for (const label of ['Goal', 'Milestone', 'Type']) expect(screen.getByLabelText(label)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Estimated time'), { target: { value: '90' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ estimatedMinutes: 90 }));
     // When: Starts (planned day + time) and Ends (the deadline) in one box, with All day
     expect(screen.getByLabelText('Planned for')).toBeInTheDocument();
     expect(screen.getByLabelText('Planned time')).toBeInTheDocument();
@@ -115,6 +126,32 @@ describe('EntryForm', () => {
     expect(screen.queryByText('Time of day')).toBeNull();
     fireEvent.change(screen.getByLabelText('Priority'), { target: { value: 'high' } });
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ priority: 'high' }));
+  });
+
+  it('a goal has Status as its first row and Category in the title box foot', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<EntryForm {...defaultProps} topicId={9} topics={[{ id: 9, name: 'Goal', icon: null, color: null } as never]}
+      customFields={{ goalStatus: 'new' }} onCustomFieldsChange={onChange} entryId={3} isEditing />);
+    expect(screen.getAllByLabelText('Status')).toHaveLength(1);
+    expect(screen.getAllByLabelText('Category')).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'paused' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ goalStatus: 'paused' }));
+  });
+
+  it('a milestone has Status as its first row and Goal in the title box foot', () => {
+    renderWithTheme(<EntryForm {...defaultProps} topicId={9} topics={[{ id: 9, name: 'Milestone', icon: null, color: null } as never]}
+      customFields={{}} entryId={3} isEditing />);
+    expect(screen.getAllByLabelText('Status')).toHaveLength(1);
+    expect(screen.getAllByLabelText('Goal')).toHaveLength(1);
+  });
+
+  it('a meal picks Breakfast / Lunch… in its When row, beside the date', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<EntryForm {...defaultProps} topicId={9} topics={[{ id: 9, name: 'Meals', icon: null, color: null } as never]}
+      customFields={{ mealType: 'breakfast' }} onCustomFieldsChange={onChange} entryId={3} isEditing />);
+    expect(screen.getAllByLabelText('Meal')).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText('Meal'), { target: { value: 'lunch' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ mealType: 'lunch' }));
   });
 
   it('a text-only topic has no label; its tools sit in the foot beside Delete, with Save', () => {

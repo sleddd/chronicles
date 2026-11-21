@@ -213,6 +213,7 @@ export function OnboardingTour({ onClose, themePreference, onTheme, isOn, onFeat
           <li>Tap Voice and say “Add task call the dentist due Friday” or “Mark vitamin D taken”.</li>
           <li>The bell shows what’s due today, and you can tick things off right there.</li>
           <li>Ctrl or ⌘ + S saves the entry you’re writing.</li>
+          <li>Add Chronicles to your iPhone or iPad Home Screen to use like an app. In Safari or Chrome, tap Share, then Add to Home Screen.</li>
         </ul>
       ),
     },

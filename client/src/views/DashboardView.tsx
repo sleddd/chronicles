@@ -2868,12 +2868,15 @@ export function DashboardView() {
   // Cards off until switched on (Focus sounds); the rest are on until hidden
   const shown = (k: SectionKey) => (OFF_BY_DEFAULT.includes(k) ? (config.turnedOn ?? []).includes(k) : !(config.hidden ?? []).includes(k));
   const onboardingState = onboarding ?? {};
-  const checklist = gettingStarted({ state: onboardingState, voiceSupported: voice.supported, passkeySupported });
+  // Opened from the Home Screen already: the Home Screen item isn't needed
+  const installed = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && (window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true);
+  const checklist = gettingStarted({ state: onboardingState, voiceSupported: voice.supported, passkeySupported, installed, mediaOff: ff.entertainmentEnabled === false });
   const entrySaved = !!entryGuide && quoteEntries.length > entryGuide.baseline;
   const toggleChecklist = (key: ChecklistKey) => markOnboarding({ ticked: toggleTicked(onboardingState, key) });
   const checklistAction = (key: ChecklistKey) => {
-    // Passkeys are in Settings → Security
-    if (key === 'name' || key === 'passkey') routerNavigate('/settings');
+    // Passkeys are in Settings → Security, the AI in Settings → In-App AI
+    if (key === 'name' || key === 'passkey' || key === 'ai') routerNavigate('/settings');
     else if (key === 'city') {
       // Customize view, down to the box where a city is typed
       setCustomizing(true);
@@ -2894,6 +2897,10 @@ export function DashboardView() {
         box.focus();
       });
     } else if (key === 'health') routerNavigate('/health');
+    // Planning opens on Vision, where it starts; the Kitchen on its dashboard
+    else if (key === 'planning') routerNavigate('/goals/overview');
+    else if (key === 'kitchen') routerNavigate('/kitchen');
+    else if (key === 'media') routerNavigate('/media');
     else if (key === 'voice') {
       voice.openAndListen();
       // Up to the voice panel, under the header
@@ -3161,6 +3168,11 @@ export function DashboardView() {
             </QuickWrap>
           )}
 
+          {/* Getting started: right under the Quick entry, on every screen size */}
+          {showChecklist(onboarding) && (
+            <GettingStarted items={checklist} onAction={checklistAction} onToggle={toggleChecklist} onDismiss={() => markOnboarding({ checklistDismissed: true })} />
+          )}
+
           {/* One drag-and-drop for every card from here down: a zone above the clocks, then Your Agenda's */}
           <DndContext sensors={sensors} collisionDetection={closestCorners}
             onDragStart={() => { setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
@@ -3183,9 +3195,6 @@ export function DashboardView() {
           </DndContext>
 
 
-          {showChecklist(onboarding) && (
-            <GettingStarted items={checklist} onAction={checklistAction} onToggle={toggleChecklist} onDismiss={() => markOnboarding({ checklistDismissed: true })} />
-          )}
 
 
 

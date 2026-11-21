@@ -1,15 +1,18 @@
+import { useState } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
 import { TickMark } from '../atoms/TickMark.js';
 import { cardLabel } from '../../styles/cardLabel.js';
-import type { ChecklistItem, ChecklistKey } from '../../utils/onboarding.js';
+import { HOME_SCREEN_STEPS, type ChecklistItem, type ChecklistKey } from '../../utils/onboarding.js';
 
 /* "Getting started" (dashboard, after the welcome tour): a --bg-panel card
    with a checklist — name, city, a first entry, a medication or routine, a
    voice command, the recovery key — each with a line on how to do it and,
    while open, Show me / Try it / I've saved it on the right. Items are only
    ticked by hand (the circle); nothing is checked off for the person. All
-   ticked, it says "You're all set"; × closes it for good. Props only. */
+   ticked, it says "You're all set"; × closes it for good. The Home Screen
+   item's Show me opens its steps right in the row (an iPhone or iPad
+   has no page to send it to). */
 
 const Card = styled.section`
   position: relative;
@@ -73,6 +76,16 @@ const Tick = styled.button`
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 50%; }
 `;
 
+/* The Home Screen steps, opened under the item's line */
+const Steps = styled.ol`
+  margin: 10px 0 2px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  li + li { margin-top: 4px; }
+`;
+
 const AllSet = styled.p`
   margin: 14px 0 4px;
   font-size: 15px;
@@ -95,7 +108,7 @@ const ActionBtn = styled.button`
 
 /** What each open item's action is called */
 const ACTION: Record<ChecklistKey, string> = {
-  name: 'Show me', city: 'Show me', entry: 'Show me', health: 'Show me', voice: 'Try it', passkey: 'Show me', recovery: 'I’ve saved it',
+  name: 'Show me', city: 'Show me', entry: 'Show me', health: 'Show me', planning: 'Show me', kitchen: 'Show me', media: 'Show me', ai: 'Show me', voice: 'Try it', passkey: 'Show me', homescreen: 'Show me', recovery: 'I’ve saved it',
 };
 
 export function GettingStarted({ items, onAction, onToggle, onDismiss }: {
@@ -106,6 +119,7 @@ export function GettingStarted({ items, onAction, onToggle, onDismiss }: {
   onDismiss: () => void;
 }) {
   const done = items.filter(i => i.done).length;
+  const [stepsOpen, setStepsOpen] = useState(false);
   return (
     <Card aria-label="Getting started">
       <Head>
@@ -124,8 +138,15 @@ export function GettingStarted({ items, onAction, onToggle, onDismiss }: {
           <Text $done={i.done}>
             <b>{i.label}</b>
             {!i.done && <span>{i.how}</span>}
+            {!i.done && i.key === 'homescreen' && stepsOpen && (
+              <Steps id="home-screen-steps">{HOME_SCREEN_STEPS.map(step => <li key={step}>{step}</li>)}</Steps>
+            )}
           </Text>
-          {!i.done && <ActionBtn type="button" onClick={() => onAction(i.key)}>{ACTION[i.key]}</ActionBtn>}
+          {!i.done && (i.key === 'homescreen' ? (
+            <ActionBtn type="button" aria-expanded={stepsOpen} aria-controls="home-screen-steps" onClick={() => setStepsOpen(o => !o)}>
+              {stepsOpen ? 'Hide steps' : ACTION[i.key]}
+            </ActionBtn>
+          ) : <ActionBtn type="button" onClick={() => onAction(i.key)}>{ACTION[i.key]}</ActionBtn>)}
         </Row>
       ))}
     </Card>

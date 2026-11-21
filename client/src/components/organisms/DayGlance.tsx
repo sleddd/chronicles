@@ -307,7 +307,23 @@ const WeekDay = styled.button<{ $on: boolean; $today: boolean }>`
   ${NAV_COMPACT} { .today-word { display: none; } .today-day { display: inline; } }
   &:hover .day > span { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-  @media (max-width: 640px) { padding: 14px 8px; .day { flex-direction: column; gap: 6px; } .day > small { letter-spacing: 0.06em; } }
+  /* Nothing ever spills out of a day's box into the next one's */
+  overflow: hidden;
+  /* Phones / tablets: the weekday over the date, centred, with less padding — side by side they
+     needed more room than a seventh of the strip, and ran over the chosen day's fill */
+  ${NAV_COMPACT} {
+    align-items: center;
+    padding: 12px 4px;
+    .day { flex-direction: column; align-items: center; gap: 6px; }
+    .day > small { font-size: 12px; letter-spacing: 0.06em; }
+  }
+  /* Phones: a seventh of the strip is about 30px, so just the date — no weekday — with today's
+     date in the accent */
+  @media (max-width: 640px) {
+    padding: 10px 0;
+    .day > small { display: none; }
+    .day > span { font-size: 15px; ${({ $today }) => ($today ? 'color: var(--color-accent-soft);' : '')} }
+  }
 `;
 
 const Marks = styled.div`
@@ -1432,7 +1448,9 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
             <WeekDay key={d} type="button" $on={on} $today={d === today} aria-pressed={on}
               aria-label={`${LONG_NAMES[dow(d)]} ${Number(d.slice(8))}${d === today ? ', today' : ''}${marks.length ? `, ${marks.length} planned` : ''}`}
               onClick={() => setPicked(d === today ? null : d)}>
-              <div className="day"><small>{d === today ? <><span className="today-word">Today</span><span className="today-day">{WEEK_NAMES[dow(d)]}</span></> : WEEK_NAMES[dow(d)]}</small><span>{Number(d.slice(8))}</span></div>
+              <div className="day"><small>{d === today
+                ? <><span className="today-word">Today</span><span className="today-day">{WEEK_NAMES[dow(d)]}</span></>
+                : WEEK_NAMES[dow(d)]}</small><span>{Number(d.slice(8))}</span></div>
             </WeekDay>
           );
         })}

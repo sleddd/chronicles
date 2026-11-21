@@ -15,9 +15,9 @@ describe('shortcutCatalog', () => {
       '/health', '/health/exercise', '/health/exercise/schedule', '/health/exercise/training', '/health/exercise/history', '/health/habits',
       '/inspiration/research', '/inspiration/quotes', '/topics/3', '/topics/7',
     ]);
-    expect(c.find(s => s.path === '/health')).toMatchObject({ label: 'Health · Dashboard', group: 'Health' });
-    expect(c.find(s => s.path === '/health/exercise/training')).toMatchObject({ label: 'Health · Exercise · Training', group: 'Health' });
-    expect(c.find(s => s.path === '/health/habits')).toMatchObject({ label: 'Health · Habits', group: 'Health', icon: 'health_and_safety' });
+    expect(c.find(s => s.path === '/health')).toMatchObject({ label: 'Dashboard', group: 'Health' });
+    expect(c.find(s => s.path === '/health/exercise/training')).toMatchObject({ label: 'Training', group: 'Health' });
+    expect(c.find(s => s.path === '/health/habits')).toMatchObject({ label: 'Habits', group: 'Health', icon: 'health_and_safety' });
     expect(c.find(s => s.path === '/topics/3')).toMatchObject({ label: 'Books', group: 'Topics' });
   });
 });

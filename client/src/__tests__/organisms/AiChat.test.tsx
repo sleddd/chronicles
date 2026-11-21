@@ -94,6 +94,16 @@ describe('AiChat safety', () => {
     expect(queued('crisis_card_shown')).toHaveLength(0);
   });
 
+  it('shows the medical note once a session when a medical question comes up', async () => {
+    openChat();
+    await send('What should I cook tonight?');
+    expect(screen.queryByText(/is not a doctor and can’t give medical advice/)).not.toBeInTheDocument();
+    await send('Can I take ibuprofen with my blood pressure medication?');
+    expect(await screen.findByText(/is not a doctor and can’t give medical advice/)).toBeInTheDocument();
+    await send('What dose is usual?');
+    expect(screen.getAllByText(/is not a doctor and can’t give medical advice/)).toHaveLength(1);
+  });
+
   it('concern: shows the card above a reply written under the safe rules', async () => {
     (classifyRisk as any).mockResolvedValue({ rating: 'concern', kind: 'eating_disorder' });
     openChat();

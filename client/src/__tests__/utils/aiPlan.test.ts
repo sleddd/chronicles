@@ -56,7 +56,7 @@ describe('buildPlanRequest', () => {
   it('lists every kind of thing sent for the share prompt, by name', () => {
     const { shared } = buildPlanRequest(input());
     expect(shared.map(l => l.label)).toEqual([
-      '2 unscheduled tasks, with status and notes', '1 task already planned for the next 3 days',
+      '2 unscheduled tasks, with status, notes and estimates', '1 task already planned for the next 3 days',
       '2 goals, with notes, in your priority order', '1 milestone, with notes',
       'Your vision and 1 area vision', '3 events over the next 3 days (name and time only)',
       '3 goal categories (names only)', '2 task types (names only)',

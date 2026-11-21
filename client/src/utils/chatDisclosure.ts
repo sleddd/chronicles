@@ -11,6 +11,28 @@ export function reminderDue(lastDisclosedAt: number, now: number = Date.now()): 
   return now - lastDisclosedAt >= REMINDER_INTERVAL_MS;
 }
 
+/*
+ * Medical questions: the chat shows this note in the thread (never sent to the
+ * model) the first time in a session that a message is about health care —
+ * symptoms, a diagnosis, medications and doses, test results, treatment. The
+ * model is told the same in its rules (MEDICAL_RULES in chatSave.ts).
+ */
+export const MEDICAL_DISCLAIMER = 'In-App AI is not a doctor and can’t give medical advice. What it says is general information and may be wrong. For a diagnosis, a treatment or a question about your medications, talk to a doctor, nurse or pharmacist. If it’s an emergency, call 911.';
+
+const MEDICAL_WORDS = new RegExp([
+  'symptoms?', 'diagnos\\w*', 'medications?', 'medicines?', 'meds', 'prescri\\w*', 'dos(?:e|es|age|ing)', 'side[ -]effects?',
+  'drug interactions?', 'pills?', 'antibiotics?', 'antidepressants?', 'ibuprofen', 'acetaminophen', 'tylenol', 'advil', 'aspirin',
+  'insulin', 'blood (?:pressure|sugar|test|tests|work)', 'lab results?', 'test results?', 'fever', 'rash', 'infection', 'lump',
+  'chest pain', 'shortness of breath', 'can\'?t breathe', 'dizz(?:y|iness)', 'migraines?', 'surgery', 'diseases?', 'disorders?',
+  'treatments?', 'is (?:this|it) (?:normal|serious)', 'should i (?:see|call) (?:a|my) (?:doctor|dr)',
+  'doctors?', 'physicians?', 'pharmacists?', 'nurses?', 'allerg(?:y|ies|ic)', 'pregnan\\w*',
+].map(w => `\\b${w}\\b`).join('|'), 'i');
+
+/** Whether a message is about health care (symptoms, medications, a diagnosis…) — for the medical note */
+export function mentionsMedical(text: string): boolean {
+  return MEDICAL_WORDS.test(text);
+}
+
 /** Version of the chat consent / safety notice — bump it to ask everyone again. */
 export const AI_CONSENT_VERSION = 1;
 
@@ -40,7 +62,7 @@ export const AI_SHARING_CHECKS: readonly string[] = [
 /** What each feature sends, and what it costs — shown above the consent statement */
 export const AI_FEATURE_NOTICE = {
   aiPlan: [
-    'Your unscheduled tasks with their status and notes, the tasks already planned, your goals and milestones with their notes, your visions, the names of your goal categories and task types, and the names and times of your events and meetings for the next 14 days are sent. Nothing else about an event or meeting is.',
+    'Your unscheduled tasks with their status, notes and estimates, the tasks already planned, your goals and milestones with their notes, your visions, the names of your goal categories and task types, and the names and times of your events and meetings for the next 14 days are sent. Nothing else about an event or meeting is.',
     'The AI may suggest days for tasks, new tasks and milestones, and changes to your tasks, goals and milestones: cleaner titles, better categories and types, statuses, and the dates that fill out your roadmap. For an event it may only suggest a new day or time.',
     'Each run is a paid request to your provider, sent again once if the first try asks for a longer answer than your model allows. The more tasks and goals you have, the more it costs.',
     'It runs only when you press the button on the Planner. You review every suggestion, and nothing changes until you press Apply.',

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
+import { MEDICAL_DISCLAIMER } from '../../utils/chatDisclosure.js';
 
 /* The AI chat's Safety protocol, folded under one row in Settings → In-App AI
    (shown whether the AI is on or off), with the chat consent status under it.
    Props only. Change the date and the change log whenever the text changes. */
 
-export const PROTOCOL_DATE = 'Nov 19, 2026';
+export const PROTOCOL_DATE = 'Nov 20, 2026';
 
 const Wrap = styled.div`
   padding: 16px 0 4px;
@@ -242,6 +243,28 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
             saved from the chat. Every later message is still screened.
           </p>
 
+          <h4>Medical questions</h4>
+          <p>
+            In-App AI is not a doctor, nurse or pharmacist, and it does not give medical advice. When you ask about
+            symptoms, an illness, a diagnosis, medications, doses, side effects, test results or treatment, it shares
+            general information only, and that information can be wrong or may not fit your situation.
+          </p>
+          <p>
+            The first time in a chat that you raise a medical question, Chronicles shows this note in the chat: “{MEDICAL_DISCLAIMER}”
+            The AI also says briefly that it isn’t giving medical advice. It never diagnoses you, and it never tells you
+            to start, stop, skip or change a medication or a dose. It suggests you ask a doctor, nurse or pharmacist, who
+            knows your history.
+          </p>
+          <p>
+            If what you describe could be an emergency, such as chest pain, trouble breathing, signs of a stroke, severe
+            bleeding, a severe allergic reaction or an overdose, it tells you first to call 911 or your local emergency
+            services.
+          </p>
+          <p>
+            The same applies to the health information elsewhere in Chronicles, including AI estimates of calories and
+            nutrients, AI menus and recipes, and the patterns in Health reports. None of it is medical advice.
+          </p>
+
           <h4>What Chronicles records</h4>
           <p>
             Chronicles records only that crisis resources were shown, with the date, the rating, and the kind of risk,
@@ -253,7 +276,8 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
           <h4>Limits</h4>
           <p>
             The AI chat is not a therapist, doctor, or crisis counselor, and it cannot contact anyone for you. Its answers
-            on health, money, or legal matters are general information, not professional advice.
+            on health, money, or legal matters are general information, not professional advice. Never use it in place
+            of a doctor’s care, and don’t delay getting care because of something it said.
           </p>
           <p>
             Screening can miss a message that signals risk, and it can flag one that doesn’t. If you or someone else is in
@@ -267,6 +291,7 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
           <table>
             <thead><tr><th>Date</th><th>Change</th></tr></thead>
             <tbody>
+              <tr><td>November 20, 2026</td><td>Added a medical disclaimer. The first time in a chat that you raise a medical question, Chronicles shows a note that the AI is not a doctor and can’t give medical advice, and the AI says so itself. It never diagnoses or tells you to change a medication or dose, and it points to emergency services first when something could be an emergency.</td></tr>
               <tr><td>November 19, 2026</td><td>Added AI insights, an optional feature that reads the Journal entries you choose to send. Its reflections are screened like chat replies, and support resources are shown when your writing shows a risk sign.</td></tr>
               <tr><td>October 20, 2026</td><td>Cravings, treats, comfort food and eating to cope are no longer treated as a risk sign, and the AI no longer mentions crisis lines for an ordinary bad day. After a risk sign, the AI brings up the resources when risk shows again or you ask, instead of in every reply. The resources stay shown in the chat.</td></tr>
               <tr><td>October 19, 2026</td><td>Screening no longer treats a bad food day, regret about a meal, venting about a hard day, or fear of eating because of a food allergy or a medical reason as a risk sign. Eating concerns are flagged only for an ongoing, distressing pattern.</td></tr>

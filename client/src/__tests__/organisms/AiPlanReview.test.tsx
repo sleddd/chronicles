@@ -60,7 +60,7 @@ describe('AiPlanReview', () => {
     const onClose = vi.fn();
     renderWithTheme(<AiPlanReview onClose={onClose} />);
     expect(screen.getByRole('alert')).toHaveTextContent('Your unencrypted data is about to be shared with OpenAI.');
-    expect(screen.getByText('2 unscheduled tasks, with status and notes')).toBeInTheDocument();
+    expect(screen.getByText('2 unscheduled tasks, with status, notes and estimates')).toBeInTheDocument();
     expect(screen.getByText('2 goals, with notes, in your priority order')).toBeInTheDocument();
     expect(screen.getByText(/^1 event over the next 14 days/)).toBeInTheDocument();
     expect(screen.getByText('Your vision and 1 area vision')).toBeInTheDocument();

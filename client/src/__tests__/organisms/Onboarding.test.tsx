@@ -68,6 +68,19 @@ describe('GettingStarted', () => {
     expect(onDismiss).toHaveBeenCalled();
   });
 
+  it('opens the iPhone / iPad Home Screen steps in its row, without leaving the page', () => {
+    const onAction = vi.fn();
+    renderWithTheme(<GettingStarted onAction={onAction} onToggle={() => {}} onDismiss={() => {}} items={[
+      { key: 'homescreen', label: 'Add Chronicles to your iPhone or iPad Home Screen', how: 'In Safari…', done: false },
+    ]} />);
+    expect(screen.queryByText(/Scroll down and tap Add to Home Screen/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show me' }));
+    expect(screen.getByText(/Scroll down and tap Add to Home Screen/)).toBeInTheDocument();
+    expect(onAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide steps' }));
+    expect(screen.queryByText(/Scroll down and tap Add to Home Screen/)).toBeNull();
+  });
+
   it('says "You’re all set" once everything is ticked', () => {
     renderWithTheme(<GettingStarted onAction={() => {}} onToggle={() => {}} onDismiss={() => {}} items={[
       { key: 'name', label: 'Add your name', how: '', done: true },

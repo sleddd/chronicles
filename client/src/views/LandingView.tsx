@@ -187,6 +187,7 @@ const QUESTIONS = [
   { q: 'What happens if I lose my password?', a: 'Because Chronicles uses zero-knowledge client-side encryption where your password and keys never leave your device, we cannot recover or reset your password for you. Your data remains strictly private.' },
   { q: 'Is there a phone app?', a: 'Chronicles runs smoothly in any modern web browser and installs straight to your phone home screen for a seamless native app experience.' },
   { q: 'What will it cost?', a: 'During active beta, access is completely free. After official release, pricing will be no more than $20 a month.' },
+  { q: 'Can I run Chronicles locally on my own computer?', a: 'Yes. I’m happy to share a single copy of Chronicles for your personal use only. It isn’t for redistribution or commercial use. Email support@mydailychronicles.com and I’ll invite you to the GitHub repository to download a copy or send it to you as a zip file.' },
 ];
 
 /* ——— Shared pieces ——— */

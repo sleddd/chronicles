@@ -109,6 +109,8 @@ export interface TaskFieldValues {
   taskFormat?: 'single' | 'list';
   checklist?: { id: string; text: string; done: boolean }[];
   notes?: string;
+  /** How long it's expected to take, in minutes (the Estimate row); unset = no estimate */
+  estimatedMinutes?: number;
 }
 
 export interface HabitFieldValues {

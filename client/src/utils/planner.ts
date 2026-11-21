@@ -147,8 +147,30 @@ export function hoursOf(cf: Record<string, unknown> | undefined): number {
   const end = sameDayEnd(cf);
   if (end !== undefined) return Math.min(MAX_HOURS, (end - timeOf(cf)!) / 60);
   const n = typeof cf?.scheduledHours === 'number' ? cf.scheduledHours : Number(cf?.scheduledHours);
-  if (!Number.isFinite(n) || n <= 0) return DEFAULT_HOURS;
-  return clampHours(n);
+  if (Number.isFinite(n) && n > 0) return clampHours(n);
+  // No length of its own yet: its estimate, to the half hour (a 20-minute task still takes half an hour)
+  const est = estimateOf(cf);
+  return est ? clampHours(Math.round(est / 30) / 2) : DEFAULT_HOURS;
+}
+
+/* ── Estimated time: how long a task is expected to take (`estimatedMinutes`) ── */
+
+/** The choices offered for an estimate, in minutes */
+export const ESTIMATE_OPTIONS: readonly number[] = [15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720, 960];
+
+/** A task's estimate in minutes, or undefined when it has none (anything odd is ignored) */
+export function estimateOf(cf: Record<string, unknown> | undefined): number | undefined {
+  const n = typeof cf?.estimatedMinutes === 'number' ? cf.estimatedMinutes : Number(cf?.estimatedMinutes);
+  return Number.isFinite(n) && n > 0 && n <= 7 * 24 * 60 ? Math.round(n) : undefined;
+}
+
+/** An estimate as words: "15 min", "1 h 30 min", "6 h", "2 days" (a day = 8 working hours) */
+export function estimateLabel(minutes: number): string {
+  if (minutes >= 16 * 60 && minutes % (8 * 60) === 0) return `${minutes / (8 * 60)} days`;
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
 }
 /** The fields after moving a task's start to `start` (minutes), its same-day end time moved with it */
 export function startPatch(cf: Record<string, unknown>, start: number): Record<string, unknown> {

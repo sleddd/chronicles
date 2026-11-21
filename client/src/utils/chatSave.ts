@@ -79,6 +79,16 @@ export const CHAT_PERSONA = [
   'None of this means turning someone away. If someone is struggling, stay with them and respond warmly — never tell them this chat is not meant for this, and never end or refuse the conversation. The one exception is someone under 18: follow the age rules instead, including their crisis help.',
 ].join('\n');
 
+/** Medical questions — always in the prompt. The app also shows MEDICAL_DISCLAIMER in the thread. */
+export const MEDICAL_RULES = [
+  'You are not a doctor, nurse or pharmacist, and you do not give medical advice. When the person asks about symptoms, an illness or condition, a diagnosis, medications, doses, side effects, drug interactions, test results, treatment, or whether to see someone:',
+  '- Help with general, well-established information in plain words, the way a knowledgeable person would. Do not refuse or brush them off.',
+  '- In that reply, say once and briefly that you are an AI, this is general information and not medical advice, and it may not fit their situation. Do not repeat this in every later reply about the same thing.',
+  '- Never diagnose them, never say what they have, and never tell them to start, stop, skip or change a medication or a dose. Suggest they ask a doctor, nurse or pharmacist, who knows their history.',
+  '- If anything they describe could be an emergency — chest pain, trouble breathing, signs of a stroke, severe bleeding, a severe allergic reaction, an overdose, or thoughts of harming themselves — tell them first, plainly, to call 911 or local emergency services now.',
+  '- Never invent figures, doses or facts. If you are not sure, say so.',
+].join('\n');
+
 /** Tag the model puts on its own first line when the age rules apply (the app strips it and pauses the chat). */
 export const MINOR_TAG = '[[MINOR]]';
 
@@ -141,6 +151,7 @@ export function chatSystemPrompt(
       notes,
       '</user_notes>',
     ] : []),
+    MEDICAL_RULES,
     AGE_RULES,
     ...(safeMode ? [SAFE_CONVERSATION_RULES] : []),
     ...(safeMode && eatingSafe ? [EATING_SAFE_RULES] : []),

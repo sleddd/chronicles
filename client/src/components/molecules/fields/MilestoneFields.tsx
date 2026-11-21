@@ -7,13 +7,13 @@ import type { GoalOption, LinkedTask } from '../../../types/ui.js';
 import {
   FormWrap, Section, SectionHead, SectionLabel, TitleInput, RowBox, LabelledRow, RowLabel, BoxText,
 } from './formKit.js';
-import { PillPick, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
+import { PillPick, StatusPick, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
 export type { MilestoneFieldValues } from '../../../types/fields.js';
 
 /* Milestone fields — the same form in the journal editor and Quick Entry: the
-   objective as the text's first line, its Status in the text box's foot strip
-   (MilestoneStatusPick, like a task's and a goal's); then rows — Goal (a pill
-   dropdown), When (Starts = the start date, Ends = the target date, the two ends
+   objective as the text's first line, its Goal in the text box's foot strip
+   (MilestoneGoalPick); then rows — Status (where it's reached for, like a
+   task's and a goal's), When (Starts = the start date, Ends = the target date, the two ends
    of its roadmap bar, with the stopwatch in the row's top-right corner), Tasks
    (the tasks attached to it: tick, open, detach, and + Attach a task) — then Notes. */
 
@@ -28,10 +28,29 @@ const statusOf = (v: MilestoneFieldValues): MilestoneFieldValues['milestoneStatu
   v.isCompleted ? 'completed' : v.milestoneStatus === 'in_progress' ? 'in_progress' : 'not_started';
 
 /** The milestone's Status, for the text box's foot strip (like a task's) */
-export function MilestoneStatusPick({ values, onChange }: { values: MilestoneFieldValues; onChange: (v: MilestoneFieldValues) => void }) {
+export function MilestoneStatusPick({ values, onChange, inRow }: { values: MilestoneFieldValues; onChange: (v: MilestoneFieldValues) => void; inRow?: boolean }) {
   return (
-    <StatusDropdown value={statusOf(values)} options={STATUSES}
+    <StatusDropdown value={statusOf(values)} options={STATUSES} inRow={inRow}
       onChange={s => onChange({ ...values, milestoneStatus: s, isCompleted: s === 'completed' })} />
+  );
+}
+
+/** The milestone's Goal, for the text box's foot strip (Status has the row under the title) */
+export function MilestoneGoalPick({ values, onChange, goalOptions }: {
+  values: MilestoneFieldValues; onChange: (v: MilestoneFieldValues) => void; goalOptions: GoalOption[];
+}) {
+  const goal = goalOptions.find(g => g.id === values.parentGoalId);
+  return (
+    <StatusPick>
+      <span className="name">Goal</span>
+      <span className="value">{goal?.title ?? 'No goal'}</span>
+      <Icon name="chevron-down" size={14} strokeWidth={2} />
+      <select aria-label="Goal" value={values.parentGoalId?.toString() || ''}
+        onChange={e => onChange({ ...values, parentGoalId: e.target.value ? parseInt(e.target.value, 10) : null })}>
+        <option value="">No goal</option>
+        {goalOptions.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
+      </select>
+    </StatusPick>
   );
 }
 
@@ -144,11 +163,13 @@ interface MilestoneFieldsProps {
   /** The milestone's Time panel, opened from a stopwatch in the When row's top-right corner */
   timer?: ReactNode;
   timerRunning?: boolean;
+  /** The goal is picked in the text box's foot strip (the entry editor), so it has no row here */
+  goalInFoot?: boolean;
 }
 
 export function MilestoneFields({
   values, onChange, goalOptions, linkedTasks = [], attachableTasks = [],
-  onToggleTaskComplete, onUnlinkTask, onLinkTask, onOpenTask, onCreateTask, timer, timerRunning,
+  onToggleTaskComplete, onUnlinkTask, onLinkTask, onOpenTask, onCreateTask, timer, timerRunning, goalInFoot,
 }: MilestoneFieldsProps) {
   const set = (patch: Partial<MilestoneFieldValues>) => onChange({ ...values, ...patch });
   const notesId = useId();
@@ -174,7 +195,12 @@ export function MilestoneFields({
       </Section>
 
       <RowBox style={{ marginTop: 30 }}>
+        {/* Status first, where it's reached for */}
         <LabelledRow>
+          <RowLabel>Status</RowLabel>
+          <MilestoneStatusPick values={values} onChange={onChange} inRow />
+        </LabelledRow>
+        {!goalInFoot && <LabelledRow>
           <RowLabel>Goal</RowLabel>
           <div>
             <PillPick>
@@ -187,7 +213,7 @@ export function MilestoneFields({
               </select>
             </PillPick>
           </div>
-        </LabelledRow>
+        </LabelledRow>}
 
         {/* When: Starts (the start date) and Ends (the target date), the two ends of its roadmap bar */}
         <LabelledRow style={timer ? { position: 'relative' } : undefined}>
