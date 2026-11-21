@@ -42,8 +42,8 @@ export function HealthPrivacyView() {
 
       <h2>How it is protected</h2>
       <p>
-        Your entries, health logs, settings and AI keys are encrypted in your browser with AES-256-GCM before they are
-        sent. The key that unlocks them comes from your password, and your password never leaves your device. We cannot
+        Your entries, health logs, settings (all but your light or dark theme, your accent colour and a few technical sync markers) and AI keys are
+        encrypted in your browser with AES-256-GCM before they are sent. The key that unlocks them comes from your password, and your password never leaves your device. We cannot
         read your encrypted data, and a stolen copy of our database would show only scrambled data, as long as your
         password is strong.
       </p>
@@ -64,7 +64,16 @@ export function HealthPrivacyView() {
         <li>Your public shelf, if you turn it on. The covers, titles, makers, years, types, ratings, shelves and links (such as a Goodreads or Rotten Tomatoes page you added) of the media items you bookmark for it are stored readable so anyone with the link can see them, until you take an item off or turn the shelf off, which deletes it. Notes, progress and your own photos are never included.</li>
         <li>If you haven’t opened Chronicles since our October 2026 update: medication dose times with their taken or skipped status, and the names and icons of your topics. They move inside your encryption the next time you open the app.</li>
         <li>Whether you turned on the In-App AI chat and confirmed you are 18 or older, with the date.</li>
+        <li>If you connect Google Calendar: your Google account email, and the access Google gives us to your calendars, which is encrypted with a key held on our server (not with your password) so you aren’t asked to sign in to Google every time the app syncs. That access lets the app read and change events on your Google calendars. Syncing happens in your browser and touches only your event and meeting entries. Disconnecting revokes the access at Google and deletes it from our server.</li>
       </ul>
+      <p>
+        Our servers can also see the outline of your encrypted data, but never what it says. That is: how many entries,
+        finance records (bills, budget categories, spending lines, goals, funds) and medication dose logs you have; when
+        each was created and last changed (an entry you backdate carries the day you chose); how large each one is; for
+        a dose log, the day it is for; and the names of your encrypted settings, which show which features you use but
+        not what is in them. Which public shelves you follow is encrypted, but our server still sees each request for a
+        shelf and the network address it came from, as with any web request.
+      </p>
       <p>
         We also keep counts, with the date only and no account attached, of how often the In-App AI chat showed crisis
         resources or paused because the person writing seemed to be under 18. These counts contain nothing you wrote and
@@ -169,7 +178,7 @@ export function HealthPrivacyView() {
         We keep your data while your account is open. Sessions expire after 7 days and are purged the following day.
         Share links stop working when they expire and are then purged. A public shelf is deleted the moment you turn it off. Our database host’s automatic backups are kept
         for up to {D.backupDays} days. Security logs,
-        which record sign-in events with an IP address, are kept only in our host’s log stream, which deletes them
+        which record sign-in events without your account, email or IP address, are kept only in our host’s log stream, which deletes them
         automatically on a rolling basis. The counts of when the AI chat showed crisis resources or paused for a likely
         minor are kept permanently; they hold only a date and never an account or anything you wrote.
       </p>

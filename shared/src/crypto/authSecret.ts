@@ -44,9 +44,32 @@ async function pbkdf2Hex(secret: string, salt: Uint8Array, iterations: number): 
   return toHex(bits);
 }
 
-/** The sign-in secret for this password and email (64 hex chars). */
-export function deriveAuthSecret(password: string, email: string, iterations = PBKDF2_ITERATIONS): Promise<string> {
-  return pbkdf2Hex(password, new TextEncoder().encode(`chronicles:auth:v1:${normalizeEmail(email)}`), iterations);
+/**
+ * How a password is spelled before anything is derived from it (NFKC). The
+ * same password can reach the page as different characters — "é" as one
+ * character or as "e" plus an accent, depending on the keyboard and system —
+ * and different characters give a different secret and KEK, so the person
+ * couldn't sign in on that device. ASCII passwords are unchanged.
+ */
+export function normalizePassword(password: string): string {
+  return password.normalize('NFKC');
+}
+
+/**
+ * The password exactly as typed, when normalizing changes it — for an account
+ * whose password was set before normalization (its secret and wrap were made
+ * from these characters). Null for nearly every password.
+ */
+export function legacyPasswordForm(password: string): string | null {
+  return normalizePassword(password) === password ? null : password;
+}
+
+/**
+ * The sign-in secret for this password and email (64 hex chars). `asTyped`
+ * skips normalizing — only for the fallback to an older account's password.
+ */
+export function deriveAuthSecret(password: string, email: string, iterations = PBKDF2_ITERATIONS, { asTyped = false }: { asTyped?: boolean } = {}): Promise<string> {
+  return pbkdf2Hex(asTyped ? password : normalizePassword(password), new TextEncoder().encode(`chronicles:auth:v1:${normalizeEmail(email)}`), iterations);
 }
 
 /** Proof of the recovery key for its salt (both hex) — what the server checks. */

@@ -24,7 +24,9 @@ import { TaskFields, type TaskFieldValues } from '../molecules/fields/TaskFields
 import { GoalFields, GoalCategoryPick, type GoalFieldValues } from '../molecules/fields/GoalFields.js';
 import { MilestoneFields, MilestoneGoalPick, type MilestoneFieldValues } from '../molecules/fields/MilestoneFields.js';
 import { HabitFields, type HabitFieldValues } from '../molecules/fields/HabitFields.js';
-import { HABIT_DEFAULTS } from '../../utils/habits.js';
+import { HABIT_DEFAULTS, HABIT_ICON, HABIT_TOPIC, describeTarget } from '../../utils/habits.js';
+import { useHabits } from '../../hooks/useHabits.js';
+import { LinkedHabits } from '../molecules/fields/LinkedHabits.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { FoodFields, type FoodFieldValues } from '../molecules/fields/FoodFields.js';
 import { MedicationFields, type MedicationFieldValues } from '../molecules/fields/MedicationFields.js';
@@ -49,7 +51,7 @@ import { RoutineFields } from '../molecules/fields/RoutineFields.js';
 import { TrainingPlanFields } from '../molecules/fields/TrainingPlanFields.js';
 import type { RoutineFieldValues, TrainingPlanFieldValues } from '../../types/fields.js';
 import { categoryNames, trainingPlans } from '../../utils/training.js';
-import { ROUTINE_DEFAULTS } from '../../utils/routines.js';
+import { ROUTINE_DEFAULTS, describeDays } from '../../utils/routines.js';
 import { EventFields, type EventFieldValues } from '../molecules/fields/EventFields.js';
 import { MeetingFields, type MeetingFieldValues } from '../molecules/fields/MeetingFields.js';
 import { AllergyFields, type AllergyFieldValues } from '../molecules/fields/AllergyFields.js';
@@ -1059,6 +1061,34 @@ const QuickError = styled.p`
    Before the milestone has an id, attached tasks are held in its fields (_attachTasks) and listed
    with the others; they're joined to it as soon as it's saved (here in the journal, in QuickEntry's
    save for the Quick entry) */
+/* A goal's Habits row, saved for real: a habit joins or leaves the goal through its own
+   `parentGoalId` (useSaveFields), and + New habit makes a Habit already on it. Its own
+   component so useHabits only runs for a saved goal */
+function GoalHabits({ goalId }: { goalId: number }) {
+  const { habits, paused, entryOf } = useHabits();
+  const saveEntryFields = useSaveFields();
+  const openInJournal = useOpenInJournal();
+  const createEntry = useCreateEntry();
+  const setGoal = (habitId: number, parentGoalId: number | null) => {
+    const e = entryOf.get(habitId);
+    if (!e) return;
+    const cf = ((e.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown>) ?? {};
+    void saveEntryFields(e, { ...cf, parentGoalId }).then(ok => { if (!ok) showFlash('Couldn’t save that habit. Try again.'); });
+  };
+  const all = [...habits, ...paused];
+  const linked = all.filter(h => h.goalId === goalId)
+    .map(h => ({ id: h.id, name: h.name, target: describeTarget(h, describeDays), paused: !h.active }));
+  const attachable = habits.filter(h => h.goalId !== goalId).map(h => ({ id: h.id, name: h.name }));
+  return (
+    <LinkedHabits habits={linked} attachable={attachable} onOpen={id => openInJournal(id)}
+      onDetach={id => setGoal(id, null)} onAttach={id => setGoal(id, goalId)}
+      onCreate={name => {
+        void createEntry({ name: HABIT_TOPIC, icon: HABIT_ICON }, name, { ...HABIT_DEFAULTS, habitName: name, parentGoalId: goalId })
+          .then(id => { if (id === null) showFlash('That habit didn’t save. Try again.'); });
+      }} />
+  );
+}
+
 function MilestoneFieldsWithTasks({ entryId, linkedTasks = [], attachableTasks = [], ...props }: React.ComponentProps<typeof MilestoneFields> & { entryId?: number | null }) {
   const saveEntryFields = useSaveFields();
   const openInJournal = useOpenInJournal();
@@ -1804,7 +1834,7 @@ export function EntryForm({
                 onRemoveType={taskTypesLoaded ? l => { void saveTaskTypes(removeTaskType(taskTypes, l)); } : undefined} />}
               {customType === 'goal' && <GoalFields categoryInFoot values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
                 categories={goalCategoryNames} onAddCategory={categoriesLoaded ? l => { void saveCategories(addGoalCategory(goalCategories, l)); } : undefined}
-                timer={exerciseTimer} timerRunning={timer.running} />}
+                timer={exerciseTimer} timerRunning={timer.running} habits={entryId ? <GoalHabits goalId={entryId} /> : undefined} />}
               {customType === 'habit' && <HabitFields values={{ ...HABIT_DEFAULTS, parentGoalId: null, ...customFields } as HabitFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions}
                 categories={goalCategoryNames} onAddCategory={categoriesLoaded ? l => { void saveCategories(addGoalCategory(goalCategories, l)); } : undefined}
                 onRemoveCategory={categoriesLoaded ? l => { void saveCategories(removeGoalCategory(goalCategories, l)); } : undefined} />}

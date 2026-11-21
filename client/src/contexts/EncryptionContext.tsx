@@ -25,7 +25,7 @@ import { holdKey, keyHolderExists, keylessPage, requestKey } from '../services/k
 import { browserIsIdle, markActivity } from '../services/activity.js';
 import type { ConfirmAction } from '../services/api.js';
 import { auth as authApi, type PasskeyWrap } from '../services/api.js';
-import { deriveAuthSecret } from '@shared/crypto/authSecret.js';
+import { withAuthSecret } from '../utils/passwordForms.js';
 import { useOptionalAuth } from './AuthContext.js';
 import { cancelCalendarSync } from '../services/calendarSync.js';
 import { clearEncryptedSettings } from '../hooks/useEncryptedSetting.js';
@@ -278,9 +278,9 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     // Always from the server, against the password and (with 2FA on) a code:
     // a wrap kept in the tab would go stale the moment the password is changed
     // in another tab, and it is one more thing in memory that opens the journal
-    const { confirmToken, encryption: e } = await authApi.passwordWrap({
-      currentAuthSecret: await deriveAuthSecret(password, email), action, ...(code?.trim() ? { code: code.trim() } : {}),
-    });
+    const { confirmToken, encryption: e } = await withAuthSecret(password, email, currentAuthSecret => authApi.passwordWrap({
+      currentAuthSecret, action, ...(code?.trim() ? { code: code.trim() } : {}),
+    }));
     if (!e.kekSalt || !e.encryptedMasterKey || !e.kekWrapIv) throw new Error('No encryption params available. Sign in again.');
     const params = { kekSalt: e.kekSalt, encryptedMasterKey: e.encryptedMasterKey, kekWrapIv: e.kekWrapIv, kekIterations: e.kekIterations };
     return { kind: 'password' as const, password, params, confirmToken };

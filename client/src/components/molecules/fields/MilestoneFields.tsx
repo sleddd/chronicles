@@ -54,14 +54,15 @@ export function MilestoneGoalPick({ values, onChange, goalOptions }: {
   );
 }
 
-/* The attached tasks: a tick, the title (opens it), a × to detach; then + Attach a task */
-const TaskList = styled.div`
+/* The attached tasks: a tick, the title (opens it), a × to detach; then + Attach a task
+   (shared with a goal's Habits row, LinkedHabits) */
+export const TaskList = styled.div`
   display: flex;
   flex-direction: column;
   min-width: 0;
 `;
 
-const TaskItem = styled.div<{ $done: boolean }>`
+export const TaskItem = styled.div<{ $done: boolean }>`
   display: flex;
   align-items: center;
   gap: 12px;
@@ -92,7 +93,7 @@ const TaskItem = styled.div<{ $done: boolean }>`
 `;
 
 /* + New task and + Attach a task, side by side under the list */
-const AddLine = styled.div`
+export const AddLine = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -100,7 +101,7 @@ const AddLine = styled.div`
   margin-top: 10px;
 `;
 
-const NewTaskBtn = styled.button`
+export const NewTaskBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -117,7 +118,7 @@ const NewTaskBtn = styled.button`
   &:hover { border-color: var(--border-default); }
 `;
 
-const NewTaskBox = styled.span`
+export const NewTaskBox = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -139,7 +140,7 @@ const NewTaskBox = styled.span`
   button:hover { color: var(--text-primary); background: var(--bg-hover); }
 `;
 
-const Muted = styled.p`
+export const Muted = styled.p`
   margin: 0 0 10px;
   font-family: var(--font-sans);
   font-size: 14px;

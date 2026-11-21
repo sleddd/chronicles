@@ -133,7 +133,7 @@ const SlotLabel = styled.span`
 
 const MealName = styled.span`
   font-family: var(--font-sans);
-  font-size: 17px;
+  font-size: 15px;
   color: var(--text-secondary);
 `;
 
@@ -238,7 +238,7 @@ const ItemBtn = styled.button<{ $done: boolean }>`
   text-align: left;
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 15px;
   color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'var(--text-secondary)')};
   text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')};
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 4px; }

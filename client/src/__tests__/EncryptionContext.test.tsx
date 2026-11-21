@@ -55,7 +55,7 @@ vi.mock('@shared/crypto/primitives.js', () => ({
 }));
 
 // The derived sign-in secret (a real one costs 600k PBKDF2 rounds)
-vi.mock('@shared/crypto/authSecret.js', () => ({ deriveAuthSecret: async () => 'a'.repeat(64) }));
+vi.mock('@shared/crypto/authSecret.js', () => ({ deriveAuthSecret: async () => 'a'.repeat(64), legacyPasswordForm: () => null }));
 
 vi.mock('@shared/crypto/constants.js', () => ({
   PBKDF2_ITERATIONS: 600000,

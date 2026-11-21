@@ -11,8 +11,9 @@ export type { GoalFieldValues } from '../../../types/fields.js';
 /* Goal fields — the same form in the journal editor and Quick Entry: the
    objective as the text's first line, its Category in the text box's foot
    strip (GoalCategoryPick) and Status as the first row (where it's reached
-   for), then When (Starts / Deadline, the two ends of its roadmap bar) —
-   each with a muted label on the left — then Notes. Props only. */
+   for), then When (Starts / Deadline, the two ends of its roadmap bar), then
+   Habits (the habits that are part of it, once it is saved) — each with a muted
+   label on the left — then Notes. Props only. */
 
 /* Same statuses as the goals board's columns (Achieved = completed) */
 const STATUSES: { value: GoalFieldValues['goalStatus']; label: string; dot: string }[] = [
@@ -66,6 +67,8 @@ interface GoalFieldsProps {
   timerRunning?: boolean;
   /** Category is picked in the text box's foot strip (the entry editor), so it has no row here */
   categoryInFoot?: boolean;
+  /** The Habits row's contents (LinkedHabits); omitted = no row */
+  habits?: ReactNode;
 }
 
 /** A category as a pill dropdown: None, the list, then "+ New category…" (a name box with a × in its
@@ -123,10 +126,9 @@ export function GoalCategoryPick({ values, onChange, categories, onAddCategory }
     onPick={goalCategory => onChange({ ...values, goalCategory })} onAdd={onAddCategory} />;
 }
 
-export function GoalFields({ values, onChange, categories = [], onAddCategory, timer, timerRunning, categoryInFoot }: GoalFieldsProps) {
+export function GoalFields({ values, onChange, categories = [], onAddCategory, timer, timerRunning, categoryInFoot, habits }: GoalFieldsProps) {
   const set = (patch: Partial<GoalFieldValues>) => onChange({ ...values, ...patch });
   const notesId = useId();
-
 
   return (
     <FormWrap>
@@ -168,6 +170,12 @@ export function GoalFields({ values, onChange, categories = [], onAddCategory, t
             </WhenLine>
           </WhenBox2>
         </LabelledRow>
+        {habits && (
+          <LabelledRow style={{ alignItems: 'start' }}>
+            <RowLabel style={{ paddingTop: 10 }}>Habits</RowLabel>
+            {habits}
+          </LabelledRow>
+        )}
       </RowBox>
 
       <Section style={{ marginTop: 30 }}>

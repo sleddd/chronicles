@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { deriveAuthSecret } from '@chronicles/shared';
+import { withAuthSecret } from '../../utils/passwordForms.js';
 import type { KeySource } from '../../contexts/EncryptionContext.js';
 import { auth as authApi, ApiError, type PasskeyInfo } from '../../services/api.js';
 import { PasskeyCancelled, confirmWithPasskey, forgetPasskeysHere, keepOnlyPasskeys, passkeysAvailable, suggestedPasskeyName } from '../../services/passkeys.js';
@@ -155,17 +155,17 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
     setBusy(true);
     let touched: Uint8Array | null = null;
     try {
-      let confirmation: { currentAuthSecret: string; code?: string } | { confirmToken: string };
+      const remove = (confirmation: { currentAuthSecret: string; code?: string } | { confirmToken: string }) => open.kind === 'remove'
+        ? authApi.passkeyRemove(open.id, confirmation)
+        : authApi.passkeyRemoveAll(confirmation);
+      let list: Awaited<ReturnType<typeof remove>>['passkeys'];
       if (via === 'passkey') {
         const c = await confirmWithPasskey('passkey-remove', totpEnabled ? code : undefined);
         touched = c.prf;
-        confirmation = { confirmToken: c.confirmToken };
+        ({ passkeys: list } = await remove({ confirmToken: c.confirmToken }));
       } else {
-        confirmation = { currentAuthSecret: await deriveAuthSecret(password, email), ...withCode };
+        ({ passkeys: list } = await withAuthSecret(password, email, currentAuthSecret => remove({ currentAuthSecret, ...withCode })));
       }
-      const { passkeys: list } = open.kind === 'remove'
-        ? await authApi.passkeyRemove(open.id, confirmation)
-        : await authApi.passkeyRemoveAll(confirmation);
       // Which one went isn't known here (the list carries no credential ids), so none is asked for by name next time
       forgetPasskeysHere();
       took(list);

@@ -64,7 +64,8 @@ export function generateIv(): Uint8Array {
 export async function deriveKEK(
   password: string,
   salt: Uint8Array,
-  iterations: number
+  iterations: number,
+  asTyped = false
 ): Promise<CryptoKey> {
   // The salt comes from the server. Every KEK salt is 16 random bytes; refusing
   // anything else keeps a server from sending the sign-in secret's salt
@@ -74,7 +75,9 @@ export async function deriveKEK(
   if (salt.byteLength !== PBKDF2_SALT_LENGTH) throw new Error('Invalid key salt');
   const passwordKey = await crypto.subtle.importKey(
     'raw',
-    stringToArrayBuffer(password),
+    // Normalized like the sign-in secret (authSecret.ts); `asTyped` only for
+    // an older account's wrap, made from the password exactly as typed
+    stringToArrayBuffer(asTyped ? password : password.normalize('NFKC')),
     PBKDF2_ALGORITHM,
     false,
     ['deriveKey']

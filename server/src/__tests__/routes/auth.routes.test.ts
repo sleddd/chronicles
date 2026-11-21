@@ -430,6 +430,9 @@ describe('Auth Routes', () => {
       expect(res.body.encryption).toBeDefined();
       expect(res.body.encryption.encryptionEnabled).toBe(true);
       expect(res.body.encryption.kekSalt).toBe(Buffer.from('salt').toString('base64'));
+      // The recovery wrap leaves only from /recovery-wrap, for a checked recovery proof
+      expect(res.body.encryption).not.toHaveProperty('recoveryWrappedMK');
+      expect(res.body.encryption).not.toHaveProperty('recoveryWrapIv');
       expect(bcrypt.compare).toHaveBeenCalledWith(SECRET, '$2a$12$hashedsecret');
     });
 
@@ -1068,7 +1071,7 @@ describe('Auth Routes', () => {
       });
       expect(res.body.user).toEqual({ email: 'test@example.com', username: 'testuser' });
       expect(res.body.encryption).toBeDefined();
-      expect(res.body.encryption.recoveryWrappedMK).toBeNull();
+      expect(res.body.encryption.recoveryWrappedMK).toBeUndefined();
     });
   });
 

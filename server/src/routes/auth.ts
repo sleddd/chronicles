@@ -501,17 +501,15 @@ export function buildEncryptionResponse(account: {
   encryptedMasterKey: Uint8Array | null;
   kekWrapIv: Uint8Array | null;
   kekIterations: number;
-  recoveryWrappedMK: Uint8Array | null;
-  recoveryWrapIv: Uint8Array | null;
 }) {
+  // The password wrap only. The recovery wrap leaves the server solely from
+  // /recovery-wrap, for a checked proof of the recovery key (and the 2FA code)
   return {
     encryptionEnabled: account.encryptionEnabled,
     kekSalt: account.kekSalt ? Buffer.from(account.kekSalt).toString('base64') : null,
     encryptedMasterKey: account.encryptedMasterKey ? Buffer.from(account.encryptedMasterKey).toString('base64') : null,
     kekWrapIv: account.kekWrapIv ? Buffer.from(account.kekWrapIv).toString('base64') : null,
     kekIterations: account.kekIterations,
-    recoveryWrappedMK: account.recoveryWrappedMK ? Buffer.from(account.recoveryWrappedMK).toString('base64') : null,
-    recoveryWrapIv: account.recoveryWrapIv ? Buffer.from(account.recoveryWrapIv).toString('base64') : null,
   };
 }
 
@@ -1535,8 +1533,6 @@ router.post('/recover', strictLimiter, async (req, res) => {
         encryptedMasterKey: newEncryptedMasterKey,
         kekWrapIv: newKekWrapIv,
         kekIterations: account.kekIterations,
-        recoveryWrappedMK: null,
-        recoveryWrapIv: null,
       },
     });
   } catch (err) {

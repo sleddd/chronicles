@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { auth as authApi, ApiError } from '../services/api.js';
-import { deriveAuthSecret } from '@chronicles/shared';
+import { withAuthSecret } from '../utils/passwordForms.js';
 import { announceLocalReset, announceSigningIn, onRemoteReset } from '../services/signOutBroadcast.js';
 import { setEgressAccount } from '../services/deviceConsent.js';
 import { wipeBrowserData } from '../services/browserData.js';
@@ -39,8 +39,6 @@ interface EncryptionData {
   encryptedMasterKey: string | null;
   kekWrapIv: string | null;
   kekIterations: number;
-  recoveryWrappedMK: string | null;
-  recoveryWrapIv: string | null;
 }
 
 interface Pending2FA {
@@ -142,8 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string): Promise<EncryptionData | null> => {
     // Only the derived secret is sent — never the password, whatever the server answers
-    const authSecret = await deriveAuthSecret(password, email);
-    const result = await authApi.login({ email, authSecret });
+    const result = await withAuthSecret(password, email, authSecret => authApi.login({ email, authSecret }));
     if (result.requires2FA) {
       setPending2FA({ pendingToken: result.pendingToken });
       return null;

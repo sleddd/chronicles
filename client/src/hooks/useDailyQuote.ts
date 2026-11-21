@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toDateStr } from '../utils/dateUtils.js';
-import { quoteAt, quotePlaceFor, quotePool, settleQuotePlace, type Quote, type QuotePlace } from '../utils/dailyQuote.js';
+import { DAILY_QUOTES, quoteAt, quotePlaceFor, quotePool, settleQuotePlace, type Quote, type QuotePlace } from '../utils/dailyQuote.js';
 
 /*
  * The dashboard's daily quote: which quote shows today and stepping to the
@@ -19,8 +19,19 @@ function loadPlace(): QuotePlace | null {
   } catch { return null; }
 }
 
+const BUILT_IN = new Set(DAILY_QUOTES.map(q => q.text));
+
+/**
+ * The place is kept in localStorage, which outlives the session and isn't
+ * encrypted: the quote's text goes with it only when it is one of the app's
+ * own. One of the person's quotes comes from their encrypted entries and is
+ * kept in memory alone (a reload after the pool changed may then land on
+ * another quote that day).
+ */
 function savePlace(place: QuotePlace): void {
-  try { localStorage.setItem(PLACE_KEY, JSON.stringify(place)); } catch { /* the quote just won't be remembered */ }
+  const { text, ...rest } = place;
+  const stored = text !== undefined && BUILT_IN.has(text) ? place : rest;
+  try { localStorage.setItem(PLACE_KEY, JSON.stringify(stored)); } catch { /* the quote just won't be remembered */ }
 }
 
 export function useDailyQuote(now: Date, mine: Quote[], ready: boolean): {

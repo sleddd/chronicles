@@ -21,7 +21,7 @@ export const SEO_TITLE = 'Chronicles — Zero-Knowledge Encrypted Journal & Digi
 /* Feature screenshots (dark theme, test account): src/assets/landing/features/<key>-dark.jpg, else
    <key>.jpg. Only the files the rows below use are bundled: add a new shot's file name to this list */
 const SHOTS = import.meta.glob<string>(
-  '../assets/landing/features/{planning-vision,planning-goals-list,planning-milestones-list,planning-roadmap,planning-tasks-list,planning-tasks,planning-planner,health-meals,health-dashboard,health-exercise-history,health-reports,finance,finance-bills,finance-savings,kitchen-dashboard,kitchen-recipes,kitchen-recipe-view,kitchen-shopping-lists,journal,topics-list,topic-research,topic-event,media,media-entry,media-following,ai-plan-share,ai-plan,ai-plan-roadmap,ai-insights-share,ai-insights}-dark.jpg',
+  '../assets/landing/features/{planning-vision,planning-goals-list,planning-milestones-list,planning-roadmap,planning-tasks-list,planning-tasks,planning-planner,health-meals,health-dashboard,health-habits,health-exercise-history,health-reports,finance,finance-bills,finance-savings,kitchen-dashboard,kitchen-recipes,kitchen-recipe-view,kitchen-shopping-lists,journal,topics-list,topic-research,topic-event,media,media-entry,media-following,ai-plan-share,ai-plan,ai-plan-roadmap,ai-insights-share,ai-insights}-dark.jpg',
   { eager: true, query: '?url', import: 'default' },
 );
 /* The one shot that has only a light copy */
@@ -90,14 +90,16 @@ const FEATURES: Feature[] = [
     facts: [
       { label: 'Wellness', text: 'Mood, sleep, water and meals, with calorie and nutrient targets.' },
       { label: 'Medication', text: 'A dose schedule you check off, with a full history behind it.' },
+      { label: 'Habits', text: 'Check off the habits you’re building, see your streaks, and tie each one to a goal.' },
       { label: 'Reports', text: 'Spot symptom patterns and food triggers, and print lists for your doctor.' },
     ],
-    takes: 'your calorie counter, pill reminder and symptom diary.',
-    shot: ['health-meals', 'health-dashboard', 'health-exercise-history', 'health-reports'],
+    takes: 'your calorie counter, pill reminder, habit tracker and symptom diary.',
+    shot: ['health-meals', 'health-dashboard', 'health-habits', 'health-exercise-history', 'health-reports'],
     size: [1268, 1300],
     alt: [
       'The meals log with the day’s calories and vitamins against goals beside the protein, carbs and fat split, and what was eaten',
       'The health dashboard with nutrients against goals, the macro split, the wellness check-in, quick logs, today’s doses and a quick symptom log',
+      'Habits as cards with the week’s check-ins, streaks and the goal each is part of, then each habit’s history',
       'Exercise history showing each exercise’s sessions, days, time and distance this month',
       'Health reports with mood, sleep, social time, exercise and stress over time, and what goes with better days',
     ],

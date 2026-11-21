@@ -200,8 +200,6 @@ export interface KeyWrapData {
   encryptedMasterKey: string | null;
   kekWrapIv: string | null;
   kekIterations: number;
-  recoveryWrappedMK: string | null;
-  recoveryWrapIv: string | null;
 }
 /** A passkey's wrap of the master key: what its PRF secret opens */
 export interface PasskeyWrap { credentialId: string; wrappedMK: string; wrapIv: string }
@@ -260,8 +258,6 @@ export const auth = {
             encryptedMasterKey: string | null;
             kekWrapIv: string | null;
             kekIterations: number;
-            recoveryWrappedMK: string | null;
-            recoveryWrapIv: string | null;
           };
         }
     >('/auth/login', { method: 'POST', body: data }),
@@ -278,8 +274,6 @@ export const auth = {
         encryptedMasterKey: string | null;
         kekWrapIv: string | null;
         kekIterations: number;
-        recoveryWrappedMK: string | null;
-        recoveryWrapIv: string | null;
       };
     }>('/auth/login/2fa', { method: 'POST', body: data }),
 

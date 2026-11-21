@@ -43,6 +43,32 @@ function isJsonObject(text: string): boolean {
   }
 }
 
+/**
+ * Open the password wrap: from the normalized password, then — only when
+ * normalizing changed it — from the password exactly as typed (an account
+ * whose password was set before normalization). The first error is kept.
+ */
+async function unwrapPasswordWrap(
+  password: string,
+  salt: Uint8Array,
+  wrappedMK: Uint8Array,
+  wrapIv: Uint8Array,
+  iterations: number,
+  extractable: boolean,
+): Promise<CryptoKey> {
+  checkKekIterations(iterations);
+  try {
+    return await unwrapKey(wrappedMK.buffer as ArrayBuffer, await deriveKEK(password, salt, iterations), wrapIv, extractable, 'kek-wrap');
+  } catch (err) {
+    if (password.normalize('NFKC') === password) throw err;
+    try {
+      return await unwrapKey(wrappedMK.buffer as ArrayBuffer, await deriveKEK(password, salt, iterations, true), wrapIv, extractable, 'kek-wrap');
+    } catch {
+      throw err;
+    }
+  }
+}
+
 class EncryptionService {
   /**
    * Set up encryption for a new user (called during registration)
@@ -95,9 +121,7 @@ class EncryptionService {
     const wrappedMK = base64ToUint8Array(wrappedMKBase64);
     const wrapIv = base64ToUint8Array(wrapIvBase64);
 
-    checkKekIterations(iterations);
-    const kek = await deriveKEK(password, salt, iterations);
-    return unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, false, 'kek-wrap');
+    return unwrapPasswordWrap(password, salt, wrappedMK, wrapIv, iterations, false);
   }
 
   /**
@@ -115,9 +139,7 @@ class EncryptionService {
     const salt = base64ToUint8Array(saltBase64);
     const wrappedMK = base64ToUint8Array(wrappedMKBase64);
     const wrapIv = base64ToUint8Array(wrapIvBase64);
-    checkKekIterations(iterations);
-    const kek = await deriveKEK(password, salt, iterations);
-    return unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
+    return unwrapPasswordWrap(password, salt, wrappedMK, wrapIv, iterations, true);
   }
 
   /**
@@ -219,9 +241,7 @@ class EncryptionService {
     const salt = base64ToUint8Array(kekSaltBase64);
     const wrappedMK = base64ToUint8Array(encryptedMKBase64);
     const wrapIv = base64ToUint8Array(kekWrapIvBase64);
-    checkKekIterations(kekIterations);
-    const kek = await deriveKEK(currentPassword, salt, kekIterations);
-    const extractableKey = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
+    const extractableKey = await unwrapPasswordWrap(currentPassword, salt, wrappedMK, wrapIv, kekIterations, true);
     return this.generateNewRecoveryWrapping(extractableKey);
   }
 
@@ -242,9 +262,7 @@ class EncryptionService {
     const salt = base64ToUint8Array(kekSaltBase64);
     const wrappedMK = base64ToUint8Array(encryptedMKBase64);
     const wrapIv = base64ToUint8Array(kekWrapIvBase64);
-    checkKekIterations(kekIterations);
-    const kek = await deriveKEK(currentPassword, salt, kekIterations);
-    const extractableKey = await unwrapKey(wrappedMK.buffer as ArrayBuffer, kek, wrapIv, true, 'kek-wrap');
+    const extractableKey = await unwrapPasswordWrap(currentPassword, salt, wrappedMK, wrapIv, kekIterations, true);
 
     try {
       // Wrap with new password

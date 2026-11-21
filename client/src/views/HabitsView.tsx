@@ -21,6 +21,7 @@ import { describeDays } from '../utils/routines.js';
 import { MED_PERIODS, medPeriodRange, type MedPeriod } from '../utils/medHistory.js';
 import { EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, groupByCategory, type GoalCategoryConfig } from '../utils/goalCategories.js';
 import { addDays, weekLabel, weekOf } from '../utils/planner.js';
+import { usePlanData } from '../hooks/usePlanData.js';
 import {
   HABIT_DEFAULTS, HABIT_ICON, HABIT_TOPIC, countSeries, dayCells, dayTarget, describeTarget, habitCsvRows, habitTotals,
   isDueOn, nextCount, streakWeeks, weekProgress, type CountOn, type DayCell, type DayRange, type Habit,
@@ -84,7 +85,7 @@ const NameBtn = styled.button`
   background: transparent;
   text-align: left;
   cursor: pointer;
-  b { font-family: var(--font-display); font-size: 20px; font-weight: 300; line-height: 1.25; color: var(--text-primary); overflow-wrap: anywhere; }
+  b { margin-bottom: 5px; font-family: var(--font-display); font-size: 20px; font-weight: 300; line-height: 1.25; color: var(--text-primary); overflow-wrap: anywhere; }
   small { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
   &:hover b { color: var(--color-accent-link); }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
@@ -252,6 +253,10 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 export function HabitsView() {
   const { habits, paused, count, setCount, loaded, habitTopicId } = useHabits();
+  // The goal a habit is part of, named on its card and its history
+  const { goals } = usePlanData();
+  const goalTitles = useMemo(() => new Map(goals.map(g => [g.id, g.title])), [goals]);
+  const goalOf = (h: Habit) => (h.goalId ? goalTitles.get(h.goalId) : undefined);
   const openInJournal = useOpenInJournal();
   const newEntry = useNewEntryInJournal();
   const today = toDateStr(new Date());
@@ -303,6 +308,7 @@ export function HabitsView() {
           <NameBtn type="button" aria-pressed={on} title="Go to its chart" onClick={() => pick(h)}>
             <b>{h.name}</b>
             <small>{describeTarget(h, describeDays)}</small>
+            {goalOf(h) && <small>Part of {goalOf(h)}</small>}
           </NameBtn>
           {streak > 0 && <Streak title="Weeks in a row that met the target">{plural(streak, 'week', 'weeks')}</Streak>}
         </CardHead>
@@ -374,7 +380,7 @@ export function HabitsView() {
           <CsvLink onClick={downloadCsv} disabled={habits.length === 0} />
         </Bar>
         {ordered.map(h => (
-          <HabitHistory key={key(h)} habit={h} range={range} today={today} count={count}
+          <HabitHistory key={key(h)} habit={h} goal={goalOf(h)} range={range} today={today} count={count}
             onEdit={() => openInJournal(h.id)} />
         ))}
       </>)}
@@ -383,8 +389,10 @@ export function HabitsView() {
 }
 
 /* A habit's history over the chosen period: figures, bars and a square per day */
-function HabitHistory({ habit, range, today, count, onEdit }: {
+function HabitHistory({ habit, goal, range, today, count, onEdit }: {
   habit: Habit;
+  /** The goal it's part of */
+  goal?: string;
   range: DayRange;
   today: string;
   count: CountOn;
@@ -399,7 +407,7 @@ function HabitHistory({ habit, range, today, count, onEdit }: {
       <PanelHead>
         <div>
           <h2>{habit.name}</h2>
-          <p>{describeTarget(habit, describeDays)}{habit.category ? ` · ${habit.category}` : ''}</p>
+          <p>{describeTarget(habit, describeDays)}{habit.category ? ` · ${habit.category}` : ''}{goal ? ` · Part of ${goal}` : ''}</p>
         </div>
         <LinkBtn type="button" onClick={onEdit}>Edit habit</LinkBtn>
       </PanelHead>

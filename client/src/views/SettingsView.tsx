@@ -18,6 +18,7 @@ import { FormField } from '../components/molecules/FormField.js';
 import { SessionRow } from '../components/molecules/SessionRow.js';
 import { RecoveryKeyDisplay } from '../components/molecules/RecoveryKeyDisplay.js';
 import { deriveAuthSecret, newRecoveryProof, newPasswordProblem } from '@chronicles/shared';
+import { withAuthSecret } from '../utils/passwordForms.js';
 import { PasswordStrengthMeter } from '../components/molecules/PasswordStrengthMeter.js';
 import { CalendarSyncSettings } from '../components/organisms/CalendarSyncSettings.js';
 import { ImageStorageSettings } from '../components/organisms/ImageStorageSettings.js';
@@ -392,11 +393,10 @@ export function SettingsView() {
     setEmailError(false);
     try {
       // The sign-in secret is salted with the email, so the new one goes too
-      const [currentAuthSecret, newAuthSecret] = await Promise.all([
-        deriveAuthSecret(emailPassword, user?.email ?? ''),
-        deriveAuthSecret(emailPassword, newEmail),
-      ]);
-      const result = await authApi.changeEmail({ newEmail: newEmail.trim(), currentAuthSecret, newAuthSecret, ...withCode(emailCode) });
+      // (the new one normalized, so an older account's password moves to the normalized form here)
+      const newAuthSecret = await deriveAuthSecret(emailPassword, newEmail);
+      const result = await withAuthSecret(emailPassword, user?.email ?? '', currentAuthSecret =>
+        authApi.changeEmail({ newEmail: newEmail.trim(), currentAuthSecret, newAuthSecret, ...withCode(emailCode) }));
       setEmailMessage('Email updated');
       setEditingEmail(false);
       setNewEmail('');
@@ -548,10 +548,10 @@ export function SettingsView() {
     setTwoFALoading(true);
     setTwoFAError('');
     try {
-      const confirmation = via === 'passkey'
-        ? { confirmToken: await passkeyToken('2fa-enable') }
-        : { currentAuthSecret: await deriveAuthSecret(twoFAPassword, user?.email ?? '') };
-      const { backupCodes } = await authApi.enable2FA({ secret: twoFASecret, code: twoFACode, ...confirmation });
+      const { backupCodes } = via === 'passkey'
+        ? await authApi.enable2FA({ secret: twoFASecret, code: twoFACode, confirmToken: await passkeyToken('2fa-enable') })
+        : await withAuthSecret(twoFAPassword, user?.email ?? '', currentAuthSecret =>
+          authApi.enable2FA({ secret: twoFASecret, code: twoFACode, currentAuthSecret }));
       setTwoFABackupCodes(backupCodes);
       setTotpEnabled(true);
       setTwoFAStep('codes');
@@ -572,7 +572,7 @@ export function SettingsView() {
     setDisable2FAError('');
     try {
       if (via === 'passkey') await authApi.disable2FA({ confirmToken: await passkeyToken('2fa-disable', disable2FACode) });
-      else await authApi.disable2FA({ authSecret: await deriveAuthSecret(disable2FAPassword, user?.email ?? ''), code: disable2FACode.trim() });
+      else await withAuthSecret(disable2FAPassword, user?.email ?? '', authSecret => authApi.disable2FA({ authSecret, code: disable2FACode.trim() }));
       setTotpEnabled(false);
       setDisabling2FA(false);
       setDisable2FAPassword('');
@@ -999,7 +999,7 @@ export function SettingsView() {
     setDeleteError('');
     try {
       if (via === 'passkey') await authApi.deleteAccount({ confirmToken: await passkeyToken('delete-account', totpEnabled ? deleteCode : undefined) });
-      else await authApi.deleteAccount({ authSecret: await deriveAuthSecret(deletePassword, user?.email ?? ''), ...(totpEnabled && deleteCode.trim() ? { code: deleteCode.trim() } : {}) });
+      else await withAuthSecret(deletePassword, user?.email ?? '', authSecret => authApi.deleteAccount({ authSecret, ...(totpEnabled && deleteCode.trim() ? { code: deleteCode.trim() } : {}) }));
       clearKey(); clearAll(); await logout(); navigate('/login');
     } catch (err) {
       if (!(err instanceof PasskeyCancelled)) setDeleteError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'Failed to delete account');

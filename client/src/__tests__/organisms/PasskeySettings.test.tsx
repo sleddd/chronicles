@@ -36,6 +36,7 @@ vi.mock('@/services/passkeys', () => ({
 }));
 vi.mock('@/contexts/EncryptionContext', () => ({ useEncryption: () => enc }));
 vi.mock('@chronicles/shared', () => ({ deriveAuthSecret: async (pw: string) => `secret-of-${pw}` }));
+vi.mock('@shared/crypto/authSecret.js', () => ({ deriveAuthSecret: async (pw: string) => `secret-of-${pw}`, legacyPasswordForm: () => null }));
 vi.mock('@/services/flashNotice', () => ({ showFlash: vi.fn() }));
 
 import { PasskeySettings } from '@/components/organisms/PasskeySettings';
