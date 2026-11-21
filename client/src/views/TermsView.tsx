@@ -48,7 +48,7 @@ export function TermsView() {
         <li><strong>Account compromise.</strong> Anyone who gets your password, your recovery key, or a device where you’re signed in can read your data.</li>
         <li><strong>Lost keys.</strong> Your data is encrypted with a key only you hold. If you lose both your password and your recovery key, no one, including us, can recover it.</li>
         <li><strong>Services you connect.</strong> Google Calendar, your AI provider and your storage bucket run under their own terms, and we don’t control them.</li>
-        <li><strong>What you send to your AI provider.</strong> AI task planning and AI insights send your entries to your AI provider as readable text when you press their button and choose OK. Chronicles is not responsible for what your AI provider does with information you send it, and there is no guarantee of privacy for anything sent this way.</li>
+        <li><strong>What you send to your AI provider.</strong> AI task planning, AI insights and AI kitchen send your entries to your AI provider as readable text when you press their button and choose OK. AI kitchen sends your allergies only when you tick them for that run. Its menus, recipes and prices are AI suggestions: it can miss an allergen, so check every ingredient yourself before you cook or eat anything. Chronicles is not responsible for what your AI provider does with information you send it, and there is no guarantee of privacy for anything sent this way.</li>
         <li><strong>Not advice.</strong> Chronicles, its reports, and In-App AI estimates are not medical, nutritional or financial advice.</li>
       </ul>
       <h3>Your part</h3>

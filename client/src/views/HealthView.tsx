@@ -202,6 +202,8 @@ interface HealthViewProps {
   tabBar?: React.ReactNode;
   /** The New button's label — defaults to "New <topic>" (New recipe, New symptom…) */
   newLabel?: string;
+  /** One more page action beside New (Recipes: Recipe from ingredients); renders nothing when it has nothing to show */
+  extraAction?: React.ReactNode;
 }
 
 /**
@@ -210,7 +212,7 @@ interface HealthViewProps {
  * reveal Delete; clicking opens the entry in the journal editor — its
  * breadcrumb leads back here.
  */
-export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar, newLabel }: HealthViewProps) {
+export function HealthView({ topicNames, metaFields = [], showDateFilter = true, printable = false, summaryFields = [], title = 'Health', printTitle, tabBar, newLabel, extraAction }: HealthViewProps) {
   const { isReady, isLoading } = useInitializeData();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -296,8 +298,9 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
         <Inner>
           <Head data-print-hide={printable || undefined}>
             <Title>{title}</Title>
-            {(addTopic || printable) && (
+            {(addTopic || printable || extraAction) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-print-hide>
+                {extraAction && <TopBarAction>{extraAction}</TopBarAction>}
                 {addTopic && (
                   <TopBarAction>
                     <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>

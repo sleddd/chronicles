@@ -126,13 +126,13 @@ const AI_RECORD = 'aiConfig';
 const AI_GRANDFATHER_RECORD = 'aiConfig:checked';
 
 /*
- * AI task planning and AI insights send decrypted entries (tasks, goals,
- * visions / journal text) to the provider. Each has its own switch in the
+ * AI task planning, AI insights and AI kitchen send decrypted entries (tasks,
+ * goals, visions / journal text / recipes, and allergies when ticked) to the provider. Each has its own switch in the
  * sealed aiConfig and, like AI itself, is used only on a browser where the
  * owner read the notice and agreed. The record names the version of the
  * wording agreed to (`AI_SHARING_CONSENT_VERSION`), so new wording asks again.
  */
-export type AiFeature = 'aiPlan' | 'aiInsights';
+export type AiFeature = 'aiPlan' | 'aiInsights' | 'aiKitchen';
 type AiFeatureRecord = `${AiFeature}:v${number}`;
 const featureRecord = (feature: AiFeature): AiFeatureRecord => `${feature}:v${AI_SHARING_CONSENT_VERSION}`;
 

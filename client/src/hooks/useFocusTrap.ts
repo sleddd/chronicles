@@ -4,6 +4,10 @@ const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:
 
 export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active: boolean, onClose?: () => void) {
   const previousFocus = useRef<HTMLElement | null>(null);
+  // Read through a ref: callers pass a fresh onClose each render, and re-running
+  // the effect for it would move focus back to the first button on every keystroke
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!active || !containerRef.current) return;
@@ -17,9 +21,9 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && onClose) {
+      if (e.key === 'Escape' && onCloseRef.current) {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -46,5 +50,5 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active
       document.removeEventListener('keydown', handleKeyDown);
       previousFocus.current?.focus();
     };
-  }, [active, containerRef, onClose]);
+  }, [active, containerRef]);
 }

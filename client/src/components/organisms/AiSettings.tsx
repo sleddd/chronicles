@@ -37,14 +37,15 @@ import {
   subscribeAi,
   type AiConfig,
   type AiFeature,
+  type AiFeatureSwitch,
   type AiProvider,
   type BedrockModelOption,
 } from '../../services/aiAssistant.js';
 
 const CUSTOM = '__custom__';
 
-/* The two features that send decrypted entries: each has its own switch and its own notice */
-const FEATURES: Record<AiFeature, { key: 'planEnabled' | 'insightsEnabled'; title: string; on: string; off: string }> = {
+/* The features that send decrypted entries: each has its own switch and its own notice */
+const FEATURES: Record<AiFeature, { key: AiFeatureSwitch; title: string; on: string; off: string }> = {
   aiPlan: {
     key: 'planEnabled',
     title: 'AI task planning',
@@ -57,7 +58,20 @@ const FEATURES: Record<AiFeature, { key: 'planEnabled' | 'insightsEnabled'; titl
     on: 'On. The Journal has an “AI insights” button. It asks before it sends anything.',
     off: 'Off. Turning it on lets the AI read your Journal entries when you press its button.',
   },
+  aiKitchen: {
+    key: 'kitchenEnabled',
+    title: 'AI kitchen',
+    on: 'On. The Menu has an “AI menu” button that plans a week on a budget, and Recipes has “Recipe from ingredients”. They ask before they send anything.',
+    off: 'Off. Turning it on lets the AI read your recipes, your budget and, only when you tick it, your allergies when you press its buttons.',
+  },
 };
+
+/** Which sharing features are on in the saved config but not agreed to here */
+const featuresNotHere = (): Record<AiFeature, boolean> => ({
+  aiPlan: isAiFeatureOnButNotHere('aiPlan'),
+  aiInsights: isAiFeatureOnButNotHere('aiInsights'),
+  aiKitchen: isAiFeatureOnButNotHere('aiKitchen'),
+});
 
 /**
  * AI assistant settings — bring your own Claude, Amazon Bedrock, or OpenAI
@@ -90,8 +104,8 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
   // AI task planning / AI insights: which one's notice is open, and which are
   // on in the saved config without this browser having agreed
   const [consenting, setConsenting] = useState<AiFeature | null>(null);
-  const [featureNotHere, setFeatureNotHere] = useState(() => ({ aiPlan: isAiFeatureOnButNotHere('aiPlan'), aiInsights: isAiFeatureOnButNotHere('aiInsights') }));
-  useEffect(() => subscribeAi(() => setFeatureNotHere({ aiPlan: isAiFeatureOnButNotHere('aiPlan'), aiInsights: isAiFeatureOnButNotHere('aiInsights') })), []);
+  const [featureNotHere, setFeatureNotHere] = useState(featuresNotHere);
+  useEffect(() => subscribeAi(() => setFeatureNotHere(featuresNotHere())), []);
 
   // Prefill once the config finishes decrypting (init/unlock are async)
   useEffect(() => {
@@ -326,6 +340,7 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
               Your key is encrypted with your master key. Chat messages, topic names, and the food and exercise you log go from your browser straight to {providerName}.
               {cfg.planEnabled && ' With AI task planning on, so do your tasks, goals and milestones with their notes, your visions, the names of your goal categories and task types, and the names and times of your events when you press its button.'}
               {cfg.insightsEnabled && ' With AI insights on, so do your Journal entries when you press its button.'}
+              {cfg.kitchenEnabled && ' With AI kitchen on, so do your recipes, your food budget, the ingredients you list and, only when you tick it, your allergies when you press its buttons.'}
             </SettingsNotice>
             <SettingsGroupRow label="Provider">
               <Select value={cfg.provider} onChange={e => handleProviderChange(e.target.value as AiProvider)} aria-label="Provider">

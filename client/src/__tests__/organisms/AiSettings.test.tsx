@@ -63,6 +63,18 @@ describe('AI task planning and AI insights switches', () => {
     expect(aiFeatureChosenHere('aiInsights')).toBe(false);
   });
 
+  it('AI kitchen has its own switch and notice, warning that allergens can be wrong', async () => {
+    renderWithTheme(<AiSettings />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'AI kitchen' }));
+    expect(screen.getByText(/only on a run where you tick “Include my allergies”/)).toBeTruthy();
+    expect(screen.getByText(/The AI can get allergens wrong/)).toBeTruthy();
+    for (const label of AI_SHARING_CHECKS) fireEvent.click(screen.getByLabelText(label));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on' }));
+    await waitFor(() => expect(isAiFeatureEnabled('aiKitchen')).toBe(true));
+    expect(getAiConfigValue()?.kitchenEnabled).toBe(true);
+    expect(aiFeatureChosenHere('aiPlan')).toBe(false);
+  });
+
   it('Not now leaves it off', () => {
     renderWithTheme(<AiSettings />);
     fireEvent.click(screen.getByRole('checkbox', { name: 'AI insights' }));

@@ -10,11 +10,14 @@ import { EmptyState } from '../components/atoms/EmptyState.js';
 import { Spinner } from '../components/atoms/Spinner.js';
 import { KITCHEN_TITLE, MealsTabBar } from '../components/molecules/MealsTabBar.js';
 import { RecipeAutocomplete } from '../components/molecules/RecipeAutocomplete.js';
+import { AiMenuPlan, type MenuPatch } from '../components/organisms/AiMenuPlan.js';
+import { useAiFeatureEnabled } from '../hooks/useAiReady.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { entries as entriesApi } from '../services/api.js';
 import { stripHtml } from '../utils/stripHtml.js';
+import { shoppingLines, shoppingLineText } from '../utils/kitchen.js';
 import { useNavigate } from 'react-router-dom';
 import type { MenuPlanDay, MenuMealSlot, MealSlotType, RecipeIngredient, ShoppingItem } from '../types/fields.js';
 
@@ -513,6 +516,9 @@ export function MenuView() {
   // The empty slot opened from its + (meal box with recipe suggestions)
   const [pickingCell, setPickingCell] = useState<string | null>(null);
   const openInJournal = useOpenInJournal();
+  // AI menu: only while AI kitchen is on and agreed to in this browser
+  const aiKitchenOn = useAiFeatureEnabled('aiKitchen');
+  const [aiMenuOpen, setAiMenuOpen] = useState(false);
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const weekStartStr = toDateStr(weekStart);
@@ -621,6 +627,35 @@ export function MenuView() {
     });
   }, [recipes, scheduleSave]);
 
+  /** The AI menu's chosen meals, merged into the week (meals already planned are never replaced), then saved */
+  const applyAiMenu = useCallback((patch: MenuPatch) => {
+    scheduleSave(150);
+    setMeals(prev => {
+      const next = { ...prev };
+      for (const [dateStr, slots] of Object.entries(patch)) {
+        const day = { ...(next[dateStr] || emptyDay()) };
+        for (const [slot, meal] of Object.entries(slots) as [MealSlotType, MenuMealSlot][]) {
+          if (day[slot]?.mealName?.trim()) continue;
+          day[slot] = meal;
+        }
+        next[dateStr] = day;
+      }
+      return next;
+    });
+  }, [scheduleSave]);
+
+  /** The meals already planned this week, by name: the AI menu doesn't repeat them */
+  const plannedMeals = useMemo(() => weekDays.flatMap(day => {
+    const dateStr = toDateStr(day);
+    return MEAL_SLOTS.map(({ key }) => meals[dateStr]?.[key]?.mealName?.trim() ?? '').filter(Boolean);
+  }), [weekDays, meals]);
+
+  /** Slots this week that already hold a meal: the AI menu keeps them */
+  const takenSlots = useMemo(() => weekDays.flatMap(day => {
+    const dateStr = toDateStr(day);
+    return MEAL_SLOTS.filter(({ key }) => meals[dateStr]?.[key]?.mealName?.trim()).map(({ key }) => `${dateStr}:${key}`);
+  }), [weekDays, meals]);
+
   const handleSave = useCallback(async () => {
     if (!menuPlanTopicId) return;
     setIsSaving(true);
@@ -687,20 +722,18 @@ export function MenuView() {
       const items: ShoppingItem[] = [];
       const linkedRecipeIds: number[] = [];
 
+      const wanted: RecipeIngredient[] = [];
       recipeIds.forEach(recipeId => {
         const recipeEntry = entries.find(e => e.id === recipeId);
         if (!recipeEntry) return;
         linkedRecipeIds.push(recipeId);
         const cf = (recipeEntry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
         const ingredients = (cf?.ingredients as RecipeIngredient[]) || [];
-        ingredients.forEach(ing => {
-          items.push({
-            id: crypto.randomUUID(),
-            name: [ing.amount, ing.name].filter(Boolean).join(' '),
-            category: 'other',
-            checked: false,
-          });
-        });
+        wanted.push(...ingredients);
+      });
+      // As you'd buy them: counts and package sizes kept, recipe measures dropped, each item once
+      shoppingLines(wanted).forEach(line => {
+        items.push({ id: crypto.randomUUID(), name: shoppingLineText(line), category: 'other', checked: false });
       });
 
       const weekEnd = addDays(weekStart, 6);
@@ -869,6 +902,11 @@ export function MenuView() {
               </WeekNav>
               <Divider aria-hidden="true" />
               <HeadPills>
+              {aiKitchenOn && (
+                <PillButton type="button" $variant="neutral" title="Plan this week’s meals on a budget with AI" onClick={() => { flushSave(); setAiMenuOpen(true); }}>
+                  AI menu
+                </PillButton>
+              )}
               {/* Same small pill as Save menu, with a grey outline */}
               <PillButton type="button" $variant="neutral" onClick={handleGenerateShoppingList} disabled={isGenerating}>
                 {isGenerating ? 'Making list…' : 'Make shopping list'}
@@ -960,6 +998,9 @@ export function MenuView() {
           </MobileArea>
         </Inner>
       </Page>
+      {aiMenuOpen && (
+        <AiMenuPlan days={weekDays.map(toDateStr)} taken={takenSlots} plannedMeals={plannedMeals} onApply={applyAiMenu} onClose={() => setAiMenuOpen(false)} />
+      )}
     </ContentTemplate>
   );
 }

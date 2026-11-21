@@ -59,6 +59,8 @@ export interface AiConfig {
   planEnabled: boolean;
   /** AI insights: sends Journal entries when its button is pressed (off until agreed to) */
   insightsEnabled: boolean;
+  /** AI kitchen: menu planning on a budget and recipes from what you have — sends recipes, the budget and (only when ticked) allergies (off until agreed to) */
+  kitchenEnabled: boolean;
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -78,6 +80,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   chatEnabled: false,
   planEnabled: false,
   insightsEnabled: false,
+  kitchenEnabled: false,
 };
 
 /** Suggested models per provider — the Settings form also accepts any model ID. */
@@ -184,7 +187,8 @@ export function isAiChatEnabled(): boolean {
   return !!aiConfig && aiConfig.enabled && aiConfig.chatEnabled === true && aiChosenHere();
 }
 
-const FEATURE_SWITCH: Record<AiFeature, 'planEnabled' | 'insightsEnabled'> = { aiPlan: 'planEnabled', aiInsights: 'insightsEnabled' };
+export type AiFeatureSwitch = 'planEnabled' | 'insightsEnabled' | 'kitchenEnabled';
+const FEATURE_SWITCH: Record<AiFeature, AiFeatureSwitch> = { aiPlan: 'planEnabled', aiInsights: 'insightsEnabled', aiKitchen: 'kitchenEnabled' };
 
 /** The feature is switched on, agreed to in this browser, and AI itself is ready: its button shows and may send. */
 export function isAiFeatureEnabled(feature: AiFeature): boolean {
@@ -247,7 +251,7 @@ export async function loadAiConfig(value: unknown, decryptBytes: DecryptBytesFn)
 
 /** A feature that isn't on in the config just read loses this browser's agreement to it */
 function reconcileAiFeatures(): void {
-  for (const feature of ['aiPlan', 'aiInsights'] as const) {
+  for (const feature of ['aiPlan', 'aiInsights', 'aiKitchen'] as const) {
     reconcileAiFeature(feature, !!aiConfig && aiConfig.enabled && aiConfig[FEATURE_SWITCH[feature]] === true);
   }
 }

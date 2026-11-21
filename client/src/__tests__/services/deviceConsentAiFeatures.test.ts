@@ -15,6 +15,14 @@ describe('AI sharing features: this browser’s agreement', () => {
     expect(aiFeatureChosenHere('aiPlan')).toBe(false);
   });
 
+  it('AI kitchen has its own agreement, apart from the others', () => {
+    recordAiFeatureChoice('aiPlan', true);
+    expect(aiFeatureChosenHere('aiKitchen')).toBe(false);
+    recordAiFeatureChoice('aiKitchen', true);
+    expect(aiFeatureChosenHere('aiKitchen')).toBe(true);
+    expect(aiFeatureChosenHere('aiInsights')).toBe(false);
+  });
+
   it('is kept per account, and nothing counts with no account', () => {
     recordAiFeatureChoice('aiInsights', true);
     setEgressAccount('tag-b');

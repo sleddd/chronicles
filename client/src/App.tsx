@@ -52,6 +52,7 @@ import { ExerciseScheduleView } from './views/ExerciseScheduleView.js';
 import { HealthDashboardView } from './views/HealthDashboardView.js';
 import { MealsLogView } from './views/MealsLogView.js';
 import { KitchenDashboardView } from './views/KitchenDashboardView.js';
+import { RecipeFromIngredientsButton } from './components/organisms/AiRecipeFromIngredients.js';
 import { DashboardView } from './views/DashboardView.js';
 import { AiChat } from './components/organisms/AiChat.js';
 import { useAiChatEnabled } from './hooks/useAiReady.js';
@@ -753,7 +754,7 @@ export function App() {
               <Route path="/goals/habits" element={<Navigate to="/health/habits" replace />} />
               <Route path="/goals/filter" element={<R><PlannerFilterView /></R>} />
               <Route path="/menu" element={<R><MenuView /></R>} />
-              <Route path="/menu/recipes" element={<R><HealthView topicNames={['Recipe', 'Recipes']} metaFields={[{ key: 'category', label: 'Category' }, { key: 'servings', label: 'Serves' }, { key: 'prepTime', label: 'Prep' }, { key: 'cookTime', label: 'Cook' }]} showDateFilter={false} title={KITCHEN_TITLE} tabBar={<MealsTabBar />} /></R>} />
+              <Route path="/menu/recipes" element={<R><HealthView topicNames={['Recipe', 'Recipes']} metaFields={[{ key: 'category', label: 'Category' }, { key: 'servings', label: 'Serves' }, { key: 'prepTime', label: 'Prep' }, { key: 'cookTime', label: 'Cook' }]} showDateFilter={false} title={KITCHEN_TITLE} tabBar={<MealsTabBar />} extraAction={<RecipeFromIngredientsButton />} /></R>} />
               <Route path="/kitchen" element={<R><KitchenDashboardView /></R>} />
               <Route path="/menu/meals" element={<Navigate to="/health/food" replace />} />
               <Route path="/shopping" element={<R><ShoppingListsView /></R>} />

@@ -18,6 +18,8 @@ import { longDay } from '../components/organisms/FoodLog.js';
 import { latestOpenList, menuDays, upcomingMeals } from '../utils/kitchen.js';
 import type { ShoppingItem } from '../types/fields.js';
 import { TickMark } from '../components/atoms/TickMark.js';
+import { TopBarAction } from '../components/organisms/TopBarAction.js';
+import { RecipeFromIngredientsButton } from '../components/organisms/AiRecipeFromIngredients.js';
 
 /* ── Layout (mirrors the Health dashboard) ── */
 
@@ -37,6 +39,10 @@ const Inner = styled.div`
 `;
 
 const Head = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 53px 0 28px; /* room under the title before the tabs */
 `;
 
@@ -386,7 +392,7 @@ export function KitchenDashboardView() {
     <ContentTemplate>
       <Page>
         <Inner>
-          <Head><Title>{KITCHEN_TITLE}</Title></Head>
+          <Head><Title>{KITCHEN_TITLE}</Title><TopBarAction><RecipeFromIngredientsButton /></TopBarAction></Head>
           <MealsTabBar />
 
           <CardGrid>

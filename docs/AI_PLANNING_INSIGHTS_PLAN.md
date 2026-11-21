@@ -140,3 +140,12 @@ Not built (as listed above): wellness data in insights, "Ask in chat", Undo for 
 - **The panel scrolls.** `Modal` is now never taller than the screen: its title and buttons stay put and the body scrolls.
 - **Long answers.** With goals, milestones and events in the answer, a plan could run past the room it was given and arrive cut off, which read as "no plan". The plan request now asks for 16,000 tokens of room (falling back to 4,096 for a model that refuses that much), runs Claude 5 models at medium effort, asks the model to keep "why" short and cap its changes at about forty, and an answer that is still cut off is read as far as it got (`firstJsonObject` in `utils/aiJson.ts`), with a note in the review that some suggestions may be missing.
 
+
+## AI kitchen (2026-11-20)
+
+A third sharing feature on the same rails: its own switch (`kitchenEnabled`, feature `aiKitchen`), its own per-browser agreement to the shared notice, the share prompt on every press, a review before anything is saved, nothing decrypted stored.
+
+- **AI menu** (Menu): budget, people, meals to plan, optionally your recipes (names and ingredient names) and, only when ticked for that run, your allergies. The answer is the week's meals, a recipe for each new meal and a priced shopping list, all reviewed and ticked before Apply.
+- **Recipe from ingredients** (Recipes, Kitchen dashboard): what you have, servings, meal, pantry basics on/off, optional allergies. One recipe to review and save, or Try another.
+- **Allergies are never taken on the AI's word**: every recipe is checked in the browser against every saved Allergy entry (`allergenHits`), sent or not, and flagged in the review. The notice, the review and the Terms all say the AI can get allergens wrong.
+- Privacy policy and Terms updated, both versions bumped to 2026-11-20.

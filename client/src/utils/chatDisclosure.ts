@@ -51,5 +51,15 @@ export const AI_FEATURE_NOTICE = {
     'The reflection is written by an AI model, not a person. It is not a therapist and it can be wrong.',
     'For adults 18 and older.',
   ],
+  aiKitchen: [
+    'For a menu: your weekly food budget, how many people, which meals to plan, the week’s dates, anything you type about what you like, and, when you choose, the names and ingredients of your recipes are sent.',
+    'For a recipe: the ingredients you list, how many servings, the meal and anything you type about what you like are sent.',
+    'Your allergies (each allergen, its reaction and severity, from your Allergy entries) are sent only on a run where you tick “Include my allergies”. That box starts unticked every time.',
+    'The AI can get allergens wrong. Check every ingredient yourself before you cook or eat anything.',
+    'Shopping list prices are estimates. They vary by store and by where you live, and the AI may not estimate them accurately.',
+    'To keep your weeks varied, the names of the meals on your last four weeks of menus are sent too.',
+    'Each run is a paid request to your provider. A week with new recipes for every meal is a long answer, so it costs more than a single recipe.',
+    'It runs only when you press its button on the Menu, Recipes or Kitchen page. You review everything, and nothing is saved until you choose.',
+  ],
 } as const;
 
