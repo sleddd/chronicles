@@ -3,14 +3,14 @@
 Chronicles is now available to sign up for beta testing at [mydailychronicles.com](https://mydailychronicles.com/#beta), with a native phone app via React Native planned.
 
 ### Dashboard
-The home page, where signing in lands, in light, dark or auto mode. A greeting, a Quick entry box that writes any topic with its own fields, world clocks with the weather, and **Your Agenda**: a date strip you can scroll through the calendar, then the day as a timeline. Events and meetings sit at their times, tasks you planned fill the free time around them and med doses show as small icons at their times. Drag a card to another time or stretch it by its foot. Beside the timeline are your priorities, tasks due today, wins, what's coming up and your shopping list. Tasks with no day yet can be dragged straight onto the schedule. Under Your Agenda are cards you can drag anywhere and fold away: the wellness check-in, the daily quote, today's menu, habits, a quick meal log, a symptom log, recent entries, time tracked and stats. Choose which show, and the theme, from the sliders button. Say what you want to log with **Voice** ("add task call the dentist due Friday"), and a bell at the top shows a dot while a dose, bill, task or meeting is due.
+The home page, where signing in lands, in light, dark or auto mode. A greeting, a Quick entry box that writes any topic with its own fields, world clocks with the weather, and **Your Agenda**: a date strip you can scroll through the calendar, then the day as a timeline. Events and meetings sit at their times, tasks you planned fill the free time around them and med doses show as small icons at their times. Drag a card to another time or stretch it by its foot. Beside the timeline are your priorities, tasks due today, wins, what's coming up and your shopping list. Tasks with no day yet can be dragged straight onto the schedule. The rest are cards you can drag anywhere and fold away: the wellness check-in, shortcuts, the daily quote, today's menu, habits, a quick meal log, a symptom log, recent entries, time tracked and stats. Under the Quick entry and across the top of Your Agenda, cards sit in rows of up to three columns. Drop a card beside another and they share the row two thirds and one third, stack cards in a column, or give one a full-width row of its own. Choose which show, and the theme, from the sliders button. Say what you want to log with **Voice** ("add task call the dentist due Friday"), and a bell at the top shows a dot while a dose, bill, task or meeting is due.
 
-<img width="1600" height="1000" alt="The dashboard in dark mode: the greeting, Quick entry and Your Agenda" src="client/src/assets/landing/dashboard-dark-v2.jpg" />
+<img width="1600" height="1150" alt="The dashboard in dark mode: the greeting, Quick entry and Your Agenda" src="client/src/assets/landing/dashboard-dark-v3.jpg" />
 
 ### Journal
-Pick a topic, write a line (or fill in the topic's fields) and save. Topics with fields of their own (tasks, events, meals, symptoms…) lay them out as labelled rows under the text, and a text-only topic is just the writing area. Entries are grouped by month, with Today, All and Bookmarks views and search by keyword, topic and date. The editor has rich text, encrypted photos stored in your own Cloudflare R2 bucket (bring your own key), voice dictation, Apple Pencil handwriting and drawing, bookmarks and public share links. Open an entry from any other page and saving takes you back there.
+Pick a topic, write a line (or fill in the topic's fields) and save. Topics with fields of their own (tasks, events, meals, symptoms…) lay them out as labelled rows under the text, and a text-only topic is just the writing area. Entries are grouped by month, with Today, All and Bookmarks views and search by keyword, topic and date. The editor has rich text, encrypted photos stored in your own Cloudflare R2 bucket (bring your own key), voice dictation, Apple Pencil handwriting and drawing, bookmarks and public share links. Open an entry from any other page and it shows as a card the width of its fields over the journal, and saving takes you back there. Journal writing gets the full width.
 
-<img width="1268" height="1000" alt="The journal with entries by month and a Sunday entry open" src="client/src/assets/landing/features/journal-dark.jpg" />
+<img width="1268" height="1001" alt="The journal with entries by month and a Sunday entry open" src="client/src/assets/landing/features/journal-dark.jpg" />
 
 ### Health
 A health dashboard you can rearrange by dragging widgets into rows, with today's nutrition against your goals, a wellness check-in (with a notes box for anything the questions don't ask), quick meal and exercise logging, today's habits and your medication schedule, plus tabs for Meals, Exercise (schedule, training plans and history), Habits, Symptoms, Med list, Med history, Allergies and Reports. A training plan breaks a goal (a climb, a race) into phases with hours per category, and shows each week's progress. Your exercise schedule shows on both dashboards with a timer beside each routine. Stopping it marks the session done. The quick exercise log offers your routines as one-tap chips. Marking a dose taken adds its nutrients (a vitamin D supplement, say) to the day's totals. **Habits** are anything you want to keep doing, each with a target such as 3 times a week or twice a day. Every habit is a small card with a tick for each day, how the week stands against its target and a streak of weeks met. A missed day doesn't break the streak if the week still reaches its target. Pick a habit to see how often you did it over a month, a quarter or a year as a bar chart, with a CSV download. Reports chart water, mood and sleep over time, symptom frequency and severity, and the patterns between them, such as how water, foods or exercise relate to your symptoms. They also line each habit up with your mood or a symptom ("You feel better on days you tick Balance board"). Medication lists, symptom logs and allergy records print for appointments.
@@ -30,19 +30,21 @@ Each has its own switch in Settings and its own notice to agree to, in every bro
 <img width="1268" height="900" alt="The AI plan review, with suggested days for tasks and changes to goals to tick or untick" src="client/src/assets/landing/features/ai-plan-dark.jpg" />
 
 ### Topics
-Entries are organized by topic — tasks, goals, meals, medication, recipes, books, quotes and more — or your own. Add, remove and reorder topics, choose their icons and give them custom fields (text, number, date, yes/no, link). Each topic's page lists its entries by month, with search.
+Entries are organized by topic — tasks, goals, meals, medication, recipes, books, quotes and more — or your own. Add, remove and reorder topics, choose their icons and give them custom fields (text, number, date, yes/no, link). Each topic's page is a table of its entries you can group by month or tag, sort and search. Text entries take tags of your own, and events and meetings list when they start and end and where.
 
-<img width="1268" height="1000" alt="The Topics list with an icon and entry count for each topic" src="client/src/assets/landing/features/topics-dark.jpg" />
+<img width="1268" height="730" alt="The Topics list with an icon and entry count for each topic" src="client/src/assets/landing/features/topics-list-dark.jpg" />
+
+<img width="1268" height="730" alt="Events as a table with when each starts and ends, and where" src="client/src/assets/landing/features/topic-event-dark.jpg" />
 
 ### Planning
-Your vision and areas of life, then goals, milestones and tasks on Kanban boards or as lists. Drag a card to another column to change its status, or up and down to set its order. Milestones roll up into goals and tasks into milestones. Todos are tasks with no goal, shown with the rest or on their own. Tasks can sit in Idea / Backlog until you're ready to plan them. Search, sort and filter by goal, milestone, category or status, and save the views you use often. Every card has a timer chip, so you can time a task without opening it.
+Your vision and areas of life, then goals, milestones and tasks as lists or on Kanban boards. The lists show each goal's progress as a ring, its start and deadline and how many tasks are done, and each task's priority, the day it's planned and how late it is. Drag a card to another column to change its status, or up and down to set its order. Milestones roll up into goals and tasks into milestones. Todos are tasks with no goal, shown with the rest or on their own. Tasks can sit in Idea / Backlog until you're ready to plan them. Search, sort and filter by goal, milestone, category or status, and save the views you use often. Every card has a timer chip, so you can time a task without opening it.
 
 - **Goal categories** — Give each goal an area of your life (Health, Career, Finances, Relationships, Growth, Home, or your own). Its milestones, tasks and habits take the same category, and you can filter and group by it.
 - **Vision** — An overall vision, then a card per area of life with its photo, its vision, its goals and how far along each is, and this week's tasks and habits for it.
 - **Roadmap** — Every goal as a bar from its start date to its target date, grouped by category, opening to its milestones. Each bar fills as its milestones are completed. Drag a bar to move it, or drag an end to change one date. View a month, a quarter, a year or five years.
 - **Planner** — Your week or a single day at a glance, each day ruled by the hour. Drag tasks from Unscheduled onto a day at the time you want, move them between days, and stretch a card to change how long it takes. Events and meetings sit at their own times and nothing overlaps. Tick a task off on its day. A task set to move on rolls to today if you didn't finish it.
 
-<img width="1268" height="900" alt="Tasks by status with priorities, deadlines and the milestone they roll up to" src="client/src/assets/landing/features/planning-tasks-dark.jpg" />
+<img width="1268" height="900" alt="Tasks as a list under their goals, with priority, the day planned, the deadline and how late" src="client/src/assets/landing/features/planning-tasks-list-dark.jpg" />
 
 ### Time Tracking
 Time anything with a tap. Tasks, todos, goals, milestones, exercise and routines each have a timer, and the Time Tracking topic holds anything else you want to track time to ("Writing the novel", "Client: Acme"). One timer runs at a time, a floating timer shows it from any page, and you can add time by hand. The Time tracked card on the dashboard totals today, this week or this month and starts a timer for any activity by name. Your time is encrypted in your browser like everything else.
@@ -53,9 +55,9 @@ Day, week and month views of what's scheduled: events and meetings, including on
 <img width="1268" height="1100" alt="The month view with a dot per kind of item and the chosen day beside it" src="client/src/assets/landing/features/calendar-dark.jpg" />
 
 ### From the Kitchen
-A kitchen dashboard with today's meals and your shopping list, a weekly menu planner, recipes and shopping lists. Recipes have checkable ingredients, numbered steps, a photo and a print view. Link recipes to menu slots and shopping lists, and turn a week's menu into a shopping list in one tap.
+A kitchen dashboard with today's meals and your shopping list, a weekly menu planner, recipes and shopping lists. Recipes and shopping lists are tables you can group, sort and search, with each recipe's prep and cook times, servings and difficulty, and each list's item count. Recipes have checkable ingredients, numbered steps, a photo and a print view. Link recipes to menu slots and shopping lists, and turn a week's menu into a shopping list in one tap.
 
-<img width="1268" height="1400" alt="The kitchen dashboard with today's meals and the shopping list" src="client/src/assets/landing/features/kitchen-dark.jpg" />
+<img width="1268" height="730" alt="The kitchen dashboard with today's meals and the shopping list to tick off" src="client/src/assets/landing/features/kitchen-dashboard-dark.jpg" />
 
 ### Media Journal
 Books, movies, TV shows and music on one shelf. Covers and details are found for you from Open Library, iTunes, TVmaze and Wikipedia (never from an address you type), with half-star ratings, how far through you are, and notes. Each item sits on a shelf: reading or watching, want to, finished, paused or didn't finish. Search, filter by type, shelf and rating, and sort. Bookmark the ones you want to share and they appear on a **public shelf** anyone can open from a link, with the same search and filters. Only the catalogue cover, title, maker, year, rating and shelf are published. Notes, progress and your own photos never are, and turning the shelf off deletes it.
@@ -70,7 +72,7 @@ Off until you turn it on in Settings. A manual budget by category with a chart o
 ### Settings
 Your account, theme (light or dark and 30 accent colors), which features are on, calendar sync, entry images, In-App AI, security (passkeys, two-factor authentication, trusted browsers, active sessions, recovery key) and data import and export. Every section folds away.
 
-<img width="1600" height="1000" alt="Settings with the Theme section open: light, dark or auto, and the background photos" src="client/src/assets/landing/settings-dark.jpg" />
+<img width="1600" height="1150" alt="Settings with the Theme section open: light, dark or auto, and the background photos" src="client/src/assets/landing/settings-dark.jpg" />
 
 ## Privacy & Security
 
@@ -116,7 +118,7 @@ chronicles/
 ├── client/          # React SPA (Vite + styled-components + PWA)
 ├── server/          # Express API (Prisma + PostgreSQL)
 ├── shared/          # Shared code (crypto, types, theme)
-└── docs/            # BLUEPRINT.md, ACCESSIBILITY_UX_PLAN.md, IMAGES_FEATURE_PLAN.md, THEME_DESIGN_UPDATE.md
+└── docs/            # BLUEPRINT.md, ACCESSIBILITY_UX_PLAN.md, AI_PLANNING_INSIGHTS_PLAN.md, AUTH_REDESIGN_PLAN.md, IMAGES_FEATURE_PLAN.md, SCALE_TEST_REPORT.md, SHARDING.md, THEME_DESIGN_UPDATE.md, compliance/
 ```
 
 ## How It Works
@@ -125,13 +127,14 @@ chronicles/
 
 An optional, manual money tracker — turn it on in **Settings → Features → Finance** (it's off by default). Nothing connects to your bank: you enter what you want to track, and it's encrypted in your browser like your journal.
 
+- **Current balance** — Type in what you have available once, and it keeps itself current as you mark bills paid and log spending, showing what's left after the bills still due this month.
 - **Budget & Bills** — Monthly categories with a planned amount, compared with the bills due that month (counted as soon as you add a bill) and the spending you log. List every bill and subscription with how often it's due and what it costs a month; **Mark paid** records a payment on the bill, and you can pause or cancel subscriptions you're reconsidering. Totals show your monthly and yearly bills and what subscriptions cost you.
 - **Goals** — A target amount and date, with a progress bar fed by a savings fund or an amount you enter.
 - **Savings** — Named funds (emergency fund, a trip, car repairs) with a log of what you add and take out.
-- **Reconcile** *(its own opt-in switch)* — For each paycheck: your bank balance once everything has posted, the bills you're paying, and what's left to spend. Tick each line as it clears the bank, then check your current balance against what it should be ("Matches" or "Off by $X").
+- **Debts** — What you owe on each debt, paid down with a log of payments until it reads Paid off.
 - **Reports** — Search what you've paid by bill name, type (bill or subscription) and category, for this or last month, this or last year, or any dates — totals by bill and by month.
 - **Calendar** — Bill due dates appear on the calendar.
-- **Export** — Settings → Data → Export Finance Data downloads everything, decrypted in your browser, as one ZIP: a spreadsheet each for budget categories, bills, bill payments, spending, savings funds and entries, goals, paydays and payday lines; one sheet of every transaction; and a complete JSON backup. The download is not encrypted, so keep it somewhere safe.
+- **Export** — Settings → Data → Export Finance Data downloads everything, decrypted in your browser, as one ZIP: a spreadsheet each for budget categories, bills, bill payments, spending, savings funds and entries, debts and debt payments, and goals; one sheet of every transaction; and a complete JSON backup. The download is not encrypted, so keep it somewhere safe.
 
 > **Disclaimer:** Chronicles takes reasonable steps to keep your data secure — everything in Finance is encrypted in your browser before it's saved, and the server never sees it. But Chronicles is **not a banking app or a financial service**, and no system is perfectly secure. You are responsible for your financial data: what you choose to store, keeping your own records and backups, and securing your account and devices. By using Finance you accept the risk of storing and maintaining that information here.
 
@@ -152,22 +155,22 @@ Add up to 7 photos to any journal entry — without giving up zero-knowledge:
 2. **Enter credentials in Settings → Entry Images** — They autosave as you type, get encrypted with your master key, and are stored as ciphertext the server cannot read. The setup guide in Settings walks through the bucket, token, and the required CORS policy, and an optional "Test connection" verifies everything from your browser.
 3. **Attach images in the editor** — Photos are downscaled, encrypted with AES-256-GCM in the browser, and uploaded directly to your bucket with browser-signed URLs. Chronicles' server never sees the images or your credentials — your bucket only ever contains encrypted noise.
 
-Star an image to feature it as a full-width banner above the entry (recipes use it as their photo, and goal cards show it as a small round picture); tap any thumbnail for a full-screen lightbox with keyboard and swipe navigation. Deleting an image or an entry (including bulk delete) also removes the objects from your bucket. Sharing is automatically disabled for entries that contain images — except recipes, which share only their formatted text while the photo stays in your bucket.
+Photos show under the entry's text — one larger, several in a row — and a recipe's page leads with its photo; tap any photo for a full-screen lightbox with keyboard and swipe navigation. Deleting an image or an entry (including bulk delete) also removes the objects from your bucket. Sharing is automatically disabled for entries that contain images — except recipes, which share only their formatted text while the photo stays in your bucket.
 
 ### Settings
 
 Each section is a collapsible card (all start collapsed; Settings remembers which you open):
 
-- **Account** - Username, display name (edit in place), email (changing it asks for your password), and delete account (asks for your password, plus a 2FA code when 2FA is on)
+- **Account** - Username, display name (edit in place), email (changing it asks for your password), how you'd like to hear about a security incident, the welcome tour, and delete account (asks for your password, plus a 2FA code when 2FA is on)
 - **Preferences** - Timezone (weather cities are set from the dashboard's Theme and layout panel)
-- **Theme** - Light/dark mode and 30 accent color presets
-- **Features** - Turn on or off meals, medication, goals, milestones, exercise, allergies, cycle tracking, entertainment and inspiration; Finance and paycheck reconcile are off until you turn them on
+- **Theme** - Light, dark or auto, 30 accent color presets, and a background photo (or one of your own)
+- **Features** - Turn on or off meals, medication, goals, milestones, exercise, allergies, cycle tracking, holidays, the Media journal (and its public shelf) and inspiration; Finance is off until you turn it on
 - **Calendar Sync** - Connect Google Calendar, choose the target calendar, toggle imports, manage the Apple ICS feed, and clean up old events
 - **Entry Images** - Toggle the feature, enter your Cloudflare R2 credentials (autosaved and master-key encrypted), test the connection, and follow the built-in setup guide
 - **In-App AI** - Choose Claude, Amazon Bedrock, or OpenAI, add your credentials and model, and leave notes for the chat assistant. Switch on the chat, AI task planning and AI insights separately. The last two show a notice to agree to first
 - **Security** - Passkeys, change password, active sessions, recovery key, two-factor authentication (TOTP setup wizard with QR code and backup codes) and trusted browsers
 - **Data** - Default topics, seed test data (and sample Finance data when Finance is on), export to CSV, export all Finance data (a ZIP of spreadsheets plus a JSON backup), import entries (CSV) and a Daily Log (JSON) — each import has a downloadable example file
-- **Privacy** and **Sign Out**
+- **Feedback/Report a Bug**, **Privacy** and **Sign Out**
 
 ## Getting Started
 
@@ -214,7 +217,8 @@ Each section is a collapsible card (all start collapsed; Settings remembers whic
 
 **Password requirements:**
 - Minimum 12 characters
-- At least one uppercase letter, lowercase letter, and number
+- At least one uppercase letter, lowercase letter, number and symbol
+- Hard to guess: a strength meter shows as you type, and common passwords, keyboard patterns and your own name or email are refused
 
 **Recovery Key:**
 At registration, you'll receive a recovery key (formatted as hex with dashes). Save it securely — it's the only way to recover your account if you forget your password.
@@ -250,8 +254,8 @@ npm run test:coverage    # Run tests with coverage
 
 © 2025–2026 Claudette Raynor. All rights reserved.
 
-You may download and use this application for personal use only. You may change your own copy and run your changes on your own devices for your own use. Commercial use and redistribution (changed or not) are strictly prohibited. See [LICENSE](LICENSE) for the full terms.
+**Personal copies are welcome.** Download Chronicles, run it for yourself, and change your own copy however you like on your own devices. **Commercial use of any kind is prohibited**, including selling it, charging for access, hosting it as a service, using it for a business or client, and distributing it through any app store or marketplace (paid or free). The license covers the **visual design, theme system and assets** (layouts, look and feel, design tokens and colour palettes, the name, logo, icons, screenshots and artwork) as well as the code, whether copied or closely recreated. See [LICENSE](LICENSE) for the full terms.
 
-**No distribution — not even non-commercial.** "Personal, non-commercial use" means *using* it yourself. It does not mean you may share it. You may not copy, re-host, mirror, upload, bundle or hand out Chronicles (original or changed, source or built, whole or in part) to anyone, free or paid, public or private — friends and family included. Anyone who wants it gets it from this repository. Your own changes stay on your own machine; the only way to share a change is a pull request to this repository (LICENSE, Section 4).
+**No distribution — not even non-commercial.** "Personal, non-commercial use" means *using* it yourself. It does not mean you may share it. You may not copy, re-host, mirror, upload, bundle or hand out Chronicles (original or changed, source or built, whole or in part) to anyone, free or paid, public or private — friends and family included. Anyone who wants it gets it from this repository. Your own changes stay on your own machine; the only way to share a change is a pull request to this repository (LICENSE, Section 6).
 
-**Contributions.** Pull requests and bug reports through GitHub issues are welcome. Contributions don't change the license: the app stays personal-use only, and anything you contribute can be used in Chronicles (see LICENSE, Section 4). Please keep personal or health information out of issues, and report security problems privately to support@mydailychronicles.com. You can also report a bug in the app (Settings → Report a Bug).
+**Contributions.** Pull requests and bug reports through GitHub issues are welcome. Contributions don't change the license: the app stays personal-use only, and anything you contribute can be used in Chronicles (see LICENSE, Section 6). Please keep personal or health information out of issues, and report security problems privately to support@mydailychronicles.com. You can also report a bug or send feedback in the app (Settings → Feedback/Report a Bug).

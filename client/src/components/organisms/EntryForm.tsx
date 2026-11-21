@@ -369,7 +369,7 @@ const TaskHead = styled.div`
   z-index: 5; /* the topic menu drops over the rows */
   /* The journal: full screen / close 30px in from the pane's edge */
   /* …and a little more room under the row, above its rule */
-  &[data-journal] { padding-right: 30px; padding-bottom: 14px; margin-bottom: 32px; }
+  &[data-journal] { padding-top: 28px; padding-right: 30px; padding-bottom: 14px; margin-bottom: 32px; }
   /* The journal: a rule under the row, between the content's edges (--head-x: 26px on a task card, the card's 36px elsewhere) */
   &[data-journal]::after {
     content: '';
@@ -383,7 +383,7 @@ const TaskHead = styled.div`
   /* Full width: room between the topic picker / close row and the entry under it */
   @media (min-width: 1025px) { &[data-full] { margin-bottom: 32px; } }
   /* Phones / tablets: snug under the "Entry list" row above it */
-  ${NAV_COMPACT} { &[data-journal] { padding-top: 6px; } }
+  ${NAV_COMPACT} { &[data-journal] { padding-top: 18px; } }
   /* The Quick entry: the topic picker a little further down from the card's top */
   &:not([data-journal]) { padding-top: 26px; }
   /* Close: a round button with the reminders bell's fill and a light outline round its edge —
@@ -930,9 +930,9 @@ const JournalHead = styled.div<{ $expanded?: boolean; $roomy?: boolean }>`
     bottom: 0;
     border-bottom: 1px solid var(--border-card);
   }
-  ${NAV_COMPACT} { padding-right: 24px; padding-top: 8px; }
+  ${NAV_COMPACT} { padding-right: 24px; padding-top: 18px; }
   @media (max-width: 640px) {
-    padding: 8px 12px 12px 20px;
+    padding: 16px 12px 12px 20px;
     margin-bottom: ${({ $roomy }) => ($roomy ? '18px' : '8px')};
     &::after { left: 20px; right: 20px; }
   }

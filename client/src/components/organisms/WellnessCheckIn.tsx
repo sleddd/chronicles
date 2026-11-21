@@ -237,7 +237,7 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
   // Foldable (the Health dashboard): the four squares in a panel with its title, folded by its chevron
   if (foldable) return (
     <DashPanel aria-label={title ?? 'Wellness check-in'}>
-      <DashPanelHead title={title ?? 'Wellness check-in'} aside={entry ? 'Logged today' : 'Not logged yet'} />
+      <DashPanelHead title={title ?? 'Wellness check-in'} />
       {panel}
     </DashPanel>
   );
@@ -249,7 +249,7 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
   if (!title) return panel;
   return (
     <DashPanel aria-label={title}>
-      <DashPanelHead title={title} aside={entry ? 'Logged today' : 'Not logged yet'} />
+      <DashPanelHead title={title} />
       {panel}
     </DashPanel>
   );

@@ -50,7 +50,8 @@ const Head = styled.header`
   ${NAV_COMPACT} {
     /* Snug under the top bar: just a few px of the page's 26px of room above it */
     padding: 0 16px;
-    margin-top: -20px;
+    margin-top: -24px;
+    margin-bottom: 12px;
     &:not([data-back]) { display: none; }
     /* Just the back caret here, under the top bar's own hairline */
     html:not([data-wallpaper]) & { border-bottom: none; }

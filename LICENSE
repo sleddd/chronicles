@@ -2,81 +2,107 @@ Chronicles — Personal Use License
 
 Copyright (c) 2025-2026 Claudette Raynor. All rights reserved.
 
-This software, including its source code, compiled or built forms, hosted
-versions, documentation, designs and artwork (together, the "Software"), is
-the property of Claudette Raynor (the "Owner"). It is made available to view
-and to use under the terms below. It is NOT open source.
+This license covers Chronicles as a whole (the "Software"): its source code,
+compiled or built forms and hosted versions, and equally its visual design,
+theme system and assets, as described in Section 2. All of it is the
+property of Claudette Raynor (the "Owner"). It is made available to view and
+to use under the terms below. It is NOT open source.
 
-1. Permitted use
+1. Personal copies are welcome
 
-   You may download, install and run a copy of the Software for your own
-   personal, non-commercial use. You may also change your own copy and run
-   the changed version on your own devices for that same personal use.
-   Personal use means use by you, for yourself; it does not include running
-   the Software (changed or not) for other people. A changed version stays
-   yours alone: it may not be shared or distributed (Section 2), and the
-   only way to get a change to anyone else is a pull request to the Owner's
-   repository (Section 4).
+   You are welcome to download, install and run your own copy of the
+   Software for your own personal, non-commercial use, and to change your
+   copy however you like and run the changed version on your own devices
+   for that same personal use. Personal use means use by you, for yourself.
+   It does not include running the Software, changed or not, for other
+   people. Your copy, and any changes you make to it, stay yours alone
+   (Section 4). The only way to get a change to anyone else is a pull
+   request to the Owner's repository (Section 6).
 
-2. Restrictions
+2. What this license covers
 
-   You may not, in whole or in part:
+   Everything in the Software is covered, not only the code:
 
-   a. use the Software for any commercial purpose, including offering it,
-      or any service built on it, to others for a fee, for advertising
-      revenue, or as part of a business;
-   b. modify, adapt, translate or create derivative works of the Software,
-      except for your own personal use as allowed in Section 1 or to prepare
-      a contribution as allowed in Section 4;
-   c. copy, publish, distribute, sublicense, sell, rent, lease or lend the
-      Software, or make it available to others (including as a hosted
-      service), except that you may link to the Owner's own repository or
-      website, and may fork the repository on GitHub as allowed in
-      Section 4;
-   d. remove or alter any copyright, license or attribution notice; or
-   e. use the Software, its source code or its designs to train or build a
-      competing product.
+   a. the source code and every compiled, built or hosted form of it;
+   b. the visual design: the layouts, screens, components, page structure
+      and overall look and feel of the app, its landing page and its other
+      pages;
+   c. the theme system: the design tokens, colour palettes and accent
+      presets, typography choices and scales, spacing, corner, shadow and
+      motion rules, and the stylesheets and styled components that apply
+      them;
+   d. the assets: the Chronicles name and logo, icons and app icons,
+      illustrations, screenshots, the Owner's own photographs, the
+      headline artwork, and the written copy and documentation.
 
-   Viewing the source code does not grant any right to use it beyond
+   The rights in Sections 1 and 6 apply to all of it. The restrictions in
+   Sections 3 and 4 apply to all of it, whether it is copied directly or
+   closely recreated.
+
+3. No commercial use of any kind
+
+   You may not use the Software, or any part of it, for any commercial
+   purpose. This includes, without limitation:
+
+   a. selling it, or charging for access to it, for a copy of it, or for
+      any service, feature or support built on it;
+   b. distributing it through any app store or marketplace, paid or free,
+      including the Apple App Store, Google Play, the Microsoft Store,
+      browser extension stores and package or container registries;
+   c. offering it, or anything built on it, as a hosted service,
+      subscription or software-as-a-service;
+   d. using it to earn advertising, sponsorship, affiliate or data revenue;
+   e. using it within or on behalf of a business, organisation or client,
+      including rebranding or white-labelling it; and
+   f. using its code, visual design, theme system or assets in, or to
+      build, design or train, any other product, commercial or not.
+
+4. No distribution
+
+   You may not copy, publish, distribute, sublicense, sell, rent, lease,
+   lend, share, give away, upload, mirror, re-host or bundle the Software or
+   any part of it (original or changed, source or built, whole or in part),
+   or otherwise make it available to anyone else, for free or for payment,
+   publicly or privately, including to friends, family, classmates or a
+   private group. This applies whether or not any money is involved: personal
+   or non-commercial use does NOT allow distribution. Each person who wants
+   the Software must get it from the Owner's own repository or website. You
+   may link to them, and you may fork the repository on GitHub only to
+   prepare a pull request (Section 6). Permission to use the Software
+   personally is a right for you alone and cannot be passed on.
+
+   You also may not remove or alter any copyright, license or attribution
+   notice. Viewing the source code does not grant any right to use it beyond
    Section 1.
 
-   No distribution of any kind. The ban in 2(c) is separate from, and not
-   limited by, the ban on commercial use in 2(a). "Non-commercial" or
-   "personal" use does NOT allow distribution. You may not share, give
-   away, upload, mirror, re-host, bundle or pass on the Software or any
-   copy of it (original or changed, source or built, whole or in part) to
-   anyone else, for free or for payment, publicly or privately, including
-   to friends, family, classmates or a private group. Each person who wants
-   the Software must get it from the Owner's own repository or website.
-   Permission to use the Software personally is a right for you alone and
-   cannot be passed on.
-
-3. Third-party components
+5. Third-party components
 
    The Software includes or depends on third-party components that are
    licensed by their own authors under their own terms (for example the
-   Work Sans and Open Sans fonts in client/src/assets/fonts, under the SIL
-   Open Font License, and the open-source packages listed in the
+   Work Sans and Open Sans fonts and the Material Symbols icons in
+   client/src/assets/fonts, the background photographs from Unsplash under
+   the Unsplash License, and the open-source packages listed in the
    package.json files). This license does not change those terms, and
    nothing here restricts your rights to those components under their own
-   licenses.
+   licenses. It does cover the Owner's own design and arrangement of them.
 
-4. Contributions: pull requests and issues
+6. Contributions: pull requests and issues
 
    a. Pull requests. You may fork the repository on GitHub to prepare a
       pull request to the Owner's repository, and you may keep using your
       changes on your own devices for your own personal use (Section 1).
       You may not publish or distribute a changed version, or use it for
       anyone but yourself: changes reach other people only through a pull
-      request that the Owner merges into the Owner's repository. The Owner may
-      accept, change, decline or close any pull request without giving a
-      reason.
+      request that the Owner merges into the Owner's repository. The Owner
+      may accept, change, decline or close any pull request without giving
+      a reason.
 
    b. Issues. You may report bugs and suggest features through the
-      repository's issue tracker, or through the "Report a bug" form in the
-      Software. Issues are public: do not include passwords, recovery keys,
-      health information or other personal data. Report security problems
-      privately to support@mydailychronicles.com, not in an issue.
+      repository's issue tracker, or through the "Feedback/Report a Bug"
+      form in the Software. Issues are public: do not include passwords,
+      recovery keys, health information or other personal data. Report
+      security problems privately to support@mydailychronicles.com, not in
+      an issue.
 
    c. Rights in contributions. By submitting a pull request, issue,
       suggestion or other contribution, you confirm that it is your own work
@@ -89,18 +115,18 @@ and to use under the terms below. It is NOT open source.
    Contributing does not give you any further right to use the Software:
    use stays limited to Section 1.
 
-5. Ownership and feedback
+7. Ownership and feedback
 
    The Owner keeps all rights not expressly granted here. If you send
    suggestions or other feedback, the Owner may use them without obligation
    or payment to you.
 
-6. Termination
+8. Termination
 
    This license ends automatically if you break any of its terms. When it
    ends you must stop using the Software and delete all copies you have.
 
-7. No warranty and limitation of liability
+9. No warranty and limitation of liability
 
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

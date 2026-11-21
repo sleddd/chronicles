@@ -28,7 +28,7 @@ const Box = styled.div<{ $inside?: boolean }>`
   background: ${({ $inside }) => ($inside ? 'transparent' : 'var(--bg-control, transparent)')};
 `;
 
-const Bar = styled.button`
+const Bar = styled.button<{ $foot?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -37,6 +37,8 @@ const Bar = styled.button`
   min-height: 52px;
   /* Room over and under the words */
   padding: 16px var(--cell-x, 22px);
+  /* The last row of a card (the wellness check-in's foot), folded: more room under it before the card's edge */
+  ${({ $foot }) => ($foot ? 'padding-bottom: 28px;' : '')}
   border: none;
   border-radius: 10px;
   background: none;
@@ -61,7 +63,7 @@ const Bar = styled.button`
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
-/* Two columns of labelled rows, hairlines between; one column when narrow */
+/* Two columns of labelled rows, hairlines between; one column under 1200px of room */
 const Body = styled.div`
   container-type: inline-size;
   padding: 0 var(--cell-x, 22px) 4px;
@@ -73,7 +75,9 @@ const Grid = styled.div`
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 72px;
   & > div:nth-last-child(-n + 2) { border-bottom: none; }
-  @container (max-width: 760px) {
+  /* Each row is a 166px name beside a joined group of up to ~400px, so two columns (and their
+     gap) need about 1200px — anything narrower (the 2/3 card, a phone) takes one column */
+  @container (max-width: 1200px) {
     grid-template-columns: minmax(0, 1fr);
     & > div:nth-last-child(2) { border-bottom: 1px solid var(--border-subtle); }
   }
@@ -179,7 +183,7 @@ export function DayInventory({ values, onChange, inside = false }: DayInventoryP
 
   return (
     <Box role="region" aria-label="Your day" $inside={inside}>
-      <Bar type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(o => !o)}>
+      <Bar type="button" $foot={inside && !open} aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(o => !o)}>
         <span><span className="title">Your day</span><span className="count"> · {answered} of 8</span></span>
         <span className="hint">{open ? 'Hide' : answered === 8 ? 'All answered' : 'Tap to answer'}</span>
       </Bar>

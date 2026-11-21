@@ -97,14 +97,16 @@ const FEATURES: Feature[] = [
       { label: 'Tasks', text: 'Work as a list or a Kanban board, filtered by goal or category.' },
       { label: 'Planner', text: 'Drag tasks into your week and see them on your calendar beside events and bills.' },
     ],
-    shot: ['planning-planner', 'planning-goals-list', 'planning-tasks-list', 'planning-tasks', 'planning-roadmap', 'planning-vision'], size: [1268, 900],
+    // In the order of Planning's tabs: Vision, Goals, Milestones, Roadmap, Tasks (list, then board), Planner
+    shot: ['planning-vision', 'planning-goals-list', 'planning-milestones-list', 'planning-roadmap', 'planning-tasks-list', 'planning-tasks', 'planning-planner'], size: [1268, 900],
     alt: [
-      'The week planner with tasks and events in each day, and the unscheduled tasks beside it',
+      'Your vision, then a card per area of life with its goals, how far along each is and this week’s tasks',
       'Goals as a list by area of life, with progress rings, start dates, deadlines and task counts',
+      'Milestones under their goals, with progress, start dates, deadlines and task counts',
+      'The roadmap: goals and their milestones as bars across the months, grouped by category',
       'Tasks as a list under their goals, with priority, the day planned, the deadline and how late',
-      'The tasks board by status with priorities, deadlines and the milestone each rolls up to',
-      'The roadmap: goals and their milestones as bars across the year, grouped by category',
-      'Your vision and the goals in each area of life',
+      'The tasks board by status with priorities, deadlines and estimates',
+      'The week planner: tasks at their times around the week’s events and meetings',
     ],
   },
   {
@@ -764,7 +766,8 @@ export function LandingView() {
           </Container>
         </Band>
 
-        <Band $tone="white" aria-labelledby="more-title">
+        {/* The other tone from the last feature row's (they alternate white / page grey), so they never run together */}
+        <Band $tone={FEATURES.length % 2 ? 'page' : 'white'} aria-labelledby="more-title">
           <Container>
             <div data-reveal>
               <H2 id="more-title">Everything your days touch.</H2>
