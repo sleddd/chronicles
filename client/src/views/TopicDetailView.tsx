@@ -28,6 +28,7 @@ import { tagsInUse, tagsOf, sameTag } from '../utils/entryTags.js';
 import { topicKind } from '../utils/topicKind.js';
 import { groupTopicRows, sortTopicRows, type TopicGroup, type TopicSort } from '../utils/topicList.js';
 import { shortDay } from '../utils/planTable.js';
+import { eventCells } from '../utils/eventRow.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import type { UserFieldDef } from '../types/userFields.js';
 import type { DecryptedPost } from '@shared/crypto/types';
@@ -46,7 +47,7 @@ const Page = styled.div`
 
 const Inner = styled.div`
   width: 100%;
-  max-width: 1150px;
+  max-width: 1300px; /* a little wider than the other pages' 1150px */
   margin: 0 auto;
   padding: 0 24px 64px;
   @media (max-width: 768px) { padding: 0 16px 48px; }
@@ -225,6 +226,8 @@ export function TopicDetailView() {
 
   // Custom tags are a text topic's (the journal, a plain topic, one with only the person's own fields)
   const tagged = !topicKind(topic?.name);
+  // Events and meetings: when they start and end, and where, in place of Lines and Date
+  const eventLike = ['event', 'meeting'].includes(topicKind(topic?.name) ?? '');
 
   // Each entry as a row: its title and next line (the topic's first field and the rest when it has
   // fields, else its first line and the next — code in a code face), its tags, lines and date
@@ -241,6 +244,7 @@ export function TopicDetailView() {
       lines: outline.lines,
       tags: tagged ? tagsOf(cf) : [],
       bookmarked: !!cf?._isFavorite,
+      event: eventCells(cf, toDateStr(new Date())),
       created: e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt),
     };
   }), [topicEntries, rowText, tagged]);
@@ -407,7 +411,7 @@ export function TopicDetailView() {
             {shown.length === 0 ? (
               <EmptyState message="Nothing matches that search." />
             ) : (
-              <PlanTable label={topic.name} columns={tagged ? COLUMNS : COLUMNS.filter(c => c.label !== 'Tags')}>
+              <PlanTable label={topic.name} columns={eventLike ? EVENT_COLUMNS : tagged ? COLUMNS : COLUMNS.filter(c => c.label !== 'Tags')}>
                 {groups.map(g => {
                   const body = g.rows.map(r => (
                     <SwipeActions key={`${g.key}:${r.id}`} accentColor={accentColor} onDelete={() => handleDeleteEntry(r.id)}>
@@ -415,12 +419,16 @@ export function TopicDetailView() {
                         lead={r.bookmarked ? <Mark title="Bookmarked"><MaterialIcon $size={18} aria-label="Bookmarked">bookmark</MaterialIcon></Mark> : undefined}
                         title={r.title} titleCode={r.titleCode} note={r.note || undefined} noteCode={r.noteCode}
                         onOpen={() => openInJournal(r.id)}
-                        cells={[
+                        cells={eventLike ? [
+                          r.event.starts || <PlanMuted key="s">Not set</PlanMuted>,
+                          r.event.ends || <PlanMuted key="e">—</PlanMuted>,
+                          r.event.venue || <PlanMuted key="v">—</PlanMuted>,
+                        ] : [
                           ...(tagged ? [r.tags.length ? tagText(r.tags) : <PlanMuted key="t">None</PlanMuted>] : []),
                           String(r.lines),
                           shortDay(toDateStr(r.created), today),
                         ]}
-                        endCells={tagged ? [true, true, true] : [true, true]}
+                        endCells={eventLike ? [false, false, false] : tagged ? [true, true, true] : [true, true]}
                       />
                     </SwipeActions>
                   ));
@@ -450,6 +458,10 @@ const PAGE = 100;
 
 const COLUMNS: PlanColumn[] = [
   { label: 'Entry', width: '' }, { label: 'Tags', width: '180px', end: true }, { label: 'Lines', width: '72px', end: true }, { label: 'Date', width: '90px', end: true },
+];
+/* Events and meetings: when they start and end, and the venue */
+const EVENT_COLUMNS: PlanColumn[] = [
+  { label: 'Entry', width: '' }, { label: 'Starts', width: '170px' }, { label: 'Ends', width: '170px' }, { label: 'Venue', width: '200px' },
 ];
 const GROUPS: { value: TopicGroup; label: string }[] = [{ value: 'month', label: 'Month' }, { value: 'tag', label: 'Tag' }, { value: 'none', label: 'None' }];
 const SORTS: { value: TopicSort; label: string }[] = [

@@ -67,9 +67,13 @@ const ListFoot = styled(LoadMore)`
 
 const EmptyState = styled.div`
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: var(--s-7, 32px);
+  /* Fills the pane on the list's own colour, as the rows do — on a wallpaper the pane
+     itself is see-through, so an empty day showed the page through it */
+  flex: 1 0 auto;
+  html[data-wallpaper] & { background: var(--list-bg, var(--bg-app)); }
   color: var(--text-secondary);
   font-size: var(--text-sm, 15px);
 `;

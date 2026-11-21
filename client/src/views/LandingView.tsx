@@ -29,7 +29,7 @@ function slidesFor(f: Feature): Slide[] {
   return keys.flatMap((k, i) => {
     const alt = alts[i] ?? alts[0];
     const dark = shotUrl(`${k}-dark`);
-    return [{ src: dark ?? shotUrl(k), alt: dark ? `${alt} (dark mode)` : alt, size: f.size }].filter(sl => !!sl.src) as Slide[];
+    return [{ src: dark ?? shotUrl(k), alt: dark ? `${alt} (dark mode)` : alt, size: f.sizes?.[i] ?? f.size }].filter(sl => !!sl.src) as Slide[];
   });
 }
 
@@ -47,6 +47,8 @@ interface Feature {
   /** One screenshot key, or several for a slideshow */
   shot: string | string[];
   size: [number, number];
+  /** A size per shot, where a slideshow's screenshots differ (else `size` for all) */
+  sizes?: [number, number][];
   alt: string | string[];
 }
 
@@ -60,8 +62,14 @@ const FEATURES: Feature[] = [
       { label: 'Search', text: 'Find any entry by word, topic or date.' },
       { label: 'Write', text: 'Write for any topic in any form you like - dictation, pen, or just type in your entry.' },
     ],
-    shot: 'journal', size: [1268, 1000],
-    alt: 'The journal with everyday entries by month and a Sunday entry open',
+    shot: ['journal', 'topics-list', 'topic-research', 'topic-event'], size: [1268, 1000],
+    sizes: [[1268, 1000], [1268, 730], [1268, 730], [1268, 730]],
+    alt: [
+      'The journal with everyday entries by month and a Sunday entry open',
+      'Your topics, each with its icon and how many entries it holds',
+      'A topic’s entries as a table you can group, sort, search and filter by tag',
+      'Events with when each starts and ends, and where',
+    ],
   },
   {
     label: 'Media journal', title: 'One shelf for everything you read, watch and hear.',
@@ -89,11 +97,14 @@ const FEATURES: Feature[] = [
       { label: 'Tasks', text: 'Work as a list or a Kanban board, filtered by goal or category.' },
       { label: 'Planner', text: 'Drag tasks into your week and see them on your calendar beside events and bills.' },
     ],
-    shot: ['planning-planner', 'planning-tasks', 'planning-roadmap', 'planning-vision'], size: [1268, 900],
+    shot: ['planning-planner', 'planning-goals-list', 'planning-tasks-list', 'planning-tasks', 'planning-roadmap', 'planning-vision'], size: [1268, 900],
     alt: [
+      'The week planner with tasks and events in each day, and the unscheduled tasks beside it',
+      'Goals as a list by area of life, with progress rings, start dates, deadlines and task counts',
+      'Tasks as a list under their goals, with priority, the day planned, the deadline and how late',
       'The tasks board by status with priorities, deadlines and the milestone each rolls up to',
       'The roadmap: goals and their milestones as bars across the year, grouped by category',
-      'The week planner with tasks and events in each day, and the unscheduled tasks beside it',
+      'Your vision and the goals in each area of life',
     ],
   },
   {
@@ -129,6 +140,23 @@ const FEATURES: Feature[] = [
       'The budget with planned, bills, spending and what’s left, and where the money goes by category',
       'Bills and subscriptions with what’s due, paid and overdue this month',
       'Savings funds with each balance and its progress toward a target',
+    ],
+  },
+  {
+    label: 'Kitchen', title: 'Plan the week.\nShop once.',
+    body: 'Plan your meals, keep your recipes, and turn the menu into a shopping list.',
+    points: [],
+    facts: [
+      { label: 'Menu', text: 'See today’s meals at a glance and plan the whole week ahead.' },
+      { label: 'Recipes', text: 'Keep recipes with prep and cook times, servings and difficulty.' },
+      { label: 'Shopping', text: 'Make a list from the week’s menu and tick items off as you shop.' },
+    ],
+    shot: ['kitchen-dashboard', 'kitchen-recipes', 'kitchen-recipe-view', 'kitchen-shopping-lists'], size: [1268, 730],
+    alt: [
+      'The kitchen dashboard with today’s meals and the shopping list to tick off',
+      'Recipes as a table with prep and cook times, servings and difficulty',
+      'A recipe with its photo, servings to scale, ingredients to tick off and numbered steps',
+      'Shopping lists with how many items each holds',
     ],
   },
   {
@@ -247,10 +275,10 @@ const Band = styled.section<{ $tone: 'page' | 'white'; $flush?: boolean }>`
 const Hero = styled.div`
   max-width: 1180px;
   margin: 0 auto;
-  padding: 72px 24px 36px; /* 72px under before (with the buttons) */
+  padding: 104px 24px 64px; /* room above the headline, and under the intro before the screenshots */
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 18px rgba(0, 0, 0, 0.55);
-  @media (max-width: 768px) { padding: 40px 32px 28px; }
+  @media (max-width: 768px) { padding: 60px 32px 44px; }
 `;
 
 const H1 = styled.h1`
