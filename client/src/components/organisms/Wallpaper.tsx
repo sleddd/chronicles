@@ -13,21 +13,20 @@ import { useEntriesStore } from '../../stores/entriesStore.js';
    over its background. While it shows, <html data-wallpaper> turns the
    cards and controls over it to glass (styles/wallpaper.ts). */
 
-const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $solid?: number; $shade: number; $wash: boolean }>`
+const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $solid?: number; $shade: number; $footFade?: boolean }>`
   position: absolute;
   inset: 0 0 auto 0;
   height: ${({ $height }) => $height};
   z-index: -1;
   pointer-events: none;
   opacity: ${({ $shown }) => ($shown ? 1 : 0)};
-  /* The photo itself (its own layer, so dimming it never greys the wash over it) */
+  /* The photo itself, on its own layer under the shade */
   &::before {
     content: '';
     position: absolute;
     inset: 0;
     background: url(${({ $src }) => $src}) center 65% / cover no-repeat;
   }
-  /* Light theme: the photo itself is never dimmed or darkened */
   transition: opacity 0.4s ease;
   /* A long, eased fade (no visible edge): solid at the top, thinning out
      gradually from a quarter of the way down */
@@ -35,13 +34,30 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
     rgba(0, 0, 0, 0.48) 58%, rgba(0, 0, 0, 0.28) 70%, rgba(0, 0, 0, 0.12) 82%, rgba(0, 0, 0, 0.03) 92%, transparent 100%);
   -webkit-mask-image: var(--fade);
   mask-image: var(--fade);
-  /* Light: the photo is NOT faded down its length. It stays at full strength for the top
-     four-fifths of its box and only blends into the page over the last fifth, so it has
-     no hard bottom edge */
-  html[data-theme='light'] & {
-    --fade: linear-gradient(to bottom, #000 0%, #000 80%, rgba(0, 0, 0, 0.82) 86%, rgba(0, 0, 0, 0.55) 91%,
-      rgba(0, 0, 0, 0.25) 96%, transparent 100%);
-  }
+  /* Light theme fades differ by page (the photo itself never moves):
+     - content pages: full strength behind the title row (LIGHT_TITLE_ROW, so the white title reads),
+       then a quick fade that has all but gone by the tabs, and is gone by 62% — so the tabs and
+       what's under them (the Planner's days, a list's first rows) sit on the page, not on the photo
+     - the journal ($footFade): full strength for its top four-fifths, blending out over the last fifth
+     - the dashboard ($solid, below): solid down to the Quick entry, then its usual fade */
+  ${({ $solid, $footFade }) => ($solid !== undefined ? '' : $footFade ? `
+    html[data-theme='light'] & {
+      --fade: linear-gradient(to bottom, #000 0%, #000 80%, rgba(0, 0, 0, 0.82) 86%, rgba(0, 0, 0, 0.55) 91%,
+        rgba(0, 0, 0, 0.25) 96%, transparent 100%);
+    }
+  ` : `
+    html[data-theme='light'] & {
+      /* Eased (no visible line where it starts): it begins a little above the title row's foot and
+         thins out gradually through the tabs */
+      --fade: linear-gradient(to bottom, #000 0, #000 ${LIGHT_TITLE_ROW - 40}px, rgba(0, 0, 0, 0.95) ${LIGHT_TITLE_ROW - 24}px,
+        rgba(0, 0, 0, 0.86) ${LIGHT_TITLE_ROW - 8}px, rgba(0, 0, 0, 0.72) ${LIGHT_TITLE_ROW + 10}px,
+        rgba(0, 0, 0, 0.55) ${LIGHT_TITLE_ROW + 30}px, rgba(0, 0, 0, 0.38) ${LIGHT_TITLE_ROW + 52}px,
+        rgba(0, 0, 0, 0.22) ${LIGHT_TITLE_ROW + 76}px, rgba(0, 0, 0, 0.1) ${LIGHT_TITLE_ROW + 102}px,
+        rgba(0, 0, 0, 0.03) ${LIGHT_TITLE_ROW + 130}px, transparent 62%);
+    }
+  `)}
+  /* The same dark shade in both themes, so the white title and buttons read on the photo in light
+     theme as they do in dark — no page-colour wash */
   /* A light shade at the top, so the white title reads on a bright photo */
   /* A bright photo ($shade, measured when it loads) gets as much more as its
      white text needs; a dark one keeps these */
@@ -49,16 +65,6 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
     content: '';
     position: absolute;
     inset: 0;
-    /* Light, content pages (not the dashboard, not the journal — they switch this off
-       below): the photo itself is not faded (its mask stays solid), but a soft wash of the
-       page colour lies over it from under the title, so dark content reads on it */
-    background: linear-gradient(to bottom, transparent 0, transparent 92px,
-      color-mix(in srgb, var(--bg-app) 32%, transparent) 160px, color-mix(in srgb, var(--bg-app) 58%, transparent) 217px,
-      color-mix(in srgb, var(--bg-app) 80%, transparent) 270px, color-mix(in srgb, var(--bg-app) 93%, transparent) 316px,
-      var(--bg-app) 356px, var(--bg-app) 100%);
-  }
-  /* Dark: deeper, so a bright photo still sits in the dark page */
-  html[data-theme='dark'] &::after {
     background: linear-gradient(to bottom, ${({ $shade }) => `rgba(0, 0, 0, ${Math.max(0.35, $shade + 0.01)}), rgba(0, 0, 0, ${Math.max(0.29, $shade - 0.01)}) 60%, rgba(0, 0, 0, ${Math.max(0.17, $shade * 0.6 - 0.01)})`});
   }
   /* Solid down to a point (the dashboard's Quick entry, written straight on the
@@ -68,38 +74,8 @@ const Layer = styled.div<{ $src: string; $shown: boolean; $height: string; $soli
     --fade: linear-gradient(to bottom, #000 0, #000 ${$solid}px, rgba(0, 0, 0, 0.88) ${$solid + FADE * 0.14}px,
       rgba(0, 0, 0, 0.62) ${$solid + FADE * 0.34}px, rgba(0, 0, 0, 0.32) ${$solid + FADE * 0.58}px,
       rgba(0, 0, 0, 0.1) ${$solid + FADE * 0.82}px, transparent ${$solid + FADE}px);
-    &::after, html[data-theme='dark'] &::after {
+    &::after {
       background: linear-gradient(to bottom, rgba(0, 0, 0, ${Math.max(0.35, $shade + 0.01)}), rgba(0, 0, 0, ${Math.max(0.29, $shade - 0.01)}) ${$solid}px, rgba(0, 0, 0, ${Math.max(0.15, $shade * 0.6 - 0.01)}));
-    }
-    /* Light: past the solid part a long, gentle fade, washing into the page colour
-       as it goes — never a sharp line */
-    html[data-theme='light'] & {
-      /* Light: a longer fade in the SAME box — the image keeps its size and position.
-         The fade starts LIGHT_FADE_UP px above the solid mark, reaching up into the image,
-         and thins out gradually to the same end point as before */
-      --fade: linear-gradient(to bottom, #000 0, #000 ${Math.max(0, $solid - LIGHT_FADE_UP)}px,
-        rgba(0, 0, 0, 0.9) ${Math.max(0, $solid - LIGHT_FADE_UP) + ($solid + FADE - Math.max(0, $solid - LIGHT_FADE_UP)) * 0.12}px,
-        rgba(0, 0, 0, 0.76) ${Math.max(0, $solid - LIGHT_FADE_UP) + ($solid + FADE - Math.max(0, $solid - LIGHT_FADE_UP)) * 0.25}px,
-        rgba(0, 0, 0, 0.6) ${Math.max(0, $solid - LIGHT_FADE_UP) + ($solid + FADE - Math.max(0, $solid - LIGHT_FADE_UP)) * 0.38}px,
-        rgba(0, 0, 0, 0.44) ${Math.max(0, $solid - LIGHT_FADE_UP) + ($solid + FADE - Math.max(0, $solid - LIGHT_FADE_UP)) * 0.52}px,
-        rgba(0, 0, 0, 0.29) ${Math.max(0, $solid - LIGHT_FADE_UP) + ($solid + FADE - Math.max(0, $solid - LIGHT_FADE_UP)) * 0.66}px,
-        rgba(0, 0, 0, 0.15) ${Math.max(0, $solid - LIGHT_FADE_UP) + ($solid + FADE - Math.max(0, $solid - LIGHT_FADE_UP)) * 0.8}px,
-        rgba(0, 0, 0, 0.05) ${Math.max(0, $solid - LIGHT_FADE_UP) + ($solid + FADE - Math.max(0, $solid - LIGHT_FADE_UP)) * 0.92}px,
-        transparent ${$solid + FADE}px);
-    }
-    html[data-theme='light'] &::after {
-      /* The main dashboard: no wash over the photo in light theme */
-      background: none;
-    }
-  `)}
-  /* A page that asks for no wash (the journal): nothing over the photo in light theme,
-     and the photo itself stays solid most of the way down — it only thins out over its
-     last quarter, so it never looks washed out behind the title row */
-  ${({ $wash }) => ($wash ? '' : `
-    html[data-theme='light'] &::after { background: none; }
-    html[data-theme='light'] & {
-      --fade: linear-gradient(to bottom, #000 0%, #000 74%, rgba(0, 0, 0, 0.8) 82%, rgba(0, 0, 0, 0.5) 89%,
-        rgba(0, 0, 0, 0.2) 95%, transparent 100%);
     }
   `)}
   /* The picture sits at center 65% in both themes (55% before — lifted a little) — there is no light-only position */
@@ -154,9 +130,9 @@ function measureShade(img: HTMLImageElement): number {
 
 /** How far the photo takes to fade out below its solid part (`solid`) */
 const FADE = 260;
-/** Light theme, the dashboard: how far above the solid mark the fade begins, so it runs
- *  longer and reaches up into the image (the image itself doesn't move or grow) */
-const LIGHT_FADE_UP = 200;
+/** Light theme, content pages: how far down the photo stays solid — to the foot of the title and its
+ *  controls; it has all but faded by the section tabs under them (dark text in light), ~50px lower */
+const LIGHT_TITLE_ROW = 80;
 /** The photo's height on an ordinary page */
 const STANDARD_HEIGHT = 'min(520px, 60vh)';
 
@@ -166,7 +142,8 @@ const STANDARD_HEIGHT = 'min(520px, 60vh)';
  *  own (a full-height overflow box), not the element the photo sits in, so the
  *  photo follows that panel's scroll (smaller scrolling boxes — tables, the
  *  menu grid — are ignored). The journal passes false: its title row stays put. */
-type LayerProps = { height?: string; follow?: boolean; solid?: number; wash?: boolean };
+/** `footFade`: light theme keeps the photo at full strength, fading only at its foot (the journal) */
+type LayerProps = { height?: string; follow?: boolean; solid?: number; footFade?: boolean };
 
 export function Wallpaper(props: LayerProps = {}) {
   const choice = useUIStore(s => shownWallpaper(s.wallpaper, s.themeMode));
@@ -192,7 +169,7 @@ function OwnWallpaper(props: LayerProps) {
   return <PhotoLayer {...props} paper={stock?.id ?? null} src={stock ? wallpaperSrc(stock.id) : ''} />;
 }
 
-function PhotoLayer({ height = STANDARD_HEIGHT, follow = true, solid, wash = true, paper, src }: LayerProps & { paper: string | null; src: string }) {
+function PhotoLayer({ height = STANDARD_HEIGHT, follow = true, solid, footFade, paper, src }: LayerProps & { paper: string | null; src: string }) {
   const [loaded, setLoaded] = useState<string | null>(null);
   const [shade, setShade] = useState(0);
   const layerRef = useRef<HTMLDivElement>(null);
@@ -234,5 +211,5 @@ function PhotoLayer({ height = STANDARD_HEIGHT, follow = true, solid, wash = tru
   }, [src]);
 
   if (!paper) return null;
-  return <Layer ref={layerRef} $src={src} $shown={loaded === src} $height={solid === undefined ? height : `${solid + FADE}px`} $solid={solid} $shade={shade} $wash={wash} aria-hidden="true" data-print-hide />;
+  return <Layer ref={layerRef} $src={src} $shown={loaded === src} $height={solid === undefined ? height : `${solid + FADE}px`} $solid={solid} $shade={shade} $footFade={footFade} aria-hidden="true" data-print-hide />;
 }

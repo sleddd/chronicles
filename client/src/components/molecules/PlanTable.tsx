@@ -148,6 +148,9 @@ export function PlanGroup({ title, aside, progress, open, onToggle, children }: 
 
 /* ── Rows ── */
 
+/** Code in a list row: the system's monospace face (no code font is bundled) */
+const CODE_FONT = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
+
 const Row = styled(RowGrid)<{ $child: boolean }>`
   min-height: 64px;
   padding: 10px 0;
@@ -167,7 +170,7 @@ const Lead = styled.div<{ $indent: number }>`
   @media (max-width: 768px) { flex-basis: 100%; padding-left: ${({ $indent }) => $indent * 28}px; }
 `;
 
-const TitleBtn = styled.button<{ $done: boolean }>`
+const TitleBtn = styled.button<{ $done: boolean; $oneLine?: boolean }>`
   min-width: 0;
   padding: 0;
   border: none;
@@ -183,6 +186,10 @@ const TitleBtn = styled.button<{ $done: boolean }>`
   &:hover { color: var(--color-accent-link); }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 2px; }
   small { margin-left: 12px; font-size: 14px; color: var(--text-muted); text-decoration: none; display: inline-block; }
+  /* A line of code (a code snippet's first line), in a monospace face */
+  .code { font-family: ${CODE_FONT}; font-size: 0.9em; }
+  /* One line, cut off with "…" (a text entry's title and its next line) */
+  ${({ $oneLine }) => ($oneLine ? 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; small { display: inline; }' : '')}
 `;
 
 const Cell = styled.div<{ $end?: boolean; $done?: boolean }>`
@@ -201,8 +208,13 @@ export interface PlanRowProps {
   /** What sits before the title: a tick, a chevron and progress mark, a milestone mark */
   lead?: ReactNode;
   title: string;
-  /** Muted after the title (its milestone, its category) */
+  /** Muted after the title (its milestone, its category, a text entry's next line) */
   note?: string;
+  /** The title / the note is a line of code: set in a monospace face */
+  titleCode?: boolean;
+  noteCode?: boolean;
+  /** Keep the title and note to one line, cut off with "…" */
+  oneLine?: boolean;
   done?: boolean;
   /** 0 = a top row, 1 = under a goal or milestone */
   indent?: number;
@@ -213,13 +225,14 @@ export interface PlanRowProps {
   endCells?: boolean[];
 }
 
-export function PlanRow({ lead, title, note, done = false, indent = 0, onOpen, cells, endCells = [] }: PlanRowProps) {
+export function PlanRow({ lead, title, note, titleCode, noteCode, oneLine, done = false, indent = 0, onOpen, cells, endCells = [] }: PlanRowProps) {
   return (
     <Row role="row" $child={indent > 0}>
       <Lead role="cell" $indent={indent}>
         {lead}
-        <TitleBtn type="button" $done={done} onClick={onOpen}>
-          {title}{note && <small>{note}</small>}
+        <TitleBtn type="button" $done={done} $oneLine={oneLine} onClick={onOpen} title={oneLine ? [title, note].filter(Boolean).join(' · ') : undefined}>
+          <span className={titleCode ? 'code' : undefined}>{title}</span>
+          {note && <small className={noteCode ? 'code' : undefined}>{note}</small>}
         </TitleBtn>
       </Lead>
       {cells.map((c, i) => <Cell key={i} role="cell" $end={endCells[i]} $done={done}>{c}</Cell>)}

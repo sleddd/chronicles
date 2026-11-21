@@ -318,7 +318,10 @@ const ViewBtn = styled.button<{ $active: boolean }>`
 /* A category's heading over its goals in the list view (MonthGroups' heading) */
 type PlanTab = 'goals' | 'milestones' | 'tasks' | 'todos';
 type PlanView = 'board' | 'list';
-const VIEW_KEY = 'planning-view-v1';
+/* List or Board per tab, per browser. v2 (2026-11-21): List became the default, and a choice made
+   while Board was the default isn't carried over — everyone starts on List again */
+const VIEW_KEY = 'planning-view-v2';
+try { localStorage.removeItem('planning-view-v1'); } catch { /* storage unavailable */ }
 
 function readViews(): Partial<Record<PlanTab, PlanView>> {
   try { return JSON.parse(localStorage.getItem(VIEW_KEY) || '{}') as Partial<Record<PlanTab, PlanView>>; }
@@ -736,9 +739,8 @@ export function GoalsView() {
     else setStatusFilter(knownStatus(v.status));
     setTypeFilter(v.taskType ?? '');
     setCategoryFilter(v.category ?? '');
-    const nextViews = { ...views, [v.tab]: v.view };
-    setViews(nextViews);
-    try { localStorage.setItem(VIEW_KEY, JSON.stringify(nextViews)); } catch { /* storage unavailable */ }
+    // List or Board stays the person's own choice for the tab: a saved view made while Board was the
+    // default would otherwise switch the list back to the board
   };
   const openSaved = (id: string) => {
     const v = savedViews.find(x => x.id === id);

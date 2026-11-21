@@ -28,7 +28,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { usePublicShelfStore } from '../stores/publicShelfStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { focusPosition } from '../components/organisms/EntryImageGallery.js';
-import { glassPill, onPhoto } from '../styles/wallpaper.js';
+import { glassPill, onPhoto, onPhotoInDark } from '../styles/wallpaper.js';
 import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { ON_PUBLIC_SHELF, isOnPublicShelf } from '../services/publicShelf.js';
 import { PUBLIC_SHELF_PAGE_SIZE } from '@shared/validation/schemas';
@@ -133,7 +133,7 @@ const Meta = styled.div`
   font-family: var(--font-sans);
   font-size: 15px;
   color: var(--text-muted);
-  ${onPhoto}
+  ${onPhotoInDark}
   /* The dots between the parts */
   & > * + *::before { content: '·'; margin-right: 14px; color: var(--text-faint, var(--text-muted)); }
 `;
@@ -147,9 +147,9 @@ const PublicLink = styled.a`
   color: var(--text-secondary);
   text-decoration: none;
   white-space: nowrap;
-  /* On the wallpaper it reads in white like the rest of the row, a touch see-through */
-  ${onPhoto}
-  html[data-wallpaper] & { opacity: 0.88; }
+  /* On the wallpaper in dark it reads in white like the rest of the row, a touch see-through */
+  ${onPhotoInDark}
+  html[data-wallpaper][data-theme='dark'] & { opacity: 0.88; }
   &:hover { color: var(--text-primary); text-decoration: underline; opacity: 1; }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
@@ -216,8 +216,8 @@ const NameBtn = styled.button`
   background: none;
   ${nameFace}
   color: var(--text-primary);
-  /* White on a wallpaper, like the title over it */
-  ${onPhoto}
+  /* White on a wallpaper in dark, like the title over it (light keeps its standard colour) */
+  ${onPhotoInDark}
   cursor: pointer;
   & > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* The pencil in the same colour as the name (it inherits, white on a wallpaper too) */
@@ -233,7 +233,7 @@ const NameInput = styled.input`
     ${nameFace}
     color: var(--text-primary);
     background: transparent !important;
-    html[data-wallpaper] & { color: #fff; }
+    html[data-wallpaper][data-theme='dark'] & { color: #fff; }
     border: none !important;
     border-bottom: 1px solid var(--color-accent-line) !important;
     border-radius: 0;
@@ -436,7 +436,7 @@ export function MediaView() {
                 )}
                 {topicId != null && (
                   <TopBarAction>
-                    <PillButton type="button" onClick={() => newEntry(topicId)}><Icon name="plus" size={14} strokeWidth={2.5} />Add media</PillButton>
+                    <PillButton type="button" $variant="solid" onClick={() => newEntry(topicId)}>Add media</PillButton>
                   </TopBarAction>
                 )}
               </Actions>

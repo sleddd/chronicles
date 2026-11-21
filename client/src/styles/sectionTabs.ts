@@ -25,8 +25,17 @@ export const SectionTabBar = styled.nav`
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
   }
-  /* Light: no dark fill — just the blur of the photo behind the tabs */
-  html[data-wallpaper][data-theme='light'] & { background: transparent; }
+  /* Light: the tabs as on a page with no photo — no strip, fill or blur, their hairline under them
+     (by the time they're reached the photo has faded toward the page; white tabs washed out there) */
+  html[data-wallpaper][data-theme='light'] & {
+    padding: 0;
+    border-radius: 0;
+    border-bottom-color: var(--border-subtle);
+    overflow: visible;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
   /* Dark: no blur, and the fill fades out toward its edges, leaving only a faint trace
      of the strip behind the tabs (the tabs themselves stay solid) */
   html[data-wallpaper][data-theme='dark'] & {
@@ -67,14 +76,17 @@ export const SectionTab = styled.button<{ $active?: boolean }>`
   }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 480px) { font-size: 14px; }
-  /* On a wallpaper: white text with a soft shadow so it reads on any photo,
+  /* On a wallpaper in dark: white text with a soft shadow so it reads on any photo,
      the chosen one in full white over its accent underline */
   html[data-wallpaper] & {
     color: ${({ $active }) => ($active ? '#fff' : 'rgba(255, 255, 255, 0.8)')};
     text-shadow: 0 1px 10px rgba(0, 0, 0, 0.45);
   }
-  /* Light: white like dark's, with a tight drop shadow (a shadow, not a glow) so they
-     hold on the photo */
-  html[data-wallpaper][data-theme='light'] & { text-shadow: 0 1px 1px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.35); }
-  html[data-wallpaper] &:hover:not([aria-selected="true"]) { color: #fff; border-bottom-color: rgba(255, 255, 255, 0.6); }
+  html[data-wallpaper][data-theme='dark'] &:hover:not([aria-selected="true"]) { color: #fff; border-bottom-color: rgba(255, 255, 255, 0.6); }
+  /* Light: the standard light theme colours, photo or not — muted, the chosen one in the soft accent */
+  html[data-wallpaper][data-theme='light'] & {
+    color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
+    text-shadow: none;
+  }
+  html[data-wallpaper][data-theme='light'] &:hover:not([aria-selected="true"]) { color: var(--text-secondary); border-bottom-color: var(--border-strong); }
 `;

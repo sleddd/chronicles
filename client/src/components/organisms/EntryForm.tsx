@@ -5,6 +5,9 @@ import { onPhoto, photoTokens, solidUnderPhoto } from '../../styles/wallpaper.js
 import { cardLabel } from '../../styles/cardLabel.js';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { SectionLabel, RowBox, LabelledRow, RowLabel, DateTimeBox } from '../molecules/fields/formKit.js';
+import { EntryTagsField } from '../molecules/fields/EntryTagsField.js';
+import { tagsInUse, tagsOf } from '../../utils/entryTags.js';
+import { topicKind } from '../../utils/topicKind.js';
 import { TitleField } from '../molecules/fields/TitleInput.js';
 import { NAME_FIELD_BY_TYPE, NAME_MAX, NAME_PLACEHOLDER_BY_TYPE, contentWithName, nameFromContent } from '../../utils/nameFields.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
@@ -40,7 +43,7 @@ import { useCreateEntry } from '../../hooks/useCreateEntry.js';
 import { aiMediaDetails } from '../../services/mediaDetails.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { useTimeTracking } from '../../hooks/useTimeTracking.js';
-import { TIME_TRACKED_TYPES, isTimeTrackingTopic, timerFill } from '../../utils/timeTracking.js';
+import { TIME_TRACKED_TYPES, timerFill } from '../../utils/timeTracking.js';
 import { ExerciseFields, type ExerciseFieldValues } from '../molecules/fields/ExerciseFields.js';
 import { RoutineFields } from '../molecules/fields/RoutineFields.js';
 import { TrainingPlanFields } from '../molecules/fields/TrainingPlanFields.js';
@@ -495,7 +498,7 @@ const LABEL_COL = '200px';
     (a topic that is only text — Journal — has no fields, and its writing keeps the full width) */
 const FIELD_MAX = '600px';
 const FIELD_COL = `minmax(0, ${FIELD_MAX})`;
-/** The topic picker row (and its rule) as wide as the rows under it: label, gap, field and the card's sides */
+/** A card with fields (journal) as wide as its rows: label, gap, field and the card's sides — its head, rules and foot with it (a text-only topic keeps the full width) */
 const FIELDS_ROW_MAX = `calc(${LABEL_COL} + 24px + ${FIELD_MAX} + 2 * ${CARD_X})`;
 /** The same for the task card: its 140px names and 26px sides (TaskRow, TaskBody) */
 const TASK_ROW_MAX = `calc(140px + 24px + ${FIELD_MAX} + 2 * 26px)`;
@@ -524,6 +527,20 @@ const PlainText = styled.div`
   @container entrycard (max-width: 600px) { padding: 14px 20px 4px; }
   &&&& ${EditorArea} { --editor-surface: transparent; margin: 0; padding: 0; border: none; border-radius: 0; }
   && .tiptap:focus, && .tiptap:focus-visible, && [contenteditable]:focus, && [contenteditable]:focus-visible { outline: none; box-shadow: none; }
+`;
+
+/* A text-only entry's tags: their own line well under the writing, ruled off from it by a hairline
+   that runs between the card's side margins */
+const TagsLine = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 80px ${CARD_X} 0;
+  padding: 20px 0 20px;
+  border-top: 1px solid var(--border-subtle);
+  & > :first-child { ${cardLabel} }
+  @container entrycard (max-width: 600px) { margin: 56px 20px 0; padding: 16px 0; }
 `;
 
 const cardRows = css`
@@ -631,6 +648,9 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   ` : '')}
   ${({ $quick }) => ($quick ? css`
     margin-top: 24px;
+    /* Its contents a little further in from the left edge than the journal's */
+    padding-left: 10px;
+    @media (max-width: 600px) { padding-left: 6px; }
     /* Not clipped: the topic menu in its first line drops out past the card's foot,
        over what follows it (the foot band rounds its own corners instead) */
     overflow: visible;
@@ -827,8 +847,8 @@ const QuickFoot = styled(CardFoot)`
   background: transparent;
   border-top: 1px solid var(--border-subtle);
   margin-top: 14px;
-  /* Save entry: an accent outline with accent text (never filled) once there's
-     something to save; a quiet grey outline until then */
+  /* Save entry: an accent outline with accent text once there's something to save (a quiet grey
+     outline until then), filling in as a solid accent pill with dark text on hover and while pressed */
   && ${SaveButton}, html[data-theme='light'] && ${SaveButton} {
     display: inline-flex;
     align-items: center;
@@ -849,9 +869,10 @@ const QuickFoot = styled(CardFoot)`
     text-shadow: none;
     transition: background 150ms, border-color 150ms;
   }
-  && ${SaveButton}:hover:not(:disabled), html[data-theme='light'] && ${SaveButton}:hover:not(:disabled) {
-    border-color: var(--color-accent-line);
-    background: var(--color-accent-subtle);
+  && ${SaveButton}:is(:hover, :active):not(:disabled), html[data-theme='light'] && ${SaveButton}:is(:hover, :active):not(:disabled) {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: #15181d;
   }
   && ${SaveButton}:disabled, html[data-theme='light'] && ${SaveButton}:disabled {
     border-color: var(--border-card);
@@ -1123,30 +1144,11 @@ export function quickTopicPhrase(name: string): string {
 
 /* ── Helpers ── */
 
-const TOPIC_TO_TYPE: Record<string, string> = {
-  task: 'task', goal: 'goal', milestone: 'milestone',
-  meals: 'food', medication: 'medication', symptom: 'symptom',
-  exercise: 'exercise', event: 'event', events: 'event', meeting: 'meeting',
-  allergy: 'allergy', 'shopping list': 'shopping_list',
-  recipe: 'recipe', recipes: 'recipe',
-  priorities: 'priorities', wins: 'wins', wellness: 'wellness', 'menu plan': 'menu_plan',
-  changes: 'change', change: 'change',
-  routine: 'routine', routines: 'routine', 'exercise schedule': 'routine', 'exercise routine': 'routine',
-  'training plan': 'training_plan', 'training plans': 'training_plan',
-  'time tracking': 'time_tracking',
-  media: 'media', 'media journal': 'media', 'media library': 'media',
-  habit: 'habit', habits: 'habit',
-};
 
 /** Topics whose entry name is a field rather than the text (see nameKey below) */
 
-function getCustomType(topicName: string | undefined): string | null {
-  if (!topicName) return null;
-  const name = topicName.trim().toLowerCase();
-  // Time tracking under any of its usual names ("Time tracker", "Timesheet", "Time log"…)
-  if (isTimeTrackingTopic(name)) return 'time_tracking';
-  return TOPIC_TO_TYPE[name] || null;
-}
+/** Which built-in kind a topic holds (utils/topicKind) */
+const getCustomType = topicKind;
 
 
 /* ── Component ── */
@@ -1345,6 +1347,23 @@ export function EntryForm({
 
   const selectedTopic = topics.find(t => t.id === topicId);
   const customType = getCustomType(selectedTopic?.name);
+  // Custom tags: text entries only (the journal, a plain topic, a topic with the person's own
+  // fields) — never a task, goal or other built-in kind. Offered from every text entry's tags
+  const tagsOn = !customType;
+  const entryTags = tagsOf(customFields);
+  const tagSuggestions = useMemo(() => {
+    if (!tagsOn) return [];
+    const typeOf = new Map(topics.map(t => [t.id, getCustomType(t.name)]));
+    return tagsInUse(entries
+      .filter(e => !typeOf.get((e.metadata as Record<string, unknown> | undefined)?._taxonomyId as number))
+      .map(e => (e.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown> | undefined));
+  }, [tagsOn, entries, topics]);
+  const setEntryTags = (tags: string[]) => {
+    const next = { ...customFields };
+    if (tags.length) next.tags = tags; else delete next.tags;
+    onCustomFieldsChange(next);
+  };
+  const tagsField = <EntryTagsField value={entryTags} suggestions={tagSuggestions} onChange={setEntryTags} />;
   // Every tag on the media shelf, for a media entry's Tags chips
   const mediaTagOptions = useMemo(() => {
     if (customType !== 'media') return [];
@@ -1731,7 +1750,10 @@ export function EntryForm({
         <EditorArea $hidden $quick={quick}>{editorEl}</EditorArea>
       ) : textOnly ? (
         // Only text: no label or box, the tools go to the foot
-        <PlainText><EditorArea $quick={quick} $roomy={quick} $journalTitle={!quick && isJournalTopic}>{editorEl}</EditorArea></PlainText>
+        <>
+          <PlainText><EditorArea $quick={quick} $roomy={quick} $journalTitle={!quick && isJournalTopic}>{editorEl}</EditorArea></PlainText>
+          {tagsOn && <TagsLine><span>Tags</span>{tagsField}</TagsLine>}
+        </>
       ) : (
         <TextRow>
           <div>{nameTarget ? 'Title' : 'Text'}</div>
@@ -1855,6 +1877,12 @@ export function EntryForm({
                   onChange={vals => onCustomFieldsChange({ ...customFields, _userFields: vals })}
                 />
               </FieldRowLayoutContext.Provider>
+              {tagsOn && (
+                <section>
+                  <div><SectionLabel>Tags</SectionLabel></div>
+                  {tagsField}
+                </section>
+              )}
             </CustomFieldsBody>
         </CustomFieldsSection>
       )}
@@ -2128,8 +2156,8 @@ export function EntryForm({
       <ScrollArea>
         <EdBody $full={!quick && !!expanded}>
           {isTaskCard ? (
-          <EntryCard $flat data-task-card="">
-            <TaskHead data-journal="" data-full={expanded ? '' : undefined} style={{ maxWidth: TASK_ROW_MAX }}>
+          <EntryCard $flat data-task-card="" style={{ maxWidth: TASK_ROW_MAX }}>
+            <TaskHead data-journal="" data-full={expanded ? '' : undefined}>
               <JournalPrompt>
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
                   label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
@@ -2165,10 +2193,8 @@ export function EntryForm({
             </QuickFoot>
           </EntryCard>
           ) : framed ? (
-          <EntryCard $flat data-framed="">
-            <TaskHead data-journal="" data-full={expanded ? '' : undefined}
-              // A topic with fields: the row no wider than the fields under it (a text-only topic keeps the full width)
-              style={{ paddingLeft: CARD_X, '--head-x': CARD_X, ...(textOnly ? {} : { maxWidth: FIELDS_ROW_MAX }) } as CSSProperties}>
+          <EntryCard $flat data-framed="" style={textOnly ? undefined : { maxWidth: FIELDS_ROW_MAX }}>
+            <TaskHead data-journal="" data-full={expanded ? '' : undefined} style={{ paddingLeft: CARD_X, '--head-x': CARD_X } as CSSProperties}>
               <JournalPrompt>
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
                   label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />

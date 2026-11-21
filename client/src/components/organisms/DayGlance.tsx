@@ -31,7 +31,7 @@ import { builtinEntryName } from '../../utils/stripHtml.js';
 import { billOccurrences, formatCents } from '../../utils/finance.js';
 import type { ScheduledDose } from '../../types/health.js';
 import { taskFieldsForStatus } from '../../types/goals.js';
-import { addDays, layoutDay, startPatch, lengthPatch, parsePlannerOrder, plannerFacts, tasksByDay, hoursLabel, clampHours, hhmm, type PlannerOrder } from '../../utils/planner.js';
+import { addDays, layoutDay, overlapColumns, startPatch, lengthPatch, parsePlannerOrder, plannerFacts, tasksByDay, hoursLabel, clampHours, hhmm, type PlannerOrder } from '../../utils/planner.js';
 
 /* Day at a glance (the home dashboard, under the add row): one panel for a day —
    its schedule (events, meetings and the Planner's tasks on one timeline, med
@@ -61,6 +61,8 @@ function readMorningOpen(): boolean {
 /** Tasks are laid out from 8 AM (or the day's first event, when earlier), as in the Planner */
 const TASK_START = 8 * 60;
 const px = (mins: number) => (mins / 60) * HOUR_PX;
+/** The shortest a card is drawn (about 20 minutes), so even a 5-minute one can be read and grabbed */
+const MIN_CARD = 30;
 const hourName = (h: number) => (h === 0 || h === 24 ? '12 AM' : h === 12 ? '12 PM' : h < 12 ? `${h} AM` : `${h - 12} PM`);
 const WEEK_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const LONG_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -958,13 +960,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   });
   /* Schedule cards: drag one to another time, or its foot to stretch / shorten it */
   const [drag, setDrag] = useState<{ key: string; start: number; end: number; mode: 'move' | 'end'; dy: number } | null>(null);
-  // Each card's natural height (its text and padding), measured after it draws, so the hours
-  // can grow until every card shows in full with nothing overlapping
-  const [needs, setNeeds] = useState<Record<string, number>>({});
-  const cardBodies = useRef(new Map<string, HTMLElement>());
-  // The schedule's scale as drawn (hours grow to fit their cards): kept fresh each render and frozen
-  // when a drag starts, so the pointer moves a card by the hours you see — never by a fixed 84px an
-  // hour — and the hours don't re-measure under it until it's let go
+  // The schedule's scale and the cards' places as drawn: kept fresh each render and frozen when a
+  // drag starts, so a card dropped on another takes that card's time
   type Scale = { yAt: (mins: number) => number; minutesAt: (y: number) => number; cards: { key: string; top: number; bottom: number; start: number }[] };
   const scaleRef = useRef<Scale | null>(null);
   const dragRef = useRef<{ b: Block; mode: 'move' | 'end'; y0: number; moved: boolean; start: number; end: number; scale: Scale | null } | null>(null);
@@ -981,8 +978,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     if (!d.moved && Math.abs(dy) < 4) return;
     d.moved = true;
     const len = d.b.end - d.b.start;
-    // Events by 15 minutes; a task's length by half hours (as in the Planner)
-    const step = d.mode === 'end' && d.b.kind === 'task' ? 30 : 15;
+    // Five minutes at a time, moved or stretched, as in the Planner
+    const step = 5;
     // Where the pointer now is on the schedule as drawn (the hours as tall as they show), as a time
     // Moved: the time where the card's top now is on the schedule as drawn; stretched: the time where
     // its end now is
@@ -1186,74 +1183,22 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const shownBlocks = blocks.filter(b => b.start < dayEnd && b.end > dayStart);
   const hours: number[] = [];
   for (let h = dayStart / 60; h <= dayEnd / 60; h++) hours.push(h);
-  /* Each card sits in the hour row it starts in. When an hour has room, a card is placed at its
-     time within it; when cards crowd an hour (seven at 3 PM, say) they stack one under another and
-     that row grows to hold them all — the next hour's line moves down below them. Every card is
-     at least as tall as its length (84px an hour) and as tall as its words need. */
+  /* One fixed scale, like the Planner's: an hour is 84px all day, so a card is exactly as tall as
+     its time (down to MIN_CARD) and empty time stays empty. What overlaps sits side by side and
+     shares the width (overlapColumns, shared with the Planner); a short card counts as long as
+     it's drawn, so two short ones a few minutes apart don't sit on top of each other. */
   const CARD_GAP = 24; // 12px above and below each card
-  const needOf = (k: string) => Math.max(30, needs[k] ?? 0) + CARD_GAP;
-  // The room a card takes in the row it starts in: its words, or its part of that hour (a 3–6 PM card
-  // takes 3–4 PM there, then runs on down to its end — see slot)
-  const cardH = (b: Block, h: number) =>
-    Math.ceil(Math.max(needOf(b.key), ((Math.min(b.end, (h + 1) * 60) - Math.max(b.start, h * 60)) / 60) * HOUR_PX));
-  const startHour = (b: Block) => Math.max(Math.floor(dayStart / 60), Math.floor(b.start / 60));
-  const byHour = new Map<number, Block[]>();
-  for (const b of [...shownBlocks].sort((a, c) => a.start - c.start || a.title.localeCompare(c.title))) {
-    const h = startHour(b);
-    byHour.set(h, [...(byHour.get(h) ?? []), b]);
-  }
-  // Within a row: each card at its minute (at the plain 84px an hour), or under the one above it
-  const rowPlaces = new Map<number, { key: string; off: number; height: number }[]>();
-  for (const [h, list] of byHour) {
-    let bottom = 0;
-    rowPlaces.set(h, list.map(b => {
-      const off = Math.max(bottom, ((Math.max(b.start, h * 60) - h * 60) / 60) * HOUR_PX);
-      const height = cardH(b, h);
-      bottom = off + height;
-      return { key: b.key, off, height };
-    }));
-  }
-  // A row is an hour tall, or as tall as the cards that start in it
-  const hourPx = (h: number) => {
-    const rows = rowPlaces.get(h) ?? [];
-    const used = rows.reduce((m, r) => Math.max(m, r.off + r.height), 0);
-    return Math.ceil(Math.max(HOUR_PX, used));
-  };
-  const hourTops: number[] = [];
-  {
-    let y = 0;
-    for (let h = Math.floor(dayStart / 60); h <= Math.ceil(dayEnd / 60); h++) { hourTops[h] = y; y += hourPx(h); }
-  }
-  const yAt = (mins: number) => {
-    const m = Math.max(dayStart, Math.min(dayEnd, mins));
-    const h = Math.min(Math.floor(m / 60), Math.ceil(dayEnd / 60));
-    return (hourTops[h] ?? 0) - (hourTops[Math.floor(dayStart / 60)] ?? 0) + ((m - h * 60) / 60) * hourPx(h);
-  };
-  // The other way: the time at a height on the schedule (for a task dropped there)
-  const minutesAt = (y: number) => {
-    const first = Math.floor(dayStart / 60);
-    const base = hourTops[first] ?? 0;
-    for (let h = first; h <= Math.ceil(dayEnd / 60); h++) {
-      const top = (hourTops[h] ?? 0) - base;
-      const px = hourPx(h);
-      if (y < top + px) return Math.max(dayStart, Math.min(dayEnd, h * 60 + (Math.max(0, y - top) / px) * 60));
-    }
-    return dayEnd;
-  };
-  // Each card's place: in the row of the hour it starts in (see rowPlaces), running on down to its end
-  // time so it covers its whole span (3–6 PM reaches the 6 PM line). Cards later in that span may sit
-  // over it — the later one on top — and it's up to the planner to sort out the clash
-  const endOf = new Map(shownBlocks.map(b => [b.key, b.end]));
-  // Drawn in time order, so a card starting later sits over a long one it overlaps
+  const yAt = (mins: number) => ((Math.max(dayStart, Math.min(dayEnd, mins)) - dayStart) / 60) * HOUR_PX;
+  // The other way: the time at a height on the schedule (for a card moved or a task dropped there)
+  const minutesAt = (y: number) => Math.max(dayStart, Math.min(dayEnd, dayStart + (y / HOUR_PX) * 60));
+  const minMins = ((MIN_CARD + CARD_GAP) / HOUR_PX) * 60;
+  const columns = overlapColumns(shownBlocks.map(b => ({ key: b.key, start: b.start, end: b.end })), minMins);
+  // Drawn in time order (what overlaps sits side by side, but a dragged card still rides over the rest)
   const layer = new Map([...shownBlocks].sort((a, c) => a.start - c.start || a.title.localeCompare(c.title)).map((b, i) => [b.key, 1 + i * 2]));
-  const slot = new Map<string, { top: number; height: number }>();
-  for (const [h, rows] of rowPlaces) {
-    const rowTop = (hourTops[h] ?? 0) - (hourTops[Math.floor(dayStart / 60)] ?? 0);
-    for (const r of rows) {
-      const top = rowTop + r.off;
-      const reach = yAt(endOf.get(r.key) ?? 0) - top;
-      slot.set(r.key, { top, height: Math.max(r.height, reach) });
-    }
+  const slot = new Map<string, { top: number; height: number; col: number; cols: number }>();
+  for (const b of shownBlocks) {
+    const top = yAt(b.start);
+    slot.set(b.key, { top, height: Math.max(MIN_CARD + CARD_GAP, yAt(b.end) - top), ...(columns.get(b.key) ?? { col: 0, cols: 1 }) });
   }
 
   // While nothing is being dragged, the scale as drawn (a drag keeps the one it started with)
@@ -1272,20 +1217,6 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const cardTimeAt = (sc: Scale | null, y: number, skip?: string): number | undefined =>
     sc?.cards.find(c => c.key !== skip && y >= c.top && y < c.bottom)?.start;
 
-  useLayoutEffect(() => {
-    // Mid-drag the hours hold still: a dragged card's words change (it shows its new times), and
-    // re-measuring then would stretch the hours under the pointer
-    if (dragRef.current) return;
-    const next: Record<string, number> = {};
-    let changed = false;
-    for (const [k, el] of cardBodies.current) {
-      if (!el.isConnected) continue;
-      const h = Math.ceil(el.offsetHeight + 26); // the card's 12px padding top and bottom, and its border
-      next[k] = h;
-      if (Math.abs((needs[k] ?? 0) - h) > 1) changed = true;
-    }
-    if (changed) setNeeds(next);
-  });
 
   /* Doses as icons at their times (one per time), the later ones as a note under the scale */
   const doseGroups = medsOn ? doses.groups.map(g => ({ ...g, mins: minutesOf(g.time) })).filter(g => g.mins !== undefined) : [];
@@ -1366,7 +1297,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     // Over a card (or a stack sharing a time): that card's time, so any number can share one
     const onCard = cardTimeAt(scaleRef.current, y - r.top - 7);
     if (onCard !== undefined) return onCard;
-    return Math.min(23 * 60 + 45, Math.round(minutesAt(y - r.top - 7) / 15) * 15);
+    // A task dropped on the schedule lands to the nearest five minutes, as in the Planner
+    return Math.min(23 * 60 + 55, Math.round(minutesAt(y - r.top - 7) / 5) * 5);
   };
   const onCarryDown = (t: { id: number; title: string }, e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -1588,19 +1520,21 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                   // While dragged it keeps its own size and place in a stack (several cards sharing a time
                   // share that stretch) and follows the pointer: moved by how far its start moved on the
                   // schedule as drawn, stretched by how far its end moved — never redrawn across the whole span
-                  const own = slot.get(b.key) ?? { top: yAt(b.start), height: yAt(b.end) - yAt(b.start) };
+                  const own = slot.get(b.key) ?? { top: yAt(b.start), height: yAt(b.end) - yAt(b.start), col: 0, cols: 1 };
+                  // Its column among what it overlaps, 4px in from either side of it
+                  const across = { left: `calc(${(own.col * 100) / own.cols}% + ${own.col ? 4 : 0}px)`, width: `calc(${100 / own.cols}% - ${own.cols > 1 ? 4 : 0}px)` };
                   // Moved: it rides with the pointer (its words show the time it will land at), so it never
                   // sticks while crossing a stack of cards sharing one time
                   const place = !moving ? own
-                    : drag!.mode === 'move' ? { top: own.top + drag!.dy, height: own.height }
-                    : { top: own.top, height: Math.max(needOf(b.key), yAt(e0) - own.top) };
+                    : drag!.mode === 'move' ? { ...own, top: own.top + drag!.dy }
+                    : { top: own.top, height: Math.max(MIN_CARD + CARD_GAP, yAt(e0) - own.top) };
                   const cardTop = place.top + CARD_GAP / 2;
                   const task = b.kind === 'task' ? dayTasks.find(x => x.id === b.id) : undefined;
                   return (
                     <Fragment key={b.key}>
                     {task && (
                       // Its tick, to the left of the title: level with the title's first line
-                      <CardTick type="button" style={{ top: cardTop + 5, zIndex: (layer.get(b.key) ?? 1) + 1 }} role="checkbox" aria-checked={!!b.done}
+                      <CardTick type="button" style={{ top: cardTop + 5, left: `calc(${across.left} + 6px)`, zIndex: (layer.get(b.key) ?? 1) + 1 }} role="checkbox" aria-checked={!!b.done}
                         aria-label={b.done ? `Mark “${b.title}” not done` : `Mark “${b.title}” done`}
                         onClick={() => tick(task)}>
                         <TickMark checked={!!b.done} size={18} />
@@ -1609,9 +1543,9 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                     <BlockBtn type="button" $kind={b.kind} data-dragging={drag?.key === b.key} data-task={!!task} data-done={!!b.done}
                       style={{
                         // A little room above and below each card inside its time
-                        top: cardTop, height: Math.max(30, place.height - CARD_GAP),
+                        top: cardTop, height: Math.max(MIN_CARD, place.height - CARD_GAP),
                         zIndex: moving ? 1000 : layer.get(b.key),
-                        left: 0, width: '100%',
+                        ...across,
                       }}
                       onPointerDown={e => onCardDown(b, 'move', e)} onPointerMove={onCardMove} onPointerUp={onCardUp} onPointerCancel={onCardUp}
                       // The keyboard's Enter / Space (no pointer) opens it
@@ -1619,8 +1553,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                       onKeyDown={e => onCardKey(b, e)}
                       aria-keyshortcuts="ArrowUp ArrowDown"
                       title={`${b.title} · ${KIND_NAME[b.kind]} — drag to move, drag its foot to stretch`}>
-                      {/* The card's words, measured so the schedule makes room for all of them */}
-                      <span className="body" ref={el => { if (el) cardBodies.current.set(b.key, el); else cardBodies.current.delete(b.key); }}>
+                      {/* The card's words: as many as its time has room for (its title is its tooltip) */}
+                      <span className="body">
                         <span className="title">{b.title}</span>{moving ? <small>{`${clock(s0)} – ${clock(e0)}`}</small> : b.note && <small>{b.note}</small>}
                       </span>
                       <StretchGrip aria-hidden="true" onPointerDown={e => onCardDown(b, 'end', e)} />

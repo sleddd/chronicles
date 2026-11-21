@@ -4,7 +4,8 @@ import {
   DndContext, KeyboardSensor, PointerSensor, closestCenter, closestCorners, useDroppable, useSensor, useSensors,
   type DragEndEvent, type DragOverEvent, type UniqueIdentifier,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { topRowSpans } from '../utils/dashboardRows.js';
 import { CSS } from '@dnd-kit/utilities';
 import styled, { css } from 'styled-components';
 import { glassCard, glassPill, onPhoto } from '../styles/wallpaper.js';
@@ -569,6 +570,22 @@ const Col = styled.div`
   flex-direction: column;
   gap: 36px;
   min-width: 0;
+  /* The top row: cards two to a row where they fit together (wellness two thirds beside
+     Shortcuts…), in thirds — one column on phones */
+  &[data-grid] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 32px;
+    align-items: start;
+    @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); }
+  }
+`;
+
+/* A card's place in the top row: one, two or all three thirds */
+const TopCell = styled.div<{ $span: number }>`
+  grid-column: span ${({ $span }) => $span};
+  min-width: 0;
+  @media (max-width: 760px) { grid-column: 1 / -1; }
 `;
 
 /* The dashboard's card: lifted a step off the page (--bg-panel) with a
@@ -2498,6 +2515,9 @@ const AddItem = styled.form`
 `;
 
 /** `compact`: the Day at a glance look — the items as a numbered checklist like Priorities */
+/** Items a shopping list shows before it folds ("Show all 23") */
+const SHOP_ROWS = 8;
+
 export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show: string; onShow: (next: string) => void; compact?: boolean }) {
   const [show, onShow] = useCardChoice(savedShow, saveShow);
   const openInJournal = useOpenInJournal();
@@ -2520,6 +2540,10 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
   const list = chosen ?? latest;
   const listName = (e: DecryptedPost) => entryTitleText(e.content) || 'Shopping list';
   const items = ((list ? cfOf(list).items : undefined) as ShoppingItem[] | undefined) ?? [];
+  // A long list folds to its first few items, with "Show all N" under them
+  const [showAllItems, setShowAllItems] = useState(false);
+  const folds = items.length > SHOP_ROWS;
+  const visibleItems = folds && !showAllItems ? items.slice(0, SHOP_ROWS) : items;
 
   // Adds to the open list; with none open, starts a new dated one
   const add = async (e: React.FormEvent) => {
@@ -2604,7 +2628,7 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
       ) : (<>
       {!list ? <Muted>No open shopping list — add an item to start one.</Muted> : items.length === 0 ? <Muted>No items yet.</Muted> : compact ? (
         <div>
-          {items.map((it, i) => {
+          {visibleItems.map((it, i) => {
             const setItems = (next: ShoppingItem[]) => void save(list, { ...cfOf(list), items: next });
             return (
               <CompactRow key={it.id}>
@@ -2623,7 +2647,7 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
         </div>
       ) : (
         <Pills>
-          {[...items.filter(i => !i.checked), ...items.filter(i => i.checked)].map(i => (
+          {[...items.filter(i => !i.checked), ...items.filter(i => i.checked)].slice(0, folds && !showAllItems ? SHOP_ROWS : undefined).map(i => (
             <ItemPill key={i.id} type="button" $got={!!i.checked} aria-pressed={!!i.checked}
               onClick={() => void save(list, { ...cfOf(list), items: items.map(x => (x.id === i.id ? { ...x, checked: !x.checked } : x)) })}>
               {i.checked && <Icon name="check" size={14} strokeWidth={2} aria-hidden="true" />}
@@ -2631,6 +2655,11 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
             </ItemPill>
           ))}
         </Pills>
+      )}
+      {list && folds && (
+        <MoreLink type="button" aria-expanded={showAllItems} onClick={() => setShowAllItems(v => !v)}>
+          {showAllItems ? 'Show fewer' : `Show all ${items.length}`}
+        </MoreLink>
       )}
       <AddItem onSubmit={e => void add(e)}>
         <Icon name="plus" size={18} strokeWidth={1.8} aria-hidden="true" />
@@ -2674,12 +2703,12 @@ function SortableCard({ id, collapsed, label, plain, open, wide, spaced, childre
 }
 
 /* A column cards can be dropped into — even when it's empty */
-function DropCol({ id, items, gap, dragging, children }: { id: ColId; items: SectionKey[]; gap?: number; dragging?: boolean; children: ReactNode }) {
+function DropCol({ id, items, gap, dragging, grid, children }: { id: ColId; items: SectionKey[]; gap?: number; dragging?: boolean; grid?: boolean; children: ReactNode }) {
   const { setNodeRef } = useDroppable({ id });
   return (
-    <SortableContext id={id} items={items} strategy={verticalListSortingStrategy}>
+    <SortableContext id={id} items={items} strategy={grid ? rectSortingStrategy : verticalListSortingStrategy}>
       {/* Empty, it still takes a drop: a strip while a card is being dragged */}
-      <Col ref={setNodeRef} style={{ minHeight: items.length ? undefined : dragging ? 80 : 0, gap }}>{children}</Col>
+      <Col ref={setNodeRef} data-grid={grid || undefined} style={{ minHeight: items.length ? undefined : dragging ? 80 : 0, gap }}>{children}</Col>
     </SortableContext>
   );
 }
@@ -3017,10 +3046,11 @@ export function DashboardView() {
   const cols = { head: placed.head.filter(visible), top: placed.top.filter(visible), left: placed.left.filter(visible), right: placed.right.filter(visible), side: placed.side.filter(visible) };
   // `wide`: across both columns (the top row) — no outline
   // Habits and Time tracked: no outline wherever they sit (the panel and light shadow only)
-  const card = (k: SectionKey, wide = false) => {
+  // `fullRow`: the card has its row to itself (the wellness check-in gets room above it then, not beside another card)
+  const card = (k: SectionKey, wide = false, fullRow = true) => {
     const w = widgets[k]!;
     // The wellness check-in keeps its own look: moved by its grip, never folded
-    if (k === 'wellness' || k === 'clocks') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain spaced={k === 'wellness'}>{w.node}</SortableCard>;
+    if (k === 'wellness' || k === 'clocks') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain spaced={k === 'wellness' && fullRow}>{w.node}</SortableCard>;
     return (
       <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote' || collapsed.has(k)}
         wide={wide || NO_OUTLINE.has(k)}>
@@ -3035,10 +3065,17 @@ export function DashboardView() {
   left.push(...cols.left.map(k => card(k)));
   right.push(...cols.right.map(k => card(k)));
 
+  // How wide each card in the top row is (dashboardRows: wellness 2/3 beside Shortcuts, else full…)
+  const topSpans = topRowSpans(cols.top);
   // The widgets inside Your Agenda: a row across both columns, the two columns, and its third column —
   // cards drag between all four (one DndContext around the whole panel)
   const widgetColumns = (<>
-    <DropCol id="top" items={cols.top} gap={32} dragging={dragging}>{cols.top.map(k => card(k, true))}</DropCol>
+    <DropCol id="top" items={cols.top} gap={32} dragging={dragging} grid>
+      {cols.top.map(k => {
+        const span = topSpans.get(k) ?? 3;
+        return <TopCell key={k} $span={span}>{card(k, true, span === 3)}</TopCell>;
+      })}
+    </DropCol>
     <Columns $rows={Math.max(1, cols.left.length, cols.right.length)}>
       <DropCol id="left" items={cols.left} dragging={dragging}>{left}</DropCol>
       <DropCol id="right" items={cols.right} dragging={dragging}>{right}</DropCol>

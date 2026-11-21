@@ -64,6 +64,16 @@ export const onPhoto = css`
   html[data-wallpaper][data-theme='light'] & { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
 `;
 
+/** Text a little way down a page's photo (under the title: the media shelf's name and its link):
+ *  white with a shadow on the photo in dark; in light, by then the photo is fading toward the
+ *  page, so it keeps its standard light colours */
+export const onPhotoInDark = css`
+  html[data-wallpaper][data-theme='dark'] & {
+    color: #fff;
+    text-shadow: 0 1px 14px rgba(0, 0, 0, 0.3);
+  }
+`;
+
 /** Bars at the top of a panel (the journal's date bar, Bulk edit): the page's own
  *  colour, solid — no frosted blur over the photo (light or dark theme alike) */
 export const glassBar = css`

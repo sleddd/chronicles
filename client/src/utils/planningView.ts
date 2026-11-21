@@ -78,7 +78,8 @@ export const PLAN_TAB_PATHS: Record<PlanTabKey, string> = {
 
 /** True when the current setup is exactly the saved one */
 export function isSameView(a: PlanViewState, b: PlanViewState): boolean {
-  return a.tab === b.tab && a.view === b.view && a.query.trim() === b.query.trim() && a.sort === b.sort
+  // List or Board isn't part of what a view is (it's the tab's own setting, kept per browser)
+  return a.tab === b.tab && a.query.trim() === b.query.trim() && a.sort === b.sort
     && a.goalId === b.goalId && a.milestoneId === b.milestoneId && a.status === b.status
     && (a.taskType ?? '') === (b.taskType ?? '') && (a.category ?? '') === (b.category ?? '');
 }
