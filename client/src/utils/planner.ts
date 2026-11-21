@@ -305,6 +305,38 @@ export function layoutDay(tasks: { id: number; hours: number; at?: number }[], e
 }
 
 /**
+ * Side by side, like a calendar: what overlaps on one day shares the width.
+ * Items that overlap — directly or through a chain of others — form a group;
+ * each item takes the first column free at its start, and every item in the
+ * group is drawn 1 / `cols` wide. `minLength` is the least time an item takes
+ * on screen (a 5-minute card is drawn taller than its time), so two short
+ * items a few minutes apart don't sit on top of each other. Pure.
+ */
+export function overlapColumns(items: { key: string; start: number; end: number }[], minLength = 0): Map<string, { col: number; cols: number }> {
+  const out = new Map<string, { col: number; cols: number }>();
+  const sorted = items
+    .map(it => ({ ...it, end: Math.max(it.end, it.start + minLength) }))
+    .sort((a, b) => a.start - b.start || b.end - a.end || a.key.localeCompare(b.key));
+  let group: { key: string; col: number }[] = [];
+  let colEnds: number[] = [];
+  let groupEnd = -Infinity;
+  const close = () => {
+    for (const g of group) out.set(g.key, { col: g.col, cols: colEnds.length });
+    group = [];
+    colEnds = [];
+  };
+  for (const it of sorted) {
+    if (it.start >= groupEnd) close();
+    let col = colEnds.findIndex(end => end <= it.start);
+    if (col === -1) { col = colEnds.length; colEnds.push(it.end); } else colEnds[col] = it.end;
+    group.push({ key: it.key, col });
+    groupEnd = Math.max(groupEnd, it.end);
+  }
+  close();
+  return out;
+}
+
+/**
  * What isn't on a day: `overdue` — unfinished tasks whose day has passed and
  * that don't roll forward (oldest first) — `open`, unfinished tasks with no
  * day (by urgency), and `ideas`, the ones kept for later (Idea / Backlog) with

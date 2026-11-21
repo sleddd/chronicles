@@ -1,10 +1,17 @@
 import styled from 'styled-components';
+import { NAV_COMPACT } from '../../styles/breakpoints.js';
 
 /**
  * The app's outlined pill action (Save entry, Save, Cancel): tracked uppercase
  * label in a hairline pill (sentence case in light theme). `accent` for the primary action, neutral otherwise.
+ * `solid` is a page's New button in its header (New task, New goal, New topic…): filled in the accent
+ * with dark text on wider screens — on the photo too — and the outlined accent pill on phones and
+ * tablets, where it sits in the top bar. It carries `data-solid` so the photo's glass rule leaves it be.
  */
-export const PillButton = styled.button<{ $variant?: 'accent' | 'neutral' }>`
+type Variant = 'accent' | 'neutral' | 'solid';
+// A data attribute isn't in the button's prop types, so it's handed over as a plain object
+const solidMark = ({ $variant }: { $variant?: Variant }) => ($variant === 'solid' ? { 'data-solid': '' } : {}) as object;
+export const PillButton = styled.button.attrs<{ $variant?: Variant }>(solidMark)<{ $variant?: Variant }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -28,4 +35,16 @@ export const PillButton = styled.button<{ $variant?: 'accent' | 'neutral' }>`
   &:disabled { color: var(--text-disabled); border-color: var(--border-default); cursor: not-allowed; }
   /* Light: sentence case at normal spacing — small tracked capitals look faint on white */
   html[data-theme='light'] & { text-transform: none; letter-spacing: normal; font-size: 14px; font-weight: 500; }
+  ${({ $variant }) => $variant === 'solid' && `
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #15181d;
+    &:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+    ${NAV_COMPACT} {
+      background: var(--bg-control, transparent);
+      border-color: var(--color-accent-line);
+      color: var(--color-accent-line);
+      &:hover:not(:disabled) { background: var(--color-accent-subtle); border-color: var(--color-accent-line); }
+    }
+  `}
 `;

@@ -236,7 +236,7 @@ function Debts() {
           <TotalLabel>Owed in all</TotalLabel>
           <TotalFigure>{formatCents(owed)}</TotalFigure>
         </div>
-        <PillButton type="button" onClick={() => {
+        <PillButton type="button" $variant="solid" onClick={() => {
           // With no debts the form is already open: New debt just takes you to its name box
           if (debts.length === 0) { document.getElementById('new-debt-name')?.focus(); return; }
           setAdding(a => !a);

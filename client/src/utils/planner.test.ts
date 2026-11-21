@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sameLength,
+import { sameLength, overlapColumns,
   plannerFacts, hoursOf, hoursLabel, priorityIndex, layoutDay, timeOf, hhmm, partOf, effectiveDay, hasMigrated, weekOf, parsePlannerOrder, tasksByDay, unscheduled, placeIn, movedOrder,
   weekLabel, laneLabel, longDayLabel, estimateOf, estimateLabel, type PlannerTask,
 } from './planner.js';
@@ -213,5 +213,28 @@ describe('estimated time', () => {
     expect(hoursOf({ estimatedMinutes: 960 })).toBe(1);
     expect(hoursOf({ estimatedMinutes: 720 })).toBe(12);
     expect(hoursOf({})).toBe(1);
+  });
+});
+
+describe('overlapColumns', () => {
+  const at = (key: string, start: number, end: number) => ({ key, start, end });
+  it('gives the whole width to what overlaps nothing', () => {
+    const cols = overlapColumns([at('a', 480, 540), at('b', 540, 600)]);
+    expect(cols.get('a')).toEqual({ col: 0, cols: 1 });
+    expect(cols.get('b')).toEqual({ col: 0, cols: 1 });
+  });
+  it('puts overlapping items side by side, sharing the width across the whole group', () => {
+    // a 8–12, b 9–10, c 10:30–11 (reuses b's column), d 13–14 alone
+    const cols = overlapColumns([at('a', 480, 720), at('b', 540, 600), at('c', 630, 660), at('d', 780, 840)]);
+    expect(cols.get('a')).toEqual({ col: 0, cols: 2 });
+    expect(cols.get('b')).toEqual({ col: 1, cols: 2 });
+    expect(cols.get('c')).toEqual({ col: 1, cols: 2 });
+    expect(cols.get('d')).toEqual({ col: 0, cols: 1 });
+  });
+  it('counts a short item as long as it is drawn', () => {
+    const a = at('a', 480, 485);
+    const b = at('b', 490, 495);
+    expect(overlapColumns([a, b]).get('b')).toEqual({ col: 0, cols: 1 });
+    expect(overlapColumns([a, b], 22).get('b')).toEqual({ col: 1, cols: 2 });
   });
 });

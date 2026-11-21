@@ -82,7 +82,6 @@ type Step = 'share' | 'working' | 'review' | 'saving';
 type PlanOrder = { goals?: number[]; milestones?: number[] };
 const NO_ORDER: PlanOrder = {};
 const NO_TYPES: string[] = [];
-const GOAL_TYPE_LABEL: Record<string, string> = { short_term: 'Short-term', long_term: 'Long-term' };
 
 const PRIORITY_LABEL: Record<string, string> = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low', none: 'No priority' };
 const STATUS_LABEL: Record<string, string> = { new: 'New', planned: 'Planned', in_progress: 'In progress', paused: 'Paused', not_started: 'Not started' };
@@ -128,7 +127,7 @@ function taskFieldsAfter(now: Fields, change: TaskChange | undefined, slot: Sche
 const goalFieldsAfter = (now: Fields, c: GoalChange): Fields => ({
   ...now,
   ...(c.title ? { [NAME_FIELD_BY_TYPE.goal]: c.title } : {}), ...(c.status ? { goalStatus: c.status } : {}),
-  ...(c.category ? { goalCategory: c.category } : {}), ...(c.type ? { goalType: c.type } : {}),
+  ...(c.category ? { goalCategory: c.category } : {}),
   ...(c.startOn ? { startOn: c.startOn } : {}), ...(c.targetDate ? { targetDate: c.targetDate } : {}),
 });
 
@@ -158,7 +157,6 @@ function changeLines(
   return [
     ...(c.title ? [`Rename: “${now.title}” → “${c.title}”`] : []),
     ...(c.category ? [`Category: ${now.category || 'none'} → ${c.category}`] : []),
-    ...(c.type ? [`Type: ${GOAL_TYPE_LABEL[now.type ?? ''] ?? 'none'} → ${GOAL_TYPE_LABEL[c.type] ?? c.type}`] : []),
     ...(c.status ? [`Status: ${STATUS_LABEL[now.status] ?? now.status} → ${STATUS_LABEL[c.status] ?? c.status}`] : []),
     ...(c.startOn ? [`Starts: ${shortDate(now.startOn)} → ${shortDate(c.startOn)}`] : []),
     ...(c.targetDate ? [`Target: ${shortDate(now.targetDate)} → ${shortDate(c.targetDate)}`] : []),
@@ -210,7 +208,7 @@ export function AiPlanReview({ onClose }: { onClose: () => void }) {
       // In the person's own order on the boards: the top card is the most important
       goals: inOrder(goals.filter(g => g.status !== 'completed'), savedOrder?.goals).map(g => ({
         id: g.id, title: g.title, category: g.category, status: g.status,
-        type: text(g.fields.goalType), startOn: text(g.fields.startOn), targetDate: text(g.fields.targetDate), notes: text(g.fields.notes),
+        startOn: text(g.fields.startOn), targetDate: text(g.fields.targetDate), notes: text(g.fields.notes),
       })),
       milestones: inOrder(milestones.filter(m => !m.completed), savedOrder?.milestones).map(m => ({
         id: m.id, title: m.title, goalId: m.goalId,

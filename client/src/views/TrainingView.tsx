@@ -498,7 +498,7 @@ export function TrainingView() {
         <Inner>
           <Head>
             <Title>Health</Title>
-            <TopBarAction><PillButton type="button" onClick={() => void startPlan()}>New plan</PillButton></TopBarAction>
+            <TopBarAction><PillButton type="button" $variant="solid" onClick={() => void startPlan()}>New plan</PillButton></TopBarAction>
           </Head>
           <HealthTabBar />
           <SubTabs><ExerciseSubTabs /></SubTabs>
@@ -511,7 +511,7 @@ export function TrainingView() {
                 training. Your logged exercise fills it in. Start from the mountaineering template, or import
                 a tracker spreadsheet in Settings → Data.
               </p>
-              <PillButton type="button" onClick={() => void startPlan()}>New plan</PillButton>
+              <PillButton type="button" $variant="solid" onClick={() => void startPlan()}>New plan</PillButton>
             </EmptyCard>
           ) : (
             <>

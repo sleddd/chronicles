@@ -33,7 +33,6 @@ const DAY_CLOSES = 23 * 60;
 export const TASK_PRIORITIES = ['urgent', 'high', 'medium', 'low', 'none'] as const;
 export const GOAL_STATUSES = ['new', 'planned', 'in_progress', 'paused'] as const;
 export const MILESTONE_STATUSES = ['not_started', 'in_progress'] as const;
-export const GOAL_TYPES = ['short_term', 'long_term'] as const;
 
 export interface PlanTaskIn {
   id: number; title: string; priority: string; deadline: string; hours: number;
@@ -50,7 +49,7 @@ export interface PlanTaskIn {
 }
 /** A task already on a day in the range: context, and time that is taken */
 export interface PlanPlannedIn { id: number; title: string; day: string; start?: number; hours: number; goalId: number | null; milestoneId: number | null }
-export interface PlanGoalIn { id: number; title: string; category: string; status: string; type: string; startOn: string; targetDate: string; notes: string }
+export interface PlanGoalIn { id: number; title: string; category: string; status: string; startOn: string; targetDate: string; notes: string }
 export interface PlanMilestoneIn { id: number; title: string; goalId: number | null; status: 'not_started' | 'in_progress'; startOn: string; targetDate: string; notes: string; openTasks: number }
 export interface PlanVisions { overall: string; areas: { name: string; vision: string }[] }
 /** An event or meeting on a day: its name, and its times in minutes from midnight (none = all day) */
@@ -81,7 +80,7 @@ export interface PlanContext {
   taskIds: Set<number>;
   taskHours: Map<number, number>;
   tasks: Map<number, { title: string; type: string; priority: string; goalId: number | null; milestoneId: number | null }>;
-  goals: Map<number, { title: string; status: string; category: string; type: string; startOn: string; targetDate: string }>;
+  goals: Map<number, { title: string; status: string; category: string; startOn: string; targetDate: string }>;
   /** The person's own lists: a goal's category and a task's type can only be one of these */
   categories: string[];
   taskTypes: string[];
@@ -118,7 +117,7 @@ const SYSTEM = [
   '1. schedule: give unscheduled tasks a day, a start time and a length. Urgent and high-priority tasks, tasks for higher-priority goals and tasks with a near deadline go first, never after their deadline when that can be avoided. Keep days realistic, counting what is already planned: no more than about five hours of tasks a day. Leave an idea unscheduled unless it clearly helps a goal soon.',
   `2. newTasks: up to ${MAX_NEW_TASKS} new tasks that move a goal or milestone forward, especially one with no open tasks. One concrete action each, in a few words, tied to a goal or milestone.`,
   '3. taskChanges: for an unscheduled task, a better priority, the goal or milestone it belongs to when it clearly serves one and is not linked, a type from "taskTypes" that fits it better, or a cleaned-up title.',
-  `4. goalChanges and milestoneChanges: adjust start or target dates that are no longer realistic or leave a higher-priority goal starved, update a status that the notes and tasks show is out of date, or clean up a title. File a goal under the area in "categories" that fits it best when it has none or the wrong one, and set its type (short_term or long_term) when its dates make that clear. Goal statuses: ${GOAL_STATUSES.join(', ')}. Milestone statuses: ${MILESTONE_STATUSES.join(', ')}. Never mark anything completed.`,
+  `4. goalChanges and milestoneChanges: adjust start or target dates that are no longer realistic or leave a higher-priority goal starved, update a status that the notes and tasks show is out of date, or clean up a title. File a goal under the area in "categories" that fits it best when it has none or the wrong one. Goal statuses: ${GOAL_STATUSES.join(', ')}. Milestone statuses: ${MILESTONE_STATUSES.join(', ')}. Never mark anything completed.`,
   'Titles: fix spelling, grammar and capitalisation, and make a vague or run-on title a clear, short one in the same style as the person’s others. Keep their meaning and their own words where you can. Never change what a goal, milestone or task is about, and leave a title alone when it is already fine.',
   'The roadmap: each goal and milestone is drawn as a bar from its startOn to its targetDate, so one with a date missing has no proper bar. Fill the roadmap out: give every goal and milestone that lacks a start or target date a realistic one, keep each milestone inside its goal’s dates and in a sensible order, spread the work so higher-priority goals finish first, and move dates that have already slipped past.',
   `5. newMilestones: up to ${MAX_NEW_MILESTONES} milestones a goal is missing between now and its target date, each with its own start and target date.`,
@@ -162,7 +161,7 @@ export function buildPlanRequest(input: PlanInput): PlanRequest {
     },
     goals: input.goals.map((g, i) => ({
       id: g.id, priority: i + 1, title: g.title, ...(g.category ? { area: g.category } : {}), status: g.status,
-      ...(g.type ? { type: g.type } : {}), ...(g.startOn ? { startOn: g.startOn } : {}), ...(g.targetDate ? { targetDate: g.targetDate } : {}),
+      ...(g.startOn ? { startOn: g.startOn } : {}), ...(g.targetDate ? { targetDate: g.targetDate } : {}),
       ...note(g.notes, NOTES_MAX),
     })),
     milestones: input.milestones.map((m, i) => ({
@@ -218,7 +217,7 @@ export function buildPlanRequest(input: PlanInput): PlanRequest {
       taskIds: new Set(tasks.map(t => t.id)),
       taskHours: new Map(tasks.map(t => [t.id, t.hours])),
       tasks: new Map(tasks.map(t => [t.id, { title: t.title, type: t.type, priority: t.priority, goalId: t.goalId, milestoneId: t.milestoneId }])),
-      goals: new Map(input.goals.map(g => [g.id, { title: g.title, status: g.status, category: g.category, type: g.type, startOn: g.startOn, targetDate: g.targetDate }])),
+      goals: new Map(input.goals.map(g => [g.id, { title: g.title, status: g.status, category: g.category, startOn: g.startOn, targetDate: g.targetDate }])),
       categories: input.categories, taskTypes: input.taskTypes,
       milestones: new Map(input.milestones.map(m => [m.id, { title: m.title, status: m.status, goalId: m.goalId, startOn: m.startOn, targetDate: m.targetDate }])),
       // A repeating event shows once per day it lands on; only a one-off event can be moved
@@ -235,7 +234,7 @@ export function buildPlanRequest(input: PlanInput): PlanRequest {
 export interface ScheduledChange { id: number; date: string; /** Minutes from midnight; undefined = the day only */ time?: number; hours: number }
 export interface NewTaskIdea { title: string; goalId: number | null; milestoneId: number | null; date: string; time?: number; hours: number; why: string }
 export interface TaskChange { id: number; title?: string; priority?: string; type?: string; goalId?: number | null; milestoneId?: number | null; why: string }
-export interface GoalChange { id: number; title?: string; status?: string; category?: string; type?: string; startOn?: string; targetDate?: string; why: string }
+export interface GoalChange { id: number; title?: string; status?: string; category?: string; startOn?: string; targetDate?: string; why: string }
 export interface MilestoneChange { id: number; title?: string; status?: string; goalId?: number; startOn?: string; targetDate?: string; why: string }
 export interface NewMilestoneIdea { title: string; goalId: number; startOn: string; targetDate: string; why: string }
 export interface EventChange { id: number; date: string; /** Its new start, minutes from midnight; undefined = its time stays */ start?: number; why: string }
@@ -416,10 +415,9 @@ export function parsePlan(text: string, ctx: PlanContext): AiPlan {
     const status = typeof r.status === 'string' && (GOAL_STATUSES as readonly string[]).includes(r.status) && r.status !== now.status ? r.status : undefined;
     const dates = datesFrom(r, now);
     const category = fromList(r.category, ctx.categories, now.category);
-    const type = fromList(r.type, GOAL_TYPES, now.type);
-    if (!title && !status && !category && !type && !dates.startOn && !dates.targetDate) continue;
+    if (!title && !status && !category && !dates.startOn && !dates.targetDate) continue;
     changedGoals.add(id);
-    goalChanges.push({ id, ...(title ? { title } : {}), ...(status ? { status } : {}), ...(category ? { category } : {}), ...(type ? { type } : {}), ...dates, why: cleanLine(r.why, 200) });
+    goalChanges.push({ id, ...(title ? { title } : {}), ...(status ? { status } : {}), ...(category ? { category } : {}), ...dates, why: cleanLine(r.why, 200) });
   }
 
   const milestoneChanges: MilestoneChange[] = [];

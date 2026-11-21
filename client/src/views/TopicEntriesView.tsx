@@ -140,7 +140,7 @@ export function TopicEntriesView({ title, topicNames, navBar }: TopicEntriesView
             <Title>{title}</Title>
             {addTopic && (
               <TopBarAction>
-                <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>
+                <PillButton type="button" $variant="solid" onClick={() => addTopic && newEntry(addTopic.id)}>
                   New entry
                 </PillButton>
               </TopBarAction>

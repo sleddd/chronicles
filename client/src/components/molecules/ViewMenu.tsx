@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { glassControl } from '../../styles/wallpaper.js';
 import { Icon, type IconName } from '../atoms/core/Icon.jsx';
@@ -7,7 +7,9 @@ import { Icon, type IconName } from '../atoms/core/Icon.jsx';
    (accent outline and icon while open — never a darker fill) opening a small
    floating menu — an optional heading ("Saved view"), items with an icon,
    a hairline before the danger item, and a second click to confirm it
-   ("Delete “Mine”?"). Escape or a click outside closes it. Props only. */
+   ("Delete “Mine”?"). Escape or a click outside closes it. `extra` puts
+   controls of the page's own above the items (the Tasks tab's Group,
+   Category and Type pickers). Props only. */
 
 export interface ViewMenuItem {
   label: string;
@@ -67,6 +69,15 @@ const Rule = styled.hr`
   border-top: 1px solid var(--border-subtle);
 `;
 
+/* The page's own controls at the top of the menu, one a row */
+const Extra = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 4px 8px;
+  > * { width: 100%; }
+`;
+
 const Item = styled.button<{ $danger?: boolean }>`
   display: flex;
   align-items: center;
@@ -86,7 +97,7 @@ const Item = styled.button<{ $danger?: boolean }>`
   html[data-theme='light'] &:hover, html[data-theme='light'] &:focus-visible { background: var(--bg-hover); }
 `;
 
-export function ViewMenu({ label, heading, items }: { label: string; heading?: string; items: ViewMenuItem[] }) {
+export function ViewMenu({ label, heading, items, extra }: { label: string; heading?: string; items: ViewMenuItem[]; extra?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
@@ -106,7 +117,7 @@ export function ViewMenu({ label, heading, items }: { label: string; heading?: s
     };
   }, [open]);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 && !extra) return null;
   return (
     <Wrap ref={wrap}>
       <Trigger type="button" $open={open} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open}
@@ -114,7 +125,10 @@ export function ViewMenu({ label, heading, items }: { label: string; heading?: s
         <Icon name="more-horizontal" size={18} strokeWidth={2} />
       </Trigger>
       {open && (
-        <List role="menu" aria-label={label}>
+        // With controls of its own in it, it's a small dialog rather than a menu of items
+        <List role={extra ? 'dialog' : 'menu'} aria-label={label}>
+          {extra && <Extra role="group" aria-label="Show">{extra}</Extra>}
+          {extra && items.length > 0 && <Rule />}
           {heading && <Heading>{heading}</Heading>}
           {items.map((item, i) => (
             <Fragment key={item.label}>

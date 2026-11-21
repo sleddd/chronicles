@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import type { GoalFieldValues } from '../../../types/fields.js';
 import {
-  FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BoxText,
+  FormWrap, Section, SectionHead, SectionLabel, TitleInput, RowBox, LabelledRow, RowLabel, BoxText,
 } from './formKit.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
 import { PillPick, FootPickBox, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
@@ -11,13 +11,8 @@ export type { GoalFieldValues } from '../../../types/fields.js';
 /* Goal fields — the same form in the journal editor and Quick Entry: the
    objective as the text's first line, its Category in the text box's foot
    strip (GoalCategoryPick) and Status as the first row (where it's reached
-   for), then Type, When (Starts / Ends, the two ends of its roadmap bar) —
+   for), then When (Starts / Deadline, the two ends of its roadmap bar) —
    each with a muted label on the left — then Notes. Props only. */
-
-const TYPES: { value: GoalFieldValues['goalType']; label: string }[] = [
-  { value: 'short_term', label: 'Short-term' },
-  { value: 'long_term', label: 'Long-term' },
-];
 
 /* Same statuses as the goals board's columns (Achieved = completed) */
 const STATUSES: { value: GoalFieldValues['goalStatus']; label: string; dot: string }[] = [
@@ -156,18 +151,7 @@ export function GoalFields({ values, onChange, categories = [], onAddCategory, t
             <CategoryPill value={values.goalCategory ?? ''} categories={categories} onPick={goalCategory => set({ goalCategory })} onAdd={onAddCategory} />
           </LabelledRow>
         )}
-        <LabelledRow>
-          <RowLabel>Type</RowLabel>
-          <Chips role="radiogroup" aria-label="Type">
-            {TYPES.map(t => (
-              <Chip key={t.value} type="button" role="radio" aria-checked={values.goalType === t.value}
-                $active={values.goalType === t.value} onClick={() => set({ goalType: t.value })}>
-                {t.label}
-              </Chip>
-            ))}
-          </Chips>
-        </LabelledRow>
-        {/* When: Starts (the start date) and Ends (the target date), the two ends of its roadmap bar */}
+        {/* When: Starts (the start date) and Deadline (the target date), the two ends of its roadmap bar */}
         <LabelledRow style={timer ? { position: 'relative' } : undefined}>
           <RowLabel>When</RowLabel>
           {/* The timer in the row's top-right corner: view the time, start one, add time */}
@@ -179,7 +163,7 @@ export function GoalFields({ values, onChange, categories = [], onAddCategory, t
                 onChange={e => set({ startOn: e.target.value })} />
             </WhenLine>
             <WhenLine $allDay>
-              <WhenLabel>Ends</WhenLabel>
+              <WhenLabel>Deadline</WhenLabel>
               <DateTimeInput type="date" aria-label="Target date" value={values.targetDate} onChange={e => set({ targetDate: e.target.value })} />
             </WhenLine>
           </WhenBox2>

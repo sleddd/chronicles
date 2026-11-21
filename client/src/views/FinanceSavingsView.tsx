@@ -216,7 +216,7 @@ function Savings() {
           <TotalLabel>Saved in all</TotalLabel>
           <TotalFigure>{formatCents(total)}</TotalFigure>
         </div>
-        <PillButton type="button" onClick={() => setAdding(a => !a)}>{adding ? 'Close' : 'New fund'}</PillButton>
+        <PillButton type="button" $variant="solid" onClick={() => setAdding(a => !a)}>{adding ? 'Close' : 'New fund'}</PillButton>
       </Top>
 
       {(adding || funds.length === 0) && (

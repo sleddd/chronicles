@@ -138,7 +138,7 @@ export function ShoppingListsView() {
             <Title>{KITCHEN_TITLE}</Title>
             {shoppingListTopic && (
               <TopBarAction>
-                <PillButton type="button" onClick={() => shoppingListTopic && newEntry(shoppingListTopic.id)}>
+                <PillButton type="button" $variant="solid" onClick={() => shoppingListTopic && newEntry(shoppingListTopic.id)}>
                   New list
                 </PillButton>
               </TopBarAction>

@@ -39,8 +39,12 @@ import {
    day in the sealed setting `plannerOrder` (a task dropped on a day's free space
    lands by priority). Events and meetings sit at their times on the day. */
 
-type Mode = 'month' | 'week' | 'day';
-const MODES: { value: Mode; label: string }[] = [{ value: 'month', label: 'Month' }, { value: 'week', label: 'Week' }, { value: 'day', label: 'Day' }];
+type Mode = 'month' | 'week' | 'days' | 'day';
+const MODES: { value: Mode; label: string }[] = [
+  { value: 'month', label: 'Month' }, { value: 'week', label: 'Week' }, { value: 'days', label: '4 days' }, { value: 'day', label: 'Day' },
+];
+/** How many days the 4-day view shows, from the day it's on */
+const FEW_DAYS = 4;
 const MODE_KEY = 'planning-planner-v1';
 const FOLD_KEY = 'planning-planner-folded-v1';
 const NO_ORDER: PlannerOrder = {};
@@ -83,7 +87,7 @@ export function PlannerView() {
 
   // Week on wide screens, Day on phones, unless you chose otherwise in this browser
   const [chosen, setChosen] = useState<Mode | null>(() => {
-    try { const m = localStorage.getItem(MODE_KEY); return m === 'month' || m === 'week' || m === 'day' ? m : null; } catch { return null; }
+    try { const m = localStorage.getItem(MODE_KEY); return MODES.some(x => x.value === m) ? m as Mode : null; } catch { return null; }
   });
   const mode: Mode = chosen ?? (phone ? 'day' : 'week');
   const setMode = (m: Mode) => {
@@ -100,7 +104,12 @@ export function PlannerView() {
     setFoldedState(f);
     try { if (f) localStorage.setItem(FOLD_KEY, '1'); else localStorage.removeItem(FOLD_KEY); } catch { /* storage unavailable */ }
   };
-  const days = useMemo(() => (mode === 'month' ? monthGridOf(anchor) : mode === 'week' ? weekOf(anchor) : [anchor]), [mode, anchor]);
+  const days = useMemo(() => (
+    mode === 'month' ? monthGridOf(anchor)
+      : mode === 'week' ? weekOf(anchor)
+        : mode === 'days' ? Array.from({ length: FEW_DAYS }, (_, i) => addDays(anchor, i))
+          : [anchor]
+  ), [mode, anchor]);
 
   const [savedOrder, saveOrder, orderLoaded] = useEncryptedSetting<PlannerOrder>('plannerOrder', NO_ORDER);
   const order = useMemo(() => parsePlannerOrder(savedOrder), [savedOrder]);
@@ -248,9 +257,9 @@ export function PlannerView() {
   const aiPlanOn = useAiFeatureEnabled('aiPlan');
   const [aiPlanOpen, setAiPlanOpen] = useState(false);
 
-  const step = mode === 'week' ? 7 : 1;
-  const pillLabel = mode === 'month' ? monthLabel(anchor) : mode === 'week' ? weekLabel(days) : dayLabel(anchor);
-  // ‹ ›: a month, a week or a day at a time
+  const step = mode === 'week' ? 7 : mode === 'days' ? FEW_DAYS : 1;
+  const pillLabel = mode === 'month' ? monthLabel(anchor) : mode === 'day' ? dayLabel(anchor) : weekLabel(days);
+  // ‹ ›: a month, a week, four days or a day at a time
   const move = (dir: 1 | -1) => setAnchor(a => (mode === 'month' ? addMonths(a, dir) : addDays(a, dir * step)));
 
   return (
@@ -267,7 +276,7 @@ export function PlannerView() {
       )}
       {taskTopicId && (
         <TopBarAction>
-          <PillButton type="button" onClick={() => newEntry(taskTopicId, mode === 'day' ? { scheduledDate: anchor } : undefined)}>New Task</PillButton>
+          <PillButton type="button" $variant="solid" onClick={() => newEntry(taskTopicId, mode === 'day' ? { scheduledDate: anchor } : undefined)}>New Task</PillButton>
         </TopBarAction>
       )}
     </>}>
@@ -281,7 +290,7 @@ export function PlannerView() {
         onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onToggleDone={toggleDone} onResize={resize} onAdd={add}
         folded={folded} onFold={setFolded}
         onPrev={() => move(-1)} onNext={() => move(1)}
-        onPickDay={mode === 'week' ? day => { setAnchor(day); setMode('day'); } : undefined}
+        onPickDay={mode === 'week' || mode === 'days' ? day => { setAnchor(day); setMode('day'); } : undefined}
         toolsSet={(query.trim() ? 1 : 0) + (goalPicked ? 1 : 0) + (category ? 1 : 0)}
         tools={(
           <Tools>

@@ -303,7 +303,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
                 {extraAction && <TopBarAction>{extraAction}</TopBarAction>}
                 {addTopic && (
                   <TopBarAction>
-                    <PillButton type="button" onClick={() => addTopic && newEntry(addTopic.id)}>
+                    <PillButton type="button" $variant="solid" onClick={() => addTopic && newEntry(addTopic.id)}>
                       {newLabel ?? `New ${singular(addTopic.name)}`}
                     </PillButton>
                   </TopBarAction>

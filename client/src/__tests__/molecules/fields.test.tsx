@@ -31,10 +31,13 @@ describe('GoalFields', () => {
     targetDate: '2024-12-31',
   };
 
-  it('renders the title and a box of Status, Category, Type and When rows (Status first)', () => {
+  it('renders the title and a box of Status, Category and When rows (Status first) — a goal has no type', () => {
     renderWithTheme(<GoalFields values={defaultValues} onChange={() => {}} />);
     expect(screen.getByPlaceholderText('What do you want to achieve?')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Short-term' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('radio', { name: 'Short-term' })).toBeNull();
+    expect(screen.queryByText('Type')).toBeNull();
+    // When reads Starts / Deadline
+    expect(screen.getByText('Deadline')).toBeInTheDocument();
     expect(screen.getByLabelText('Start date')).toBeInTheDocument();
     expect(screen.getByLabelText('Target date')).toBeInTheDocument();
     // Status is the first row (Category moves to the text box's foot in the entry editor)
@@ -46,13 +49,6 @@ describe('GoalFields', () => {
     renderWithTheme(<GoalFields values={defaultValues} onChange={onChange} />);
     fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Train 3x a week' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ notes: 'Train 3x a week' }));
-  });
-
-  it('calls onChange when goalType changes', () => {
-    const onChange = vi.fn();
-    renderWithTheme(<GoalFields values={defaultValues} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('radio', { name: 'Long-term' }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ goalType: 'long_term' }));
   });
 
   it('calls onChange when goalStatus changes (Achieved = completed, Paused)', () => {

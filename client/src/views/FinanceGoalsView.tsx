@@ -212,7 +212,7 @@ function Goals() {
   return (
     <section>
       <Top>
-        <PillButton type="button" onClick={() => setEditing(editing === 'new' ? null : 'new')}>{editing === 'new' ? 'Close' : 'New finance goal'}</PillButton>
+        <PillButton type="button" $variant="solid" onClick={() => setEditing(editing === 'new' ? null : 'new')}>{editing === 'new' ? 'Close' : 'New finance goal'}</PillButton>
       </Top>
       {editing === 'new' && <PanelCard style={{ marginBottom: 16 }}><GoalEditor pots={savings.records.filter(p => !isDebt(p))} onSave={g => goals.save(g)} onCancel={() => setEditing(null)} /></PanelCard>}
       {sorted.length === 0 && editing !== 'new' ? (

@@ -238,7 +238,7 @@ export function TopicsView() {
           <Head>
             <Title>Topics</Title>
             {!adding && (
-              <TopBarAction><PillButton type="button" onClick={() => { setAdding(true); setEditingId(null); setConfirmDeleteId(null); }}>New topic</PillButton></TopBarAction>
+              <TopBarAction><PillButton type="button" $variant="solid" onClick={() => { setAdding(true); setEditingId(null); setConfirmDeleteId(null); }}>New topic</PillButton></TopBarAction>
             )}
           </Head>
 

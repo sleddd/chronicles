@@ -491,12 +491,20 @@ const QuickCard = styled.div`
    field on the right, hairlines edge to edge — and a tinted foot with Save */
 const CARD_X = '36px';
 const LABEL_COL = '200px';
+/** The widest a field gets beside its label: a topic's fields stay a readable width in a wide editor
+    (a topic that is only text — Journal — has no fields, and its writing keeps the full width) */
+const FIELD_MAX = '600px';
+const FIELD_COL = `minmax(0, ${FIELD_MAX})`;
+/** The topic picker row (and its rule) as wide as the rows under it: label, gap, field and the card's sides */
+const FIELDS_ROW_MAX = `calc(${LABEL_COL} + 24px + ${FIELD_MAX} + 2 * ${CARD_X})`;
+/** The same for the task card: its 140px names and 26px sides (TaskRow, TaskBody) */
+const TASK_ROW_MAX = `calc(140px + 24px + ${FIELD_MAX} + 2 * 26px)`;
 
 /* Every other topic's text: a row like the fields' (their 200px label column), the writing area
    in the task card's box with the tools under it */
 const TextRow = styled.div`
   display: grid;
-  grid-template-columns: ${LABEL_COL} minmax(0, 1fr);
+  grid-template-columns: ${LABEL_COL} ${FIELD_COL};
   column-gap: 24px;
   align-items: start;
   padding: 20px ${CARD_X} 22px;
@@ -522,7 +530,7 @@ const cardRows = css`
   /* Every field group is a row: its head (the label) in the left column, the field on the right */
   & ${CustomFieldsBody} section:not(${CustomFieldsBody} section section) {
     display: grid;
-    grid-template-columns: ${LABEL_COL} minmax(0, 1fr);
+    grid-template-columns: ${LABEL_COL} ${FIELD_COL};
     column-gap: 24px;
     align-items: start;
     margin: 0 !important;
@@ -556,7 +564,7 @@ const cardRows = css`
   /* Forms built from labelled rows: the same rows, no box of their own */
   & ${CustomFieldsBody} > * > ${RowBox} { margin: 0 !important; border: none; border-radius: 0; overflow: visible; }
   && ${CustomFieldsBody} > * > ${RowBox} > ${LabelledRow} {
-    grid-template-columns: ${LABEL_COL} minmax(0, 1fr);
+    grid-template-columns: ${LABEL_COL} ${FIELD_COL};
     column-gap: 24px;
     min-height: 68px;
     padding: 12px ${CARD_X};
@@ -572,7 +580,7 @@ const cardRows = css`
   }
   /* A row split in two (Task's Deadline | Planned for): the halves side by side, the
      first keeping the label column so its field lines up with the rows above */
-  &&& ${CustomFieldsBody} > * > ${RowBox} > .card-split { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 0; padding: 0; }
+  &&& ${CustomFieldsBody} > * > ${RowBox} > .card-split { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: calc(${LABEL_COL} + ${FIELD_MAX} + 24px + 2 * ${CARD_X}); column-gap: 0; padding: 0; }
   &&& ${CustomFieldsBody} > * > ${RowBox} > .card-split > :first-child { grid-template-columns: ${LABEL_COL} minmax(0, 1fr); column-gap: 24px; padding: 12px 24px 12px ${CARD_X}; }
   &&& ${CustomFieldsBody} > * > ${RowBox} > .card-split > :first-child + * { padding: 12px ${CARD_X} 12px 24px; }
   /* Wrappers that only group rows (Routine's Duration | Times) step aside */
@@ -2121,7 +2129,7 @@ export function EntryForm({
         <EdBody $full={!quick && !!expanded}>
           {isTaskCard ? (
           <EntryCard $flat data-task-card="">
-            <TaskHead data-journal="" data-full={expanded ? '' : undefined}>
+            <TaskHead data-journal="" data-full={expanded ? '' : undefined} style={{ maxWidth: TASK_ROW_MAX }}>
               <JournalPrompt>
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
                   label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
@@ -2158,7 +2166,9 @@ export function EntryForm({
           </EntryCard>
           ) : framed ? (
           <EntryCard $flat data-framed="">
-            <TaskHead data-journal="" data-full={expanded ? '' : undefined} style={{ paddingLeft: CARD_X, '--head-x': CARD_X } as CSSProperties}>
+            <TaskHead data-journal="" data-full={expanded ? '' : undefined}
+              // A topic with fields: the row no wider than the fields under it (a text-only topic keeps the full width)
+              style={{ paddingLeft: CARD_X, '--head-x': CARD_X, ...(textOnly ? {} : { maxWidth: FIELDS_ROW_MAX }) } as CSSProperties}>
               <JournalPrompt>
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
                   label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />

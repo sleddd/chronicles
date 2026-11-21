@@ -19,8 +19,8 @@ import { ESTIMATE_OPTIONS, estimateLabel, estimateOf } from '../../../utils/plan
 
 /* The task card (journal and Quick entry): a header with the topic picker and the
    Single task | To-do list switch, the title in a box with its Priority and tools, then
-   label-left rows — To-dos (a to-do list's items), Contributes to (goal, milestone and the
-   task's type), Status, Estimate, When (starts and ends, All day, Auto-migrate and the
+   label-left rows — To-dos (a to-do list's items), Status, Contributes to (goal, milestone
+   and the task's type), Time estimate, When (starts and ends, All day, Auto-migrate and the
    timer) and Notes. Props only. */
 
 const PRIORITIES: { value: TaskFieldValues['priority']; label: string }[] = [
@@ -42,7 +42,7 @@ const NEW_TYPE = '__new_type__';
 
 /* ── The card's pieces ── */
 
-/* When (an event's look): WHEN with All day under it, and one outlined box of Starts / Ends rows,
+/* When (an event's look): WHEN with All day under it, and one outlined box of Starts / Deadline rows,
    each a date | time */
 const WhenName = styled.div`
   display: flex;
@@ -130,7 +130,8 @@ const WhenTail = styled.div`
 export const TaskRow = styled.div`
   display: grid;
   /* Wide enough for the longest name, "Contributes to", on one line */
-  grid-template-columns: 140px minmax(0, 1fr);
+  /* The field never wider than 600px beside its name, like every topic's fields (EntryForm's FIELD_MAX) */
+  grid-template-columns: 140px minmax(0, 600px);
   column-gap: 24px;
   align-items: center;
   min-height: 50px;
@@ -381,7 +382,7 @@ interface TaskCardRowsProps {
   timerRunning?: boolean;
 }
 
-/** The task card's rows under the title: To-dos (a to-do list's items), Contributes to, Status, Estimate, When, Notes */
+/** The task card's rows under the title: To-dos (a to-do list's items), Status, Contributes to, Time estimate, When, Notes */
 export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOptions = [], types = [], onAddType, timer, timerRunning = false }: TaskCardRowsProps) {
   const set = (patch: Partial<TaskFieldValues>) => onChange({ ...values, ...patch });
   const isList = values.taskFormat === 'list';
@@ -429,7 +430,15 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
         </TaskRow>
       )}
 
-      <TaskRow data-inline="" data-stack="" style={{ paddingTop: 20, paddingBottom: 22 }}>
+      {/* Status comes first under the title, where it's reached for; Priority is in the title box's foot */}
+      <TaskRow data-inline="" style={{ paddingTop: 20, paddingBottom: 16 }}>
+        <TaskRowName>Status</TaskRowName>
+        <Picks>
+          <TaskStatusPick values={values} onChange={onChange} />
+        </Picks>
+      </TaskRow>
+
+      <TaskRow data-inline="" data-stack="" style={{ paddingTop: 16, paddingBottom: 22 }}>
         <TaskRowName>Contributes to</TaskRowName>
         <Picks>
           <PillPick>
@@ -483,18 +492,10 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
         </Picks>
       </TaskRow>
 
-      {/* Status sits here, where it's reached for; Priority is in the title box's foot */}
-      <TaskRow data-inline="" style={{ paddingTop: 20, paddingBottom: 16 }}>
-        <TaskRowName>Status</TaskRowName>
-        <Picks>
-          <TaskStatusPick values={values} onChange={onChange} />
-        </Picks>
-      </TaskRow>
-
       {/* Estimate: how long it should take (shown on its board card; the Planner sizes it by this
           until it's given a length of its own; AI planning reads it) */}
       <TaskRow data-inline="" style={{ paddingTop: 16, paddingBottom: 16 }}>
-        <TaskRowName>Estimate</TaskRowName>
+        <TaskRowName>Time estimate</TaskRowName>
         <Picks>
           <PillPick>
             <span className="value">{estimate ? estimateLabel(estimate) : 'None'}</span>
@@ -508,8 +509,8 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
         </Picks>
       </TaskRow>
 
-      {/* When: Starts (the day it's planned for, and a time) and Ends (the deadline) in one box,
-          like an event's — a deadline is just an Ends date. All day drops the times */}
+      {/* When: Starts (the day it's planned for, and a time) and Deadline (and a time) in one box,
+          like an event's. All day drops the times */}
       <TaskRow style={{ alignItems: 'start', paddingTop: 20, paddingBottom: 18 }}>
         <WhenName>
           <TaskRowName>When</TaskRowName>
@@ -537,7 +538,7 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
               )}
             </WhenLine>
             <WhenLine $allDay={!!values.allDay}>
-              <WhenLabel>Ends</WhenLabel>
+              <WhenLabel>Deadline</WhenLabel>
               <DateTimeInput type="date" aria-label="Deadline" value={values.deadline}
                 onChange={e => set({ deadline: e.target.value, ...(e.target.value ? {} : { deadlineTime: '' }) })} />
               {!values.allDay && (

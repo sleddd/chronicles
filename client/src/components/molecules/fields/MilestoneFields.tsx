@@ -13,7 +13,7 @@ export type { MilestoneFieldValues } from '../../../types/fields.js';
 /* Milestone fields — the same form in the journal editor and Quick Entry: the
    objective as the text's first line, its Goal in the text box's foot strip
    (MilestoneGoalPick); then rows — Status (where it's reached for, like a
-   task's and a goal's), When (Starts = the start date, Ends = the target date, the two ends
+   task's and a goal's), When (Starts = the start date, Deadline = the target date, the two ends
    of its roadmap bar, with the stopwatch in the row's top-right corner), Tasks
    (the tasks attached to it: tick, open, detach, and + Attach a task) — then Notes. */
 
@@ -215,7 +215,7 @@ export function MilestoneFields({
           </div>
         </LabelledRow>}
 
-        {/* When: Starts (the start date) and Ends (the target date), the two ends of its roadmap bar */}
+        {/* When: Starts (the start date) and Deadline (the target date), the two ends of its roadmap bar */}
         <LabelledRow style={timer ? { position: 'relative' } : undefined}>
           <RowLabel>When</RowLabel>
           {/* The timer in the row's top-right corner: view the time, start one, add time */}
@@ -227,7 +227,7 @@ export function MilestoneFields({
                 onChange={e => set({ startOn: e.target.value })} />
             </WhenLine>
             <WhenLine $allDay>
-              <WhenLabel>Ends</WhenLabel>
+              <WhenLabel>Deadline</WhenLabel>
               <DateTimeInput type="date" aria-label="Target date" value={values.targetDate} onChange={e => set({ targetDate: e.target.value })} />
             </WhenLine>
           </WhenBox2>

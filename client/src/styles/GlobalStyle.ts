@@ -35,7 +35,7 @@ export const GlobalStyle = createGlobalStyle`
 
   /* A page's main action beside its title (TopBarAction, desktop): a smoked glass
      pill on the photo, whatever button it is */
-  html[data-wallpaper] .page-action button {
+  html[data-wallpaper] .page-action button:not([data-solid]) {
     background: rgba(18, 20, 26, 0.5) !important;
     border: 1px solid transparent !important;
     color: #fff !important;
@@ -43,8 +43,8 @@ export const GlobalStyle = createGlobalStyle`
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
   }
-  html[data-wallpaper][data-theme='light'] .page-action button { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
-  html[data-wallpaper] .page-action button:hover { background: rgba(18, 20, 26, 0.66) !important; }
+  html[data-wallpaper][data-theme='light'] .page-action button:not([data-solid]) { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
+  html[data-wallpaper] .page-action button:not([data-solid]):hover { background: rgba(18, 20, 26, 0.66) !important; }
 
   html[data-wallpaper] .view-title {
     color: #fff !important;

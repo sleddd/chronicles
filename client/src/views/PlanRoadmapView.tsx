@@ -133,7 +133,7 @@ export function PlanRoadmapView() {
       <FilterTabs options={TIMELINE_SCALES} active={scale} onChange={setScale} />
       {goalTopicId && (
         <TopBarAction>
-          <PillButton type="button" onClick={() => newEntry(goalTopicId, category ? { goalCategory: category } : undefined)}>New Goal</PillButton>
+          <PillButton type="button" $variant="solid" onClick={() => newEntry(goalTopicId, category ? { goalCategory: category } : undefined)}>New Goal</PillButton>
         </TopBarAction>
       )}
     </>}>

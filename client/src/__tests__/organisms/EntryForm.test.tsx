@@ -98,14 +98,18 @@ describe('EntryForm', () => {
     saveStatus: '',
   };
 
-  it('a task opens in the task card: format switch, Priority in the title box, then Contributes to, Status, Estimate, When and Notes', () => {
+  it('a task opens in the task card: format switch, Priority in the title box, then Status, Contributes to, Time estimate, When and Notes', () => {
     const onChange = vi.fn();
     renderWithTheme(<EntryForm {...defaultProps} topicId={9} topics={[{ id: 9, name: 'Task', icon: null, color: null } as never]}
       customFields={{ priority: 'none' }} onCustomFieldsChange={onChange} entryId={3} isEditing onDelete={vi.fn()} />);
     expect(screen.getByRole('radio', { name: 'Single task' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByLabelText('Status')).toBeInTheDocument();
     // ("Planned" is also a Status choice, so look for the row names as words on the card)
-    for (const row of ['Title', 'Contributes to', 'Status', 'Estimate', 'When', 'Notes']) expect(screen.getAllByText(row).some(el => el.tagName === 'DIV')).toBe(true);
+    const rows = ['Title', 'Status', 'Contributes to', 'Time estimate', 'When', 'Notes'];
+    for (const row of rows) expect(screen.getAllByText(row).some(el => el.tagName === 'DIV')).toBe(true);
+    // In that order: Status first under the title, where it's reached for
+    const names = [...document.querySelectorAll('div')].map(el => el.textContent).filter(t => rows.includes(t ?? ''));
+    expect(names.filter((t, i) => names.indexOf(t) === i)).toEqual(rows);
     // Priority moved into the title box's foot: no row of its own
     expect(screen.queryAllByText('Priority').some(el => el.tagName === 'DIV')).toBe(false);
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'in_progress' } });

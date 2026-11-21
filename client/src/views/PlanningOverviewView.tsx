@@ -384,7 +384,7 @@ export function PlanningOverviewView() {
     {/* The page's actions: smoked glass on the photo, like every page's main action (.page-action) */}
     <span className="page-action" style={{ display: 'contents' }}>
       <PillButton type="button" $variant="neutral" onClick={() => setNaming(v => !v)} aria-expanded={naming}>New area</PillButton>
-      {goalTopicId !== undefined && <PillButton type="button" onClick={() => newInJournal(goalTopicId)}>New goal</PillButton>}
+      {goalTopicId !== undefined && <PillButton type="button" $variant="solid" onClick={() => newInJournal(goalTopicId)}>New goal</PillButton>}
     </span>
   </>);
 

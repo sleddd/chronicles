@@ -294,7 +294,7 @@ export function TopicDetailView() {
             </TitleBlock>
             <HeadActions>
               <PillButton type="button" $variant="neutral" onClick={startEdit}>Edit topic</PillButton>
-              <PillButton type="button" onClick={() => newEntry(topic.id)}>New {singular(topic.name)}</PillButton>
+              <PillButton type="button" $variant="solid" onClick={() => newEntry(topic.id)}>New {singular(topic.name)}</PillButton>
             </HeadActions>
             <HeadMenu>
               <RowMenu label={`${topic.name} actions`} items={[

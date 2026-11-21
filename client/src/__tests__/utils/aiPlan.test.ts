@@ -10,8 +10,8 @@ const input = (over: Partial<PlanInput> = {}): PlanInput => ({
   ],
   planned: [{ id: 3, title: 'Gym', day: '2026-11-20', start: 17 * 60, hours: 1, goalId: 10, milestoneId: null }],
   goals: [
-    { id: 10, title: 'Get healthy', category: 'Health', status: 'in_progress', type: 'long_term', startOn: '2026-10-01', targetDate: '2027-01-01', notes: 'Slow and steady' },
-    { id: 11, title: 'Write the book', category: '', status: 'new', type: '', startOn: '', targetDate: '', notes: '' },
+    { id: 10, title: 'Get healthy', category: 'Health', status: 'in_progress', startOn: '2026-10-01', targetDate: '2027-01-01', notes: 'Slow and steady' },
+    { id: 11, title: 'Write the book', category: '', status: 'new', startOn: '', targetDate: '', notes: '' },
   ],
   milestones: [{ id: 20, title: 'First draft', goalId: 11, status: 'not_started', startOn: '', targetDate: '2026-12-31', notes: 'Three chapters in', openTasks: 0 }],
   categories: ['Health', 'Career', 'Growth'],
@@ -136,14 +136,14 @@ describe('parsePlan', () => {
     const p = plan({
       goalChanges: [
         { id: 11, title: 'Write the book.', category: 'growth', type: 'long_term', why: 'Tidier.' },
-        { id: 10, category: 'Hobbies', type: 'long_term' }, // not a category of theirs, and already long-term
+        { id: 10, category: 'Hobbies', type: 'long_term' }, // not a category of theirs; goals have no type, so it's ignored
       ],
       taskChanges: [
         { id: 2, title: 'Sketch the book cover', type: 'small victory', why: 'Clearer.' },
         { id: 1, title: 'Call the dentist', type: 'Chore' }, // the same title, and not a type of theirs
       ],
     });
-    expect(p.goalChanges).toEqual([{ id: 11, title: 'Write the book.', category: 'Growth', type: 'long_term', why: 'Tidier.' }]);
+    expect(p.goalChanges).toEqual([{ id: 11, title: 'Write the book.', category: 'Growth', why: 'Tidier.' }]);
     expect(p.taskChanges).toEqual([{ id: 2, title: 'Sketch the book cover', type: 'Small victory', why: 'Clearer.' }]);
   });
 

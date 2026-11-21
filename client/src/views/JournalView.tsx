@@ -182,6 +182,23 @@ const NewEntryPill = styled.button`
   transition: border-color 120ms, color 120ms, opacity 120ms;
   &:hover { opacity: 1; border-color: var(--color-accent-hover); color: var(--color-accent-hover); }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  /* New entry itself: filled in the accent with dark text on wider screens, like every page's New
+     button — on the photo too. Phones and tablets keep the outlined pill in the top bar */
+  &[data-solid] {
+    opacity: 1;
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: #15181d;
+    text-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  &[data-solid]:hover { border-color: var(--color-accent-hover); background: var(--color-accent-hover); color: #15181d; }
+  #mobile-bar-actions &[data-solid], html[data-wallpaper] #mobile-bar-actions &[data-solid] {
+    border-color: var(--color-accent-line);
+    background: transparent;
+    color: var(--color-accent-line);
+  }
 `;
 
 /** Compact change-detection signature for the entry's image set. */
@@ -1149,7 +1166,7 @@ export function JournalView() {
         // New entry: an outlined pill right beside the title
         titleAside={(
           <TopBarAction>
-            <NewEntryPill type="button" onClick={() => { setSelectedEntryId(null); setShowMobileEditor(true); }}>
+            <NewEntryPill type="button" data-solid="" onClick={() => { setSelectedEntryId(null); setShowMobileEditor(true); }}>
               <Icon name="plus" size={14} strokeWidth={2} aria-hidden="true" />
               New entry
             </NewEntryPill>
