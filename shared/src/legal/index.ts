@@ -33,7 +33,7 @@ export const LEGAL_DETAILS = {
  */
 export const BETA_DETAILS = {
   seats: 30,
-  priceTerms: 'Billing starts when it releases after the beta. The price is still being set, but it won’t be more than $20 a month.',
+  priceTerms: 'Billing starts when it releases after the beta. The price is still being set, but it won’t be more than $15 a month.',
   copyrightHolder: 'Claudette Raynor',
   githubUrl: 'https://github.com/sleddd/chronicles',
 } as const;

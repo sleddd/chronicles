@@ -383,65 +383,38 @@ const MenuPanel = styled.nav`
   @media (max-width: 480px) { right: 16px; left: 16px; }
 `;
 
-/** Join the beta in the header: the white pill, a step smaller than the hero's */
+/** Sign in / Open Chronicles in the header: a white-outlined pill, no fill */
 const HeaderPill = styled(ActionPill)`
-  && { min-height: 42px; padding: 8px 20px; white-space: nowrap; }
+  && { min-height: 42px; padding: 8px 20px; white-space: nowrap; font-weight: 600; background: transparent; border-color: rgba(255, 255, 255, 0.7); color: #fff; }
+  &&:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
   @media (max-width: 480px) { && { min-height: 38px; padding: 6px 14px; font-size: 14px; } }
 `;
 
-/* A step darker than the Questions band above it, a hairline between: the
-   brand and a line about it, Product / Trust / Help columns, then the
-   copyright under a rule */
+/* One row on the darkest band: the name and a line on the left, the promise on the right,
+   then a quiet row of the legal pages and the copyright */
 const Footer = styled.footer`
-  --text-primary: #f7f8fa;
-  --text-soft: #b4b7be;
-  padding: 72px 0 36px;
-  background: #1a1c21;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--text-soft);
+  padding: 44px 0 36px;
+  background: #161922;
+  color: rgba(255, 255, 255, 0.72);
   font-size: 14px;
-  @media (max-width: 768px) { padding: 56px 0 32px; }
 `;
 
-const FooterTop = styled(Container)`
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr));
-  gap: 40px;
-  > div:first-child p { max-width: 360px; margin: 22px 0 0; line-height: 1.65; }
-  h2 {
-    margin: 10px 0 18px;
-    font-family: var(--font-sans);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--text-primary);
-  }
-  ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-  a { color: var(--text-soft); text-decoration: none; &:hover { color: var(--text-primary); } }
-  @media (max-width: 900px) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    > div:first-child { grid-column: 1 / -1; }
-  }
-  @media (max-width: 480px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+const FooterRow = styled(Container)`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px 32px;
+  flex-wrap: wrap;
 `;
 
-const FooterBrand = styled(Brand)`
-  font-size: 23px;
-  && { color: var(--text-soft); }
-`;
-
-/* The copyright and the promise, under a rule the column's width */
-const FooterBottom = styled(Container)`
-  margin-top: 56px;
-  > div {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-    padding-top: 28px;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-  }
+const FooterLinks = styled(Container)`
+  margin-top: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  a { color: rgba(255, 255, 255, 0.62); text-decoration: none; &:hover { color: #fff; } }
 `;
 
 interface LandingTemplateProps {
@@ -506,8 +479,10 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
             <a href="#features" data-section-link>Features</a>
             <a href="#privacy" data-section-link>Privacy</a>
             <a href="#faq" data-section-link>FAQ</a>
-            {signedIn ? <Link to="/dashboard" data-sign-in>Open Chronicles</Link> : <Link to="/login" data-sign-in>Sign in</Link>}
-            {!signedIn && <HeaderPill as="a" href="#beta" $primary data-button>Join the Beta</HeaderPill>}
+            {/* One outlined pill: Sign in, or Open Chronicles once signed in (in the menu on phones and tablets) */}
+            <HeaderPill as={Link} to={signedIn ? '/dashboard' : '/login'} data-button data-sign-in>
+              {signedIn ? 'Open Chronicles' : 'Sign in'}
+            </HeaderPill>
             <MenuBtn ref={menuBtnRef} type="button" aria-expanded={menuOpen} aria-controls="landing-menu"
               aria-label={menuOpen ? 'Close the menu' : 'Open the menu'} onClick={() => setMenuOpen(o => !o)}>
               <span /><span /><span />
@@ -529,43 +504,17 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
       </HeroBand>
       <main>{children}</main>
       <Footer>
-        <FooterTop>
-          <div>
-            <FooterBrand to="/"><DuskMark id="landing-mark-foot" /> Chronicles</FooterBrand>
-            <p>A zero-knowledge encrypted life dashboard, journal and digital day planner.</p>
-          </div>
-          <nav aria-labelledby="foot-product">
-            <h2 id="foot-product">Product</h2>
-            <ul>
-              <li><a href="#features">Features</a></li>
-              <li><a href="#how">How it works</a></li>
-              <li><a href="#beta">Join the Beta</a></li>
-            </ul>
-          </nav>
-          <nav aria-labelledby="foot-trust">
-            <h2 id="foot-trust">Trust</h2>
-            <ul>
-              <li><a href="#privacy">Privacy and encryption</a></li>
-              <li><Link to="/health-privacy">Privacy policy</Link></li>
-              <li><Link to="/terms">Terms</Link></li>
-              <li><Link to="/license">License</Link></li>
-            </ul>
-          </nav>
-          <nav aria-labelledby="foot-help">
-            <h2 id="foot-help">Help</h2>
-            <ul>
-              <li><a href="#faq">FAQ</a></li>
-              <li><Link to="/report-a-bug">Feedback/Report a Bug</Link></li>
-              <li>{signedIn ? <Link to="/dashboard">Open Chronicles</Link> : <Link to="/login">Sign in</Link>}</li>
-            </ul>
-          </nav>
-        </FooterTop>
-        <FooterBottom>
-          <div>
-            <span>© {year} {BETA_DETAILS.copyrightHolder}</span>
-            <span>No analytics. No tracking. No ads.</span>
-          </div>
-        </FooterBottom>
+        <FooterRow>
+          <span>Chronicles · An encrypted life dashboard, journal and day planner</span>
+          <span>No analytics. No tracking. No ads.</span>
+        </FooterRow>
+        <FooterLinks as="nav" aria-label="Legal and help">
+          <Link to="/health-privacy">Privacy policy</Link>
+          <Link to="/terms">Terms</Link>
+          <Link to="/license">License</Link>
+          <Link to="/report-a-bug">Feedback/Report a Bug</Link>
+          <span>© {year} {BETA_DETAILS.copyrightHolder}</span>
+        </FooterLinks>
       </Footer>
     </Page>
   );

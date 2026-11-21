@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { Checkbox } from '../../atoms/core/Checkbox.jsx';
 import { beta } from '../../../services/api.js';
@@ -28,7 +28,7 @@ const Muted = styled.p`
 /* Name over email, one field a row */
 const Fields = styled.div`
   display: grid;
-  gap: 22px;
+  gap: 14px;
   margin-bottom: 22px;
 `;
 
@@ -37,16 +37,17 @@ const Fields = styled.div`
 const Field = styled.label`
   display: flex;
   flex-direction: column;
-  gap: 10px;
   font-size: 15px;
   font-weight: 500;
   color: var(--text-primary);
+  /* The label is the box's placeholder on screen; kept for screen readers */
+  > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   input {
     height: 48px;
     padding: 0 16px;
-    border: 1px solid var(--border-field);
-    border-radius: 8px;
-    background: var(--bg-sunken);
+    border: 1px solid var(--border-card);
+    border-radius: 10px;
+    background: #ffffff;
     font-family: var(--font-sans);
     font-size: 16px;
     font-weight: 400;
@@ -79,11 +80,9 @@ const Submit = styled.div`
   text-align: center;
 `;
 
-/* The submit: a full-width round pill in dark charcoal (the app's dark page colour) —
-   not the page's taupe, so the one thing to press stands out. Deep teal before
-   (TEAL_INK in LandingTemplate) */
-const SUBMIT = '#1f2229';
-const SUBMIT_HOVER = '#33373f';
+/* The submit: a full-width round teal pill in tracked capitals (the mockup; dark charcoal before) */
+const SUBMIT = '#34a5a2';
+const SUBMIT_HOVER = '#2c8c8a';
 const SubmitButton = styled.button`
   width: 100%;
   height: 50px;
@@ -92,8 +91,10 @@ const SubmitButton = styled.button`
   background: ${SUBMIT};
   color: #ffffff;
   font-family: var(--font-sans);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: background 150ms;
   &:hover:not(:disabled) { background: ${SUBMIT_HOVER}; }
@@ -128,7 +129,8 @@ const Honeypot = styled.input`
 
 const messageOf = (err: unknown) => (err instanceof Error && err.message ? err.message : 'Something went wrong. Please try again.');
 
-export function BetaSignup() {
+/** `head`: what sits over the form in the card (the heading, a line and the points) */
+export function BetaSignup({ head }: { head?: ReactNode } = {}) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [adult, setAdult] = useState(false);
@@ -159,6 +161,7 @@ export function BetaSignup() {
 
   return (
       <BetaCard id="apply">
+        {head}
 
         {done ? (
           <Done role="status" ref={doneRef} tabIndex={-1}>
@@ -172,8 +175,8 @@ export function BetaSignup() {
         ) : (
           <form onSubmit={apply}>
             <Fields>
-              <Field>Name<input value={name} onChange={e => setName(e.target.value)} autoComplete="name" maxLength={100} required data-underline /></Field>
-              <Field>Email<input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" maxLength={254} required data-underline /></Field>
+              <Field><span>Name</span><input placeholder="Name" value={name} onChange={e => setName(e.target.value)} autoComplete="name" maxLength={100} required data-underline /></Field>
+              <Field><span>Email</span><input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" maxLength={254} required data-underline /></Field>
             </Fields>
             <Honeypot aria-hidden tabIndex={-1} autoComplete="off" name="website" value={trap} onChange={e => setTrap(e.target.value)} />
             <Checks>

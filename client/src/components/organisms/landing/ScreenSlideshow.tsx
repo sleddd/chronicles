@@ -112,7 +112,7 @@ const Controls = styled.div`
   margin-top: 40px;
 `;
 
-/* Pause / play: the arrows' round dark button, smaller, beside the dots */
+/* Pause / play: a round outline only, beside the dots */
 const PauseButton = styled.button`
   flex: none;
   width: 32px;
@@ -121,13 +121,13 @@ const PauseButton = styled.button`
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: none;
+  border: 1px solid #80868f;
   border-radius: 50%;
-  background: #2b2e36;
-  color: #ffffff;
+  background: transparent;
+  color: #4a505b;
   cursor: pointer;
-  transition: background 150ms;
-  &:hover { background: #383c46; }
+  transition: border-color 150ms, color 150ms;
+  &:hover { border-color: #4a505b; color: #1f2128; }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
@@ -146,8 +146,8 @@ const Dots = styled.div`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    &::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #bfc4cc; transition: background 150ms, transform 150ms; }
-    &:hover::before { background: #80868f; }
+    &::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #9aa0a9; transition: background 150ms, transform 150ms; }
+    &:hover::before { background: #5f6570; }
     &[aria-current='true']::before { background: ${PAGE_INK}; transform: scale(1.25); }
     &:focus-visible { outline: 2px solid ${PAGE_INK}; outline-offset: -2px; border-radius: 50%; }
   }
