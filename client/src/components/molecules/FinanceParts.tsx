@@ -498,6 +498,9 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
+  // Opened from the keyboard (a click with no pointer behind it): the menu follows its button
+  // when the page scrolls. Opened with a mouse or a tap, scrolling closes it
+  const byKeyboard = useRef(false);
   const close = (returnFocus = false) => {
     setOpen(false);
     setConfirming(null);
@@ -548,7 +551,7 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
     const onMove = (e: Event) => {
       if (e.target instanceof Node && list.current?.contains(e.target)) return;
       // While a keyboard user is in the menu, follow the button instead of closing
-      if (list.current?.contains(document.activeElement)) { place(); return; }
+      if (byKeyboard.current && list.current?.contains(document.activeElement)) { place(); return; }
       close();
     };
     const onResize = () => close();
@@ -571,7 +574,8 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
   if (items.length === 0) return null;
   return (
     <MenuWrap ref={wrap}>
-      <MenuButton ref={button} type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => { setOpen(o => !o); setConfirming(null); }}>
+      <MenuButton ref={button} type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open}
+        onClick={e => { byKeyboard.current = e.detail === 0; setOpen(o => !o); setConfirming(null); }}>
         ⋯
       </MenuButton>
       {open && createPortal(

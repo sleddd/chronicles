@@ -22,10 +22,15 @@ export const MEDICAL_DISCLAIMER = 'In-App AI is not a doctor and can’t give me
 const MEDICAL_WORDS = new RegExp([
   'symptoms?', 'diagnos\\w*', 'medications?', 'medicines?', 'meds', 'prescri\\w*', 'dos(?:e|es|age|ing)', 'side[ -]effects?',
   'drug interactions?', 'pills?', 'antibiotics?', 'antidepressants?', 'ibuprofen', 'acetaminophen', 'tylenol', 'advil', 'aspirin',
-  'insulin', 'blood (?:pressure|sugar|test|tests|work)', 'lab results?', 'test results?', 'fever', 'rash', 'infection', 'lump',
+  'insulin', 'blood (?:pressure|sugar|test|tests|work)', 'lab results?', 'test results?', 'fever', 'rash(?:es)?(?! decisions?)',
+  'infections?', 'infected', 'lump',
   'chest pain', 'shortness of breath', 'can\'?t breathe', 'dizz(?:y|iness)', 'migraines?', 'surgery', 'diseases?', 'disorders?',
   'treatments?', 'is (?:this|it) (?:normal|serious)', 'should i (?:see|call) (?:a|my) (?:doctor|dr)',
-  'doctors?', 'physicians?', 'pharmacists?', 'nurses?', 'allerg(?:y|ies|ic)', 'pregnan\\w*',
+  'doctors?(?! who)', 'physicians?', 'pharmacists?', 'nurses?', 'allerg(?:y|ies|ic)', 'pregnan\\w*',
+  // Everyday ways of asking: how it feels, common conditions, and how much of something to take
+  'pains?', 'painful', 'aches?', '\\w+aches?', 'hurts', 'sore throat', 'nause\\w*', 'vomit\\w*', 'cough\\w*', 'flu',
+  'feel(?:ing)? (?:sick|ill|unwell)', 'cancer', 'diabet\\w*', 'asthma', 'overdos\\w*', 'medical', 'vitamins?', 'supplements?',
+  '\\d+ ?(?:mg|mcg|iu)', 'what should i take', '(?:safe|ok|okay) to take', 'how much \\w+ (?:is safe|can i take)',
 ].map(w => `\\b${w}\\b`).join('|'), 'i');
 
 /** Whether a message is about health care (symptoms, medications, a diagnosis…) — for the medical note */

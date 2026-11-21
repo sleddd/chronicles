@@ -18,9 +18,10 @@ import { toDateStr } from '../../../utils/dateUtils.js';
 import { ESTIMATE_OPTIONS, estimateLabel, estimateOf } from '../../../utils/planner.js';
 
 /* The task card (journal and Quick entry): a header with the topic picker and the
-   Single task | To-do list switch, the title in a box with its Status and tools, then
-   label-left rows — Type (goal · milestone, and the task's type), Priority, Planned
-   (date, time, Auto-migrate and the timer), Deadline and Notes. Props only. */
+   Single task | To-do list switch, the title in a box with its Priority and tools, then
+   label-left rows — To-dos (a to-do list's items), Contributes to (goal, milestone and the
+   task's type), Status, Estimate, When (starts and ends, All day, Auto-migrate and the
+   timer) and Notes. Props only. */
 
 const PRIORITIES: { value: TaskFieldValues['priority']; label: string }[] = [
   { value: 'none', label: 'None' },
@@ -128,7 +129,8 @@ const WhenTail = styled.div`
 /* A row: its name (small tracked capitals) on the left, the field on the right */
 export const TaskRow = styled.div`
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  /* Wide enough for the longest name, "Contributes to", on one line */
+  grid-template-columns: 140px minmax(0, 1fr);
   column-gap: 24px;
   align-items: center;
   min-height: 50px;
@@ -274,21 +276,18 @@ const StatusPillPick = styled(PillPick)`
 `;
 
 /* A picker in the title box's foot: its name and the choice (no pill) — Priority, Category, Goal */
-export const StatusPick = styled(Pick)`
+export const FootPickBox = styled(Pick)`
   gap: 10px;
   font-size: 15px;
-  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
   .value { font-weight: 500; }
 `;
 
-/** A Status picker for the title box's foot: a dot, "Status" and the choice ⌄ (the task card's, the goal's) */
-export function StatusDropdown<T extends string>({ value, options, onChange, inRow }: {
+/** The Status picker of a field row: an outlined pill with the status dot and the choice ⌄ (the row already says "Status") */
+export function StatusDropdown<T extends string>({ value, options, onChange }: {
   value: T; options: { value: T; label: string; dot: string }[]; onChange: (v: T) => void;
-  /** In a labelled field row: an outlined pill with the dot and the choice (the row already says "Status") */
-  inRow?: boolean;
 }) {
   const s = options.find(x => x.value === value) ?? options[0];
-  if (inRow) return (
+  return (
     <div>
       <StatusPillPick>
         <span className="dot" style={{ background: s.dot }} aria-hidden="true" />
@@ -300,17 +299,6 @@ export function StatusDropdown<T extends string>({ value, options, onChange, inR
       </StatusPillPick>
     </div>
   );
-  return (
-    <StatusPick>
-      <span className="dot" style={{ background: s.dot }} aria-hidden="true" />
-      <span className="name">Status</span>
-      <span className="value">{s.label}</span>
-      <Icon name="chevron-down" size={14} strokeWidth={2} />
-      <select aria-label="Status" value={value} onChange={e => onChange(e.target.value as T)}>
-        {options.map(x => <option key={x.value} value={x.value}>{x.label}</option>)}
-      </select>
-    </StatusPick>
-  );
 }
 
 /** A picker for the title box's foot with no dot: its name and the choice ⌄ (a meal's Breakfast / Lunch…) */
@@ -319,7 +307,7 @@ export function FootPick<T extends string>({ name, value, options, placeholder, 
 }) {
   const chosen = options.find(x => x.value === value);
   return (
-    <StatusPick>
+    <FootPickBox>
       <span className="name">{name}</span>
       <span className="value">{chosen?.label ?? placeholder}</span>
       <Icon name="chevron-down" size={14} strokeWidth={2} />
@@ -327,13 +315,14 @@ export function FootPick<T extends string>({ name, value, options, placeholder, 
         {!chosen && <option value="">{placeholder}</option>}
         {options.map(x => <option key={x.value} value={x.value}>{x.label}</option>)}
       </select>
-    </StatusPick>
+    </FootPickBox>
   );
 }
 
-export function TaskStatusPick({ values, onChange, inRow }: { values: TaskFieldValues; onChange: (v: TaskFieldValues) => void; inRow?: boolean }) {
+/** The task's Status, for its field row */
+export function TaskStatusPick({ values, onChange }: { values: TaskFieldValues; onChange: (v: TaskFieldValues) => void }) {
   const status = taskStatusOf(values as unknown as Record<string, unknown>);
-  return <StatusDropdown value={status} options={STATUSES} inRow={inRow}
+  return <StatusDropdown value={status} options={STATUSES}
     onChange={v => onChange({ ...values, ...taskFieldsForStatus(v as TaskStatus) })} />;
 }
 
@@ -387,12 +376,12 @@ interface TaskCardRowsProps {
   milestoneOptions?: MilestoneOption[];
   types?: string[];
   onAddType?: (label: string) => void;
-  /** The timer (view time, start, add time), shown from the stopwatch at the end of Planned */
+  /** The timer (view time, start, add time), shown from the stopwatch under When */
   timer?: ReactNode;
   timerRunning?: boolean;
 }
 
-/** The task card's rows under the title: Type, Priority, Planned, Deadline, Notes (a to-do list's items first) */
+/** The task card's rows under the title: To-dos (a to-do list's items), Contributes to, Status, Estimate, When, Notes */
 export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOptions = [], types = [], onAddType, timer, timerRunning = false }: TaskCardRowsProps) {
   const set = (patch: Partial<TaskFieldValues>) => onChange({ ...values, ...patch });
   const isList = values.taskFormat === 'list';
@@ -441,7 +430,7 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
       )}
 
       <TaskRow data-inline="" data-stack="" style={{ paddingTop: 20, paddingBottom: 22 }}>
-        <TaskRowName>Category</TaskRowName>
+        <TaskRowName>Contributes to</TaskRowName>
         <Picks>
           <PillPick>
             <span className="name">Goal:</span>
@@ -498,7 +487,7 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
       <TaskRow data-inline="" style={{ paddingTop: 20, paddingBottom: 16 }}>
         <TaskRowName>Status</TaskRowName>
         <Picks>
-          <TaskStatusPick values={values} onChange={onChange} inRow />
+          <TaskStatusPick values={values} onChange={onChange} />
         </Picks>
       </TaskRow>
 

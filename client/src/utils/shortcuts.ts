@@ -51,6 +51,17 @@ export function shortcutCatalog(nav: NavLike[], topics: { id: number; name: stri
   return out;
 }
 
+/**
+ * The name each pinned chip shows. Views are named on their own ("Training"), so two pinned
+ * pages can share a name ("Reports" in Health and in Finance): those get their section in front.
+ */
+export function chipLabels(pinned: Shortcut[]): Map<string, string> {
+  const uses = new Map<string, number>();
+  for (const s of pinned) uses.set(s.label, (uses.get(s.label) ?? 0) + 1);
+  const inSection = (s: Shortcut) => s.group !== 'Pages' && s.group !== 'Topics';
+  return new Map(pinned.map(s => [s.path, (uses.get(s.label) ?? 0) > 1 && inSection(s) ? `${s.group} · ${s.label}` : s.label]));
+}
+
 /** The saved list as stored: paths only, each once, in order, at most MAX_SHORTCUTS */
 export function cleanShortcuts(saved: unknown): string[] {
   if (!Array.isArray(saved)) return [];

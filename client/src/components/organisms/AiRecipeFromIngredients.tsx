@@ -115,7 +115,7 @@ export function AiRecipeFromIngredients({ onClose }: { onClose: () => void }) {
     <PillButton type="button" $variant="neutral" onClick={close}>Cancel</PillButton>
     <PillButton type="button" disabled={!ready} onClick={() => prepare([])}>Next</PillButton>
   </>) : step === 'share' ? (<>
-    <PillButton type="button" $variant="neutral" onClick={() => setStep(idea ? 'review' : 'setup')}>Back</PillButton>
+    <PillButton type="button" $variant="neutral" onClick={() => { setError(''); setStep(idea ? 'review' : 'setup'); }}>Back</PillButton>
     <PillButton type="button" onClick={() => { void send(); }}>OK</PillButton>
   </>) : step === 'working' ? (
     <PillButton type="button" $variant="neutral" onClick={close}>Cancel</PillButton>

@@ -85,7 +85,7 @@ export const MEDICAL_RULES = [
   '- Help with general, well-established information in plain words, the way a knowledgeable person would. Do not refuse or brush them off.',
   '- In that reply, say once and briefly that you are an AI, this is general information and not medical advice, and it may not fit their situation. Do not repeat this in every later reply about the same thing.',
   '- Never diagnose them, never say what they have, and never tell them to start, stop, skip or change a medication or a dose. Suggest they ask a doctor, nurse or pharmacist, who knows their history.',
-  '- If anything they describe could be an emergency — chest pain, trouble breathing, signs of a stroke, severe bleeding, a severe allergic reaction, an overdose, or thoughts of harming themselves — tell them first, plainly, to call 911 or local emergency services now.',
+  '- If anything they describe could be an emergency — chest pain, trouble breathing, signs of a stroke, severe bleeding, a severe allergic reaction or an overdose — tell them first, plainly, to call 911 or local emergency services now. Thoughts of self-harm are not covered by this line: answer those as your other rules on distress say.',
   '- Never invent figures, doses or facts. If you are not sure, say so.',
 ].join('\n');
 

@@ -228,22 +228,33 @@ describe('PlannerBoard — a task\'s length', () => {
   }];
   const props = () => ({ onOpen: vi.fn(), onOpenEvent: vi.fn(), onSchedule: vi.fn(), onAdd: vi.fn(), onResize: vi.fn(), overdue: [], open: [] });
 
-  it('is as tall as its hours, and its grip\'s arrow keys change it by half an hour', () => {
-    const p = props();
-    renderWithTheme(<PlannerBoard {...p} lanes={lanes(2)} />);
-    expect((screen.getByText('Deep work').closest('article') as HTMLElement).style.height).toBe('108px'); // 2 h at 60px an hour, less 12px of room between cards
-    expect(screen.getByText('2 h')).toBeTruthy();
-    const grip = screen.getByRole('button', { name: /^Length of Deep work: 2 h/ });
-    fireEvent.keyDown(grip, { key: 'ArrowDown' });
-    expect(p.onResize).toHaveBeenLastCalledWith(3, 2.5);
-    fireEvent.keyDown(grip, { key: 'ArrowUp' });
-    expect(p.onResize).toHaveBeenLastCalledWith(3, 1.5);
-    expect(p.onOpen).not.toHaveBeenCalled();
+  it('is as tall as its hours, and its grip\'s arrow keys change it five minutes at a time (Shift: half an hour)', async () => {
+    vi.useFakeTimers();
+    try {
+      const p = props();
+      renderWithTheme(<PlannerBoard {...p} lanes={lanes(2)} />);
+      expect((screen.getByText('Deep work').closest('article') as HTMLElement).style.height).toBe('108px'); // 2 h at 60px an hour, less 12px of room between cards
+      expect(screen.getByText('2 h')).toBeTruthy();
+      const grip = () => screen.getByRole('button', { name: /^Length of Deep work/ });
+      // Three presses in a row (a held key): shown at once, saved once when the keys rest
+      fireEvent.keyDown(grip(), { key: 'ArrowDown' });
+      fireEvent.keyDown(grip(), { key: 'ArrowDown' });
+      fireEvent.keyDown(grip(), { key: 'ArrowDown', shiftKey: true });
+      expect(screen.getByText('2 h 40')).toBeTruthy();
+      expect(p.onResize).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(500);
+      expect(p.onResize).toHaveBeenCalledTimes(1);
+      expect(p.onResize.mock.calls[0][0]).toBe(3);
+      expect(p.onResize.mock.calls[0][1]).toBeCloseTo(2 + 40 / 60);
+      expect(p.onOpen).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('never goes under half an hour, and cards off a day have no grip', () => {
+  it('never goes under five minutes, and cards off a day have no grip', () => {
     const p = props();
-    renderWithTheme(<PlannerBoard {...p} lanes={lanes(0.5)} open={[{ id: 8, title: 'Someday', done: false, day: '', hours: 1 }]} />);
+    renderWithTheme(<PlannerBoard {...p} lanes={lanes(5 / 60)} open={[{ id: 8, title: 'Someday', done: false, day: '', hours: 1 }]} />);
     fireEvent.keyDown(screen.getByRole('button', { name: /^Length of Deep work/ }), { key: 'ArrowUp' });
     expect(p.onResize).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /^Length of Someday/ })).toBeNull();

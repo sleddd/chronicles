@@ -1034,6 +1034,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const onCardKey = (b: Block, e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
+    // One step, one save a press: a held key repeats thirty times a second, each a save of its own
+    if (e.repeat) return;
     const len = b.end - b.start;
     const start = Math.max(0, Math.min(24 * 60 - len, b.start + (e.key === 'ArrowUp' ? -15 : 15)));
     saveCardTimes(b, 'move', start, start + len);
@@ -1348,7 +1350,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     const id = await createEntry({ name: 'Task', icon: 'circle-check' }, text, {
       taskDescription: text, ...taskFieldsForStatus('todo'), isAutoMigrating: false,
       parentGoalId: null, parentMilestoneId: null, deadline: '', priority: 'none',
-      scheduledDate: day, scheduledTime: time, scheduledHours: 1,
+      // No length of its own: an hour to start, or its estimate once it has one
+      scheduledDate: day, scheduledTime: time,
     });
     if (id === null) showFlash('That task didn’t save. Try again.');
   };

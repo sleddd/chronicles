@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import type { KeyboardEvent } from 'react';
+import { pressable } from '../../utils/pressable.js';
 import { onBackdrop } from '../../styles/darkBackdrop.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { useNavigate } from 'react-router-dom';
@@ -79,19 +79,6 @@ const EmptyMsg = styled.div`
 `;
 
 /* time | kind over title */
-/* A row that opens something: a button for the keyboard too (Enter / Space) */
-function pressable(onPress: () => void) {
-  return {
-    role: 'button' as const,
-    tabIndex: 0,
-    onClick: onPress,
-    onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
-      if (e.target !== e.currentTarget) return;
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPress(); }
-    },
-  };
-}
-
 const EntryRow = styled.div`
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);

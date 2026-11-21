@@ -5,7 +5,7 @@ import {
   FormWrap, Section, SectionHead, SectionLabel, TitleInput, Chips, Chip, RowBox, LabelledRow, RowLabel, BoxText,
 } from './formKit.js';
 import { Icon } from '../../atoms/core/Icon.jsx';
-import { PillPick, StatusPick, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
+import { PillPick, FootPickBox, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
 export type { GoalFieldValues } from '../../../types/fields.js';
 
 /* Goal fields — the same form in the journal editor and Quick Entry: the
@@ -28,10 +28,10 @@ const STATUSES: { value: GoalFieldValues['goalStatus']; label: string; dot: stri
   { value: 'completed', label: 'Achieved', dot: 'var(--color-accent)' },
 ];
 
-/** The goal's Status, for the text box's foot strip (like the task card's) */
-export function GoalStatusPick({ values, onChange, inRow }: { values: GoalFieldValues; onChange: (v: GoalFieldValues) => void; inRow?: boolean }) {
+/** The goal's Status, for its field row (like the task card's) */
+export function GoalStatusPick({ values, onChange }: { values: GoalFieldValues; onChange: (v: GoalFieldValues) => void }) {
   const status = STATUSES.some(s => s.value === values.goalStatus) ? values.goalStatus : 'new';
-  return <StatusDropdown value={status} options={STATUSES} inRow={inRow} onChange={goalStatus => onChange({ ...values, goalStatus })} />;
+  return <StatusDropdown value={status} options={STATUSES} onChange={goalStatus => onChange({ ...values, goalStatus })} />;
 }
 
 const NEW_CATEGORY = '__new_category__';
@@ -66,8 +66,6 @@ interface GoalFieldsProps {
   categories?: string[];
   /** Save a new category; omitted = no + Add */
   onAddCategory?: (label: string) => void;
-  /** Remove one from the list; omitted = no Edit */
-  onRemoveCategory?: (label: string) => void;
   /** The goal's Time panel, opened from a stopwatch in the When row's top-right corner */
   timer?: ReactNode;
   timerRunning?: boolean;
@@ -105,7 +103,7 @@ export function CategoryPill({ value, categories, onPick, onAdd, name, foot }: {
       </button>
     </NameBox>
   );
-  const Shell = foot ? StatusPick : PillPick;
+  const Shell = foot ? FootPickBox : PillPick;
   const picker = (
     <Shell>
       {name && <span className="name">{name}</span>}
@@ -150,7 +148,7 @@ export function GoalFields({ values, onChange, categories = [], onAddCategory, t
         {/* Status first, where it's reached for */}
         <LabelledRow>
           <RowLabel>Status</RowLabel>
-          <GoalStatusPick values={values} onChange={onChange} inRow />
+          <GoalStatusPick values={values} onChange={onChange} />
         </LabelledRow>
         {!categoryInFoot && (
           <LabelledRow>

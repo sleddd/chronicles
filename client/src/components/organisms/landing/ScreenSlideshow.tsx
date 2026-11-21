@@ -226,7 +226,8 @@ export function ScreenSlideshow() {
           <PauseButton
             type="button"
             aria-label={stopped ? 'Play slideshow' : 'Pause slideshow'}
-            onClick={() => setStopped(v => !v)}
+            // Pressing Play starts it now, though the pointer or the focus is still on the slideshow
+            onClick={() => { setStopped(v => !v); setPaused(false); }}
           >
             <MaterialIcon aria-hidden $size={20}>{stopped ? 'play_arrow' : 'pause'}</MaterialIcon>
           </PauseButton>

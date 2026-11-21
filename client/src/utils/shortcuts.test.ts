@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addableShortcuts, cleanShortcuts, MAX_SHORTCUTS, shortcutCatalog, shownShortcuts } from './shortcuts.js';
+import { addableShortcuts, cleanShortcuts, MAX_SHORTCUTS, shortcutCatalog, shownShortcuts, chipLabels } from './shortcuts.js';
 
 const nav = [
   { label: 'Journal', icon: 'book', path: '/journal' },
@@ -39,5 +39,20 @@ describe('saved shortcuts', () => {
     const groups = addableShortcuts(['/journal', '/health/habits'], catalog);
     expect(groups.map(g => g.group)).toEqual(['Pages', 'Health', 'Inspiration', 'Topics']);
     expect(groups.flatMap(g => g.items).some(s => s.path === '/journal')).toBe(false);
+  });
+});
+
+describe('chipLabels', () => {
+  it('puts the section in front only when two pinned pages share a name', () => {
+    const chip = (path: string, label: string, group: string) => ({ path, label, group, icon: 'home' });
+    const names = chipLabels([
+      chip('/health/reports', 'Reports', 'Health'), chip('/finance/reports', 'Reports', 'Finance'),
+      chip('/health/exercise/training', 'Training', 'Health'), chip('/dashboard', 'Dashboard', 'Pages'), chip('/health', 'Dashboard', 'Health'),
+    ]);
+    expect(names.get('/health/reports')).toBe('Health · Reports');
+    expect(names.get('/finance/reports')).toBe('Finance · Reports');
+    expect(names.get('/health/exercise/training')).toBe('Training');
+    expect(names.get('/dashboard')).toBe('Dashboard');
+    expect(names.get('/health')).toBe('Health · Dashboard');
   });
 });

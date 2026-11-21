@@ -43,7 +43,8 @@ const BarActions = styled.div`
   align-items: center;
   gap: 8px;
   flex: none;
-  &:empty { display: none; }
+  /* Nothing in it: no actions at all, or only the boxes of actions with nothing to show */
+  &:empty, &:not(:has(> * > *)) { display: none; }
 `;
 
 /* The logo and page name — the button that opens and closes the menu (there's no ☰) */

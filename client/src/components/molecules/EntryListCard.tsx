@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { pressOnKey } from '../../utils/pressable.js';
 import { entryRowPlain, rowHoverHandlers, clearRowHover } from '../../styles/entryRow.js';
 import { entryTitleText } from '../../utils/entryTitle.js';
 import {
@@ -91,10 +92,7 @@ export function EntryListCard({ content, createdAt, topicName, completed, onClic
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onClick={open}
-      onKeyDown={onClick ? e => {
-        if (e.target !== e.currentTarget) return;
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
-      } : undefined}
+      onKeyDown={onClick ? pressOnKey(open) : undefined}
       {...rowHoverHandlers}
     >
       {topicName && <TopicCell title={topicName}>{topicName}</TopicCell>}

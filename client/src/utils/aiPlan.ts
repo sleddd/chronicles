@@ -272,10 +272,14 @@ function dateFrom(value: unknown): string {
 
 /** The AI plans in half hours (as it's asked to); lengths set by hand can be any five minutes */
 const AI_STEP_HOURS = 0.5;
-const hoursFrom = (value: unknown, fallback: number): number =>
-  (typeof value === 'number' && Number.isFinite(value) && value > 0
-    ? Math.min(MAX_HOURS, Math.max(AI_STEP_HOURS, Math.round(value / AI_STEP_HOURS) * AI_STEP_HOURS))
-    : fallback);
+const toAiStep = (hours: number): number =>
+  Math.min(MAX_HOURS, Math.max(AI_STEP_HOURS, Math.round(hours / AI_STEP_HOURS) * AI_STEP_HOURS));
+/** The length in an answer. One that only repeats the task's own length, as the AI rounds it, leaves it alone (20 minutes stays 20) */
+function hoursFrom(value: unknown, own: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return own;
+  const asked = toAiStep(value);
+  return asked === toAiStep(own) ? own : asked;
+}
 
 const rows = (value: unknown): Record<string, unknown>[] =>
   (Array.isArray(value) ? value : []).filter((r): r is Record<string, unknown> => !!r && typeof r === 'object' && !Array.isArray(r));

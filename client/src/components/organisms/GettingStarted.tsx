@@ -6,8 +6,9 @@ import { cardLabel } from '../../styles/cardLabel.js';
 import { HOME_SCREEN_STEPS, type ChecklistItem, type ChecklistKey } from '../../utils/onboarding.js';
 
 /* "Getting started" (dashboard, after the welcome tour): a --bg-panel card
-   with a checklist — name, city, a first entry, a medication or routine, a
-   voice command, the recovery key — each with a line on how to do it and,
+   with a checklist — name, city, a first entry, the recovery key, a passkey,
+   AI, Health, Planning, the Kitchen, Media, the Home Screen (a voice command
+   is off for now) — each with a line on how to do it and,
    while open, Show me / Try it / I've saved it on the right. Items are only
    ticked by hand (the circle); nothing is checked off for the person. All
    ticked, it says "You're all set"; × closes it for good. The Home Screen

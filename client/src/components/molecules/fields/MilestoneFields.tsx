@@ -7,7 +7,7 @@ import type { GoalOption, LinkedTask } from '../../../types/ui.js';
 import {
   FormWrap, Section, SectionHead, SectionLabel, TitleInput, RowBox, LabelledRow, RowLabel, BoxText,
 } from './formKit.js';
-import { PillPick, StatusPick, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
+import { PillPick, FootPickBox, StatusDropdown, WhenBox2, WhenLine, WhenLabel, DateTimeInput, TimerPopButton } from './TaskCardFields.js';
 export type { MilestoneFieldValues } from '../../../types/fields.js';
 
 /* Milestone fields — the same form in the journal editor and Quick Entry: the
@@ -27,10 +27,10 @@ const statusOf = (v: MilestoneFieldValues): MilestoneFieldValues['milestoneStatu
   // Done wins; a board-only "planned" (or anything unknown) shows as Not started
   v.isCompleted ? 'completed' : v.milestoneStatus === 'in_progress' ? 'in_progress' : 'not_started';
 
-/** The milestone's Status, for the text box's foot strip (like a task's) */
-export function MilestoneStatusPick({ values, onChange, inRow }: { values: MilestoneFieldValues; onChange: (v: MilestoneFieldValues) => void; inRow?: boolean }) {
+/** The milestone's Status, for its field row (like a task's) */
+export function MilestoneStatusPick({ values, onChange }: { values: MilestoneFieldValues; onChange: (v: MilestoneFieldValues) => void }) {
   return (
-    <StatusDropdown value={statusOf(values)} options={STATUSES} inRow={inRow}
+    <StatusDropdown value={statusOf(values)} options={STATUSES}
       onChange={s => onChange({ ...values, milestoneStatus: s, isCompleted: s === 'completed' })} />
   );
 }
@@ -41,7 +41,7 @@ export function MilestoneGoalPick({ values, onChange, goalOptions }: {
 }) {
   const goal = goalOptions.find(g => g.id === values.parentGoalId);
   return (
-    <StatusPick>
+    <FootPickBox>
       <span className="name">Goal</span>
       <span className="value">{goal?.title ?? 'No goal'}</span>
       <Icon name="chevron-down" size={14} strokeWidth={2} />
@@ -50,7 +50,7 @@ export function MilestoneGoalPick({ values, onChange, goalOptions }: {
         <option value="">No goal</option>
         {goalOptions.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
       </select>
-    </StatusPick>
+    </FootPickBox>
   );
 }
 
@@ -198,7 +198,7 @@ export function MilestoneFields({
         {/* Status first, where it's reached for */}
         <LabelledRow>
           <RowLabel>Status</RowLabel>
-          <MilestoneStatusPick values={values} onChange={onChange} inRow />
+          <MilestoneStatusPick values={values} onChange={onChange} />
         </LabelledRow>
         {!goalInFoot && <LabelledRow>
           <RowLabel>Goal</RowLabel>

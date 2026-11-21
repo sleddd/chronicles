@@ -6,6 +6,7 @@ import { SwipeActions } from '../molecules/SwipeActions.js';
 import { formatListDate, DateCell, TopicCell, EntryCell, EntryTitle } from '../molecules/EntryTable.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
+import { pressOnKey } from '../../utils/pressable.js';
 
 interface EntryCardProps {
   id: number;
@@ -126,11 +127,8 @@ export function EntryCard({
       aria-label={title}
       aria-current={active ? 'true' : undefined}
       onClick={open}
-      onKeyDown={e => {
-        // Only the row itself: Enter / Space on the topic or bookmark button stays theirs
-        if (e.target !== e.currentTarget) return;
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
-      }}
+      // Only the row itself: Enter / Space on the topic or bookmark button stays theirs
+      onKeyDown={pressOnKey(open)}
       {...rowHoverHandlers}
     >
       {topicName && <span style={{ minWidth: 0, display: 'flex' }}>

@@ -35,6 +35,14 @@ export function useFocusTrap(containerRef: RefObject<HTMLElement | null>, active
       const first = elements[0];
       const last = elements[elements.length - 1];
 
+      // The focused control can leave the page (a dialog's step changing its buttons),
+      // dropping focus to <body>: Tab then comes back in, never onto the page behind
+      if (!containerRef.current.contains(document.activeElement)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+        return;
+      }
+
       if (e.shiftKey && document.activeElement === first) {
         e.preventDefault();
         last.focus();

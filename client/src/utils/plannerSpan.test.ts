@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { plannerFacts, plannedDay, partEndOf, partsCovered, movedEnd, spanLabel, tasksByDay, unscheduled } from './planner.js';
+import { plannerFacts, plannedDay, partEndOf, partsCovered, tasksByDay, unscheduled } from './planner.js';
 import { calendarDayFor } from './calendarItems.js';
 
 const TODAY = '2026-11-12';
@@ -45,20 +45,5 @@ describe('a task stretched over more of the day', () => {
     expect(partEndOf({ scheduledPart: 'night', scheduledPartEnd: 'morning' })).toBe('night');
     expect(partEndOf({ scheduledPart: 'morning', scheduledPartEnd: 'noon' })).toBe('noon');
     expect(partEndOf({ scheduledPart: 'morning', scheduledPartEnd: 'whenever' })).toBe('morning');
-  });
-
-  it('keeps its length when moved, cut off at Night', () => {
-    expect(movedEnd('morning', 'noon', 'noon')).toBe('night');
-    expect(movedEnd('morning', 'noon', 'night')).toBe('night');
-    expect(movedEnd('noon', 'night', 'morning')).toBe('noon');
-    expect(movedEnd('morning', 'night', 'morning')).toBe('night');
-    expect(movedEnd('noon', '', 'morning')).toBe('morning');
-  });
-
-  it('is named by what it covers', () => {
-    expect(spanLabel('morning', 'night')).toBe('All day');
-    expect(spanLabel('morning', 'noon')).toBe('Morning – Noon');
-    expect(spanLabel('noon', 'night')).toBe('Noon – Night');
-    expect(spanLabel('noon')).toBe('');
   });
 });

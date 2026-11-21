@@ -83,6 +83,8 @@ export function usePagePan(boardRef: RefObject<HTMLElement | null>, onPrev: () =
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d || e.pointerId !== d.id || !el) return;
+    // Let go somewhere this never heard about (outside the board, before the pan began): not a drag any more
+    if (e.buttons === 0) { drag.current = null; return; }
     if (handlers.current.busy()) { drag.current = null; return; }
     const dx = e.clientX - d.x;
     if (!d.moved) {

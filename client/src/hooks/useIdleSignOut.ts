@@ -53,6 +53,8 @@ export function useIdleSignOut(): { signOutAt: number | null; stay: () => void }
     // here: the shared record (set at sign-in, kept by whoever is active) says
     let lastHere = 0;
     let lastWrite = Date.now();
+    // The newest activity here that the other tabs have been told about
+    let lastShared = 0;
     let lastPing = Date.now();
     let ending = false;
 
@@ -70,9 +72,10 @@ export function useIdleSignOut(): { signOutAt: number | null; stay: () => void }
     const check = (): boolean => {
       if (ending) return true;
       const now = Date.now();
-      if (!isIdle(now, lastHere, lastActivity())) {
+      const lastAnywhere = lastActivity();
+      if (!isIdle(now, lastHere, lastAnywhere)) {
         // Within the last minute: warn, and look again right when it would end
-        const at = Math.max(lastHere, lastActivity()) + IDLE_SIGN_OUT_MS;
+        const at = Math.max(lastHere, lastAnywhere) + IDLE_SIGN_OUT_MS;
         if (at - now <= IDLE_WARNING_MS) {
           setSignOutAt(at);
           if (!warnTimer) warnTimer = setTimeout(() => { warnTimer = null; check(); }, Math.max(0, at - now) + 50);
@@ -84,13 +87,18 @@ export function useIdleSignOut(): { signOutAt: number | null; stay: () => void }
       end();
       return true;
     };
+    const share = (at: number) => { lastWrite = Date.now(); lastShared = at; markActivity(at); };
+    // The shared record is written at most every 15 seconds, so the last thing done here may not be
+    // in it. Each look at the clock catches it up — or another tab, going by the older time, would
+    // end the session while this one still counts down
+    const tick = () => { if (!check() && lastHere > lastShared) share(lastHere); };
     const active = () => {
       // First: were they away too long? Only then does this count as being here
       if (check()) return;
       const now = Date.now();
       lastHere = now;
       if (warnTimer) clearWarning();
-      if (lastWrite === 0 || now - lastWrite > WRITE_EVERY_MS) { lastWrite = now; markActivity(now); }
+      if (lastWrite === 0 || now - lastWrite > WRITE_EVERY_MS) share(now);
       if (now - lastPing > PING_AFTER_MS && now - lastRequestTime() > PING_AFTER_MS) {
         lastPing = now;
         void authApi.me().catch(() => { /* the next data request says if the session ended */ });
@@ -111,7 +119,7 @@ export function useIdleSignOut(): { signOutAt: number | null; stay: () => void }
     document.addEventListener('visibilitychange', back);
     window.addEventListener('focus', back);
     window.addEventListener('pageshow', back);
-    const timer = setInterval(check, CHECK_EVERY_MS);
+    const timer = setInterval(tick, CHECK_EVERY_MS);
     // Stay signed in: someone is here, and it's written for the other tabs at once
     stayRef.current = () => { lastWrite = 0; active(); };
 

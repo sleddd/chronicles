@@ -11,9 +11,7 @@ import { useDecryptedImage } from '../../hooks/useDecryptedImage.js';
 import { focusPosition } from './EntryImageGallery.js';
 import { useTimeTracking } from '../../hooks/useTimeTracking.js';
 import { formatClock, formatSpent, sessionMs } from '../../utils/timeTracking.js';
-
-/* Keyboard drag: Space starts and ends it, so Enter is free to open a card */
-const BOARD_KEYS = { start: ['Space'], cancel: ['Escape'], end: ['Space', 'Enter'] };
+import { BOARD_KEYS, boardCardKey } from '../../utils/pressable.js';
 
 /* Planning boards (goals, milestones, tasks, todos): one column per status —
    a toned panel with its name, "N cards" and a full-width + to start a new entry
@@ -311,11 +309,7 @@ function BoardCard({ item, onOpen, timeTracking }: { item: BoardItem; onOpen: (i
       {...attributes}
       {...listeners}
       onClick={() => onOpen(item.id)}
-      onKeyDown={e => {
-        // dnd-kit's own handler first (Space picks the card up), then Enter opens it
-        listeners?.onKeyDown?.(e);
-        if (e.key === 'Enter' && !isDragging && e.target === e.currentTarget) onOpen(item.id);
-      }}
+      onKeyDown={boardCardKey(listeners?.onKeyDown, isDragging, () => onOpen(item.id))}
     >
       <Top>
         <TopText>

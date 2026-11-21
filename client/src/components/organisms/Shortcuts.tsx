@@ -4,7 +4,7 @@ import styled from 'styled-components';
 import { useNavItems } from '../../hooks/useNavItems.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { cardLabel } from '../../styles/cardLabel.js';
-import { MAX_SHORTCUTS, addableShortcuts, cleanShortcuts, shortcutCatalog, shownShortcuts } from '../../utils/shortcuts.js';
+import { MAX_SHORTCUTS, addableShortcuts, chipLabels, cleanShortcuts, shortcutCatalog, shownShortcuts } from '../../utils/shortcuts.js';
 
 /* The home dashboard's Shortcuts card: chips to the pages you use most. A chip opens its page;
    Edit shows a × on each and a "+ Add a shortcut" picker (every nav page, its views and each
@@ -120,6 +120,7 @@ export function Shortcuts({ links, onChange }: { links: string[] | undefined; on
   const catalog = useMemo(() => shortcutCatalog(nav, topics), [nav, topics]);
   const saved = useMemo(() => cleanShortcuts(links), [links]);
   const shown = useMemo(() => shownShortcuts(saved, catalog), [saved, catalog]);
+  const names = useMemo(() => chipLabels(shown), [shown]);
   const addable = useMemo(() => addableShortcuts(saved, catalog), [saved, catalog]);
   const [editing, setEditing] = useState(false);
   // With nothing pinned yet, the picker shows straight away
@@ -141,9 +142,9 @@ export function Shortcuts({ links, onChange }: { links: string[] | undefined; on
         {shown.map(s => (
           <Pill key={s.path}>
             <Go type="button" onClick={() => navigate(s.path)}>
-              <Glyph aria-hidden="true">{s.icon}</Glyph>{s.label}
+              <Glyph aria-hidden="true">{s.icon}</Glyph>{names.get(s.path) ?? s.label}
             </Go>
-            {editing && <Remove type="button" aria-label={`Remove ${s.label}`} onClick={() => remove(s.path)}>×</Remove>}
+            {editing && <Remove type="button" aria-label={`Remove ${names.get(s.path) ?? s.label}`} onClick={() => remove(s.path)}>×</Remove>}
           </Pill>
         ))}
         {picking && saved.length < MAX_SHORTCUTS && addable.length > 0 && (

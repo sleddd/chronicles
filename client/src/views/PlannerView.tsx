@@ -29,7 +29,7 @@ import { EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, categorie
 import {
   addDays, dayLabel, hasMigrated, laneLabel, longDayLabel, monthDay, movedOrder, parsePlannerOrder, plannerFacts, priorityIndex,
   tasksByDay, unscheduled, weekLabel, weekOf, type PlannerOrder, type PlannerTask,
-  startPatch, lengthPatch, monthGridOf, addMonths, monthLabel, hhmm,
+  startPatch, lengthPatch, dayPatch, monthGridOf, addMonths, monthLabel, hhmm,
 } from '../utils/planner.js';
 
 /* Planning → Planner: the week (or one day) at a glance. Tasks and todos are
@@ -188,8 +188,7 @@ export function PlannerView() {
     if (!t) return;
     if (day && at !== undefined) {
       // Dropped at a time on a day: it keeps that time, and the other cards it passed keep theirs
-      const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-      void saveFields(t.entry, { ...startPatch(t.fields, at), scheduledDate: day }).then(ok => {
+      void saveFields(t.entry, dayPatch(startPatch(t.fields, at), day)).then(ok => {
         if (!ok) showFlash('Couldn’t save that task’s time, so it’s back where it was. Try again.');
       });
       for (const k of keep) {
@@ -218,7 +217,6 @@ export function PlannerView() {
     void saveOrder(movedOrder(order, id, day, list.map(x => x.id), target, today)).catch(err => console.error('Failed to save the day’s order:', err));
   };
 
-  // The grip at a card's foot: its length in hours
   // The tick on a card: done, or not done again
   const toggleDone = (id: number) => {
     const t = tasks.find(x => x.id === id);
@@ -228,6 +226,7 @@ export function PlannerView() {
       if (!ok) showFlash('Couldn’t save that task. Try again.');
     });
   };
+  // The grip at a card's foot: its length in hours
   const resize = (id: number, hours: number) => {
     const t = planned.find(x => x.id === id);
     if (!t) return;

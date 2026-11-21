@@ -81,9 +81,19 @@ export function defaultShoppingListTitle(date = new Date()): string {
 /* ── Shopping list amounts: what you buy, not what a recipe measures ── */
 
 /** Cooking measures nobody buys by: "1 cup flour" is bought as a bag of flour */
-const KITCHEN_MEASURE = /\b(tsps?|teaspoons?|tbsps?|tbs|tablespoons?|cups?|c\.|pinch(es)?|dash(es)?|splash(es)?|drizzles?|handfuls?|sprigs?|cloves?|ml|millilit(er|re)s?|fl\.? ?oz|pints?|quarts?|knobs?|to taste|as needed|optional)\b/i;
-/** Pantry things bought as one jar, bottle or bag whatever a recipe uses: listed by name alone */
-const PANTRY = /\b(salt|black pepper|peppercorns?|spices?|seasonings?|powder|flakes|extract|cumin|paprika|oregano|thyme|rosemary|cinnamon|nutmeg|turmeric|curry|cayenne|bay leaf|bay leaves|baking soda|yeast|vanilla|oil|vinegar|soy sauce|fish sauce|hot sauce|honey|syrup|mustard|ketchup|mayonnaise|sugar|flour|cornstarch|stock cubes?|bouillon)\b/i;
+const MEASURE_WORDS = 'tsps?|teaspoons?|tbsps?|tbs|tablespoons?|cups?|c\\.|pinch(?:es)?|dash(?:es)?|splash(?:es)?|drizzles?|handfuls?|sprigs?|cloves?|ml|millilit(?:er|re)s?|fl\\.? ?oz|knobs?';
+const KITCHEN_MEASURE = new RegExp(`\\b(?:${MEASURE_WORDS}|to taste|as needed|optional)\\b`, 'i');
+/** A measure in front of the food it measures: "2 cloves garlic", "pinch of salt" */
+const LEADING_MEASURE = new RegExp(`^[\\d\\s./-]*(?:${MEASURE_WORDS})(?![a-z])\\s*(?:of\\s+)?(?=\\S)`, 'i');
+/** A measure after its food, where it can only be a measure: "garlic cloves", "thyme sprigs" (not "ground cloves") */
+const TRAILING_MEASURE = /(?<=\bgarlic)\s+cloves?$|(?<=\S)\s+sprigs?$/i;
+const COOKING_NOTE = /\b(?:to taste|as needed|optional)\b/gi;
+/**
+ * Pantry things bought as one jar, bottle or bag whatever a recipe uses:
+ * listed by name alone. Matched as what the item is (the end of its name), so
+ * "olive oil" is pantry and "flour tortillas" or "oil-packed tuna" are not.
+ */
+const PANTRY = /\b(salt|black pepper|peppercorns?|spices?|seasonings?|powder|flakes|extract|cumin|paprika|oregano|thyme|rosemary|cinnamon|nutmeg|cloves|turmeric|curry|cayenne|bay leaf|bay leaves|baking soda|yeast|vanilla|oil|vinegar|soy sauce|fish sauce|hot sauce|honey|syrup|mustard|ketchup|mayonnaise|sugar|flour|cornstarch|stock cubes?|bouillon)$/i;
 
 /**
  * The amount to show on a shopping list for one ingredient: a count or a
@@ -93,7 +103,7 @@ const PANTRY = /\b(salt|black pepper|peppercorns?|spices?|seasonings?|powder|fla
  */
 export function buyingAmount(amount: string, name: string): string {
   const a = amount.trim();
-  if (!a || KITCHEN_MEASURE.test(a) || KITCHEN_MEASURE.test(name) || PANTRY.test(name)) return '';
+  if (!a || KITCHEN_MEASURE.test(a) || PANTRY.test(name.trim())) return '';
   return a;
 }
 
@@ -102,17 +112,49 @@ export function shoppingName(name: string): string {
   return name
     .replace(/\(.*?\)/g, '')
     .split(',')[0]
-    .replace(KITCHEN_MEASURE, '')
+    .replace(COOKING_NOTE, '')
+    .trim()
+    .replace(LEADING_MEASURE, '')
+    .replace(TRAILING_MEASURE, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-const PLAIN_COUNT = /^\d+$/;
+/** "2", "1.5 lb", "1/2 can", "1 1/2 lb" → the number and what it counts */
+const AMOUNT = /^(\d+ \d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*(.*)$/;
+
+function readAmount(amount: string): { n: number; unit: string } | null {
+  const m = AMOUNT.exec(amount.trim());
+  if (!m) return null;
+  const n = m[1].split(' ').reduce((sum, piece) => {
+    const [top, bottom] = piece.split('/').map(Number);
+    return sum + (bottom === undefined ? top : top / bottom);
+  }, 0);
+  return Number.isFinite(n) ? { n, unit: m[2].trim() } : null;
+}
+
+/**
+ * Two amounts of the same item as one: added up when they count the same thing
+ * (2 + 3 → "5", "1 lb" + "1 lb" → "2 lb"), else blank, so the list never
+ * shows less than is needed.
+ */
+export function addAmounts(a: string, b: string): string {
+  const x = readAmount(a);
+  const y = readAmount(b);
+  if (!x || !y || x.unit.toLowerCase() !== y.unit.toLowerCase()) return '';
+  const total = Math.round((x.n + y.n) * 100) / 100;
+  return [String(total), x.unit].filter(Boolean).join(' ');
+}
+
+/** One shopping list line as text: "2 lb ground beef", or just "salt" */
+export function shoppingLineText(line: { amount: string; name: string }): string {
+  return [line.amount, line.name].filter(Boolean).join(' ');
+}
 
 /**
  * Recipe ingredients as shopping list lines: named as you'd buy them, with
  * only counts and package sizes kept, and the same item from several recipes
- * listed once (plain counts added up — 2 + 3 chicken breasts is 5).
+ * listed once with its amounts added up.
  */
 export function shoppingLines(ingredients: { amount: string; name: string }[]): { amount: string; name: string }[] {
   const lines = new Map<string, { amount: string; name: string }>();
@@ -122,13 +164,8 @@ export function shoppingLines(ingredients: { amount: string; name: string }[]): 
     const amount = buyingAmount(ing.amount, name);
     const key = name.toLowerCase();
     const had = lines.get(key);
-    if (!had) { lines.set(key, { amount, name }); continue; }
-    had.amount = PLAIN_COUNT.test(had.amount) && PLAIN_COUNT.test(amount)
-      ? String(Number(had.amount) + Number(amount))
-      : had.amount === amount ? amount : '';
+    if (had) had.amount = addAmounts(had.amount, amount);
+    else lines.set(key, { amount, name });
   }
   return [...lines.values()];
 }
-
-/** One shopping list line as its item name: "5 chicken breasts", or just "cumin" */
-export const shoppingLineText = (line: { amount: string; name: string }) => [line.amount, line.name].filter(Boolean).join(' ');

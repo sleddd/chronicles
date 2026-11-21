@@ -71,6 +71,28 @@ describe('parseMenuPlan', () => {
     expect(menu.totalCents).toBe(250);
   });
 
+  it('never lets a recipe without a key take another recipe’s place', () => {
+    const named = (key: string | undefined, title: string) => ({ key, title, ingredients: [{ name: 'x' }] });
+    const menu = parseMenuPlan(JSON.stringify({
+      meals: [{ date: '2026-11-23', slot: 'dinner', name: 'Dinner', newRecipe: 'r2' }],
+      recipes: [named(undefined, 'A'), named(undefined, 'B'), named('r2', 'C')],
+    }), ctx);
+    expect(menu.recipes.map(r => r.fields.recipeName)).toEqual(['C']);
+  });
+
+  it('adds up a repeated shopping line and counts the ones with no price', () => {
+    const menu = parseMenuPlan(JSON.stringify({
+      meals: [{ date: '2026-11-23', slot: 'dinner', name: 'Dinner' }],
+      shopping: [
+        { name: 'eggs', amount: '6', price: 3 }, { name: 'Eggs', amount: '6', price: 3 },
+        { name: 'steak', amount: '1 lb', price: 1500 }, { name: 'bread', price: '1,50' },
+      ],
+    }), ctx);
+    expect(menu.shopping[0]).toMatchObject({ name: 'eggs', amount: '12', estCostCents: 600 });
+    expect(menu.totalCents).toBe(750);
+    expect(menu.unpriced).toBe(1);
+  });
+
   it('lists shopping as bought: no recipe measures, spices by name, each item once', () => {
     const menu = parseMenuPlan(JSON.stringify({
       meals: [{ date: '2026-11-23', slot: 'dinner', name: 'Chili', recipeId: 7 }],
@@ -122,9 +144,51 @@ describe('allergens', () => {
     expect(allergenHits(recipe(['eggplant', 'coconut milk']), [{ allergen: 'egg', reaction: '', severity: null }, { allergen: 'nuts', reaction: '', severity: null }])).toEqual([]);
     expect(nameAllergenHits('Peanut noodles', [peanut])).toEqual(['Peanuts']);
   });
+
+  const hit = (allergen: string, food: string) => nameAllergenHits(food, [{ allergen, reaction: '', severity: null }]).length > 0;
+
+  it('reads an allergen however it was written', () => {
+    const written: [string, string][] = [
+      ['Peanut allergy', 'peanuts'], ['Peanuts.', 'peanuts'], ['Peanuts (severe)', 'peanut butter'],
+      ['Allergic to peanuts', 'peanut butter'], ['Dairy products', 'butter'], ['Cow’s milk', 'cheddar'],
+      ['Milk or eggs', 'butter'], ['Shellfish; eggs', 'shrimp'], ['Sesame seeds', 'sesame oil'],
+    ];
+    expect(written.filter(([allergen, food]) => !hit(allergen, food))).toEqual([]);
+  });
+
+  it('matches singular and plural both ways', () => {
+    const forms: [string, string][] = [
+      ['Olives', 'olive oil'], ['Apples', 'apple'], ['Grapes', 'grape juice'], ['Strawberry', 'strawberries'],
+      ['Strawberries', 'strawberry jam'], ['Berries', 'mixed berries'], ['Tomatoes', 'tomato'], ['Fish', 'anchovies'],
+    ];
+    expect(forms.filter(([allergen, food]) => !hit(allergen, food))).toEqual([]);
+  });
+
+  it('finds an allergen inside compound words and accented names', () => {
+    const hidden: [string, string][] = [
+      ['Fish', 'swordfish steaks'], ['Tree nuts', 'chopped mixed nuts'], ['Nuts', 'hazelnuts'], ['Dairy', 'cheesecake'],
+      ['Dairy', 'crème fraîche'], ['Gluten', 'spaghetti'], ['Eggs', 'omelette'], ['Soy', 'soybean oil'], ['Seafood', 'salmon'],
+    ];
+    expect(hidden.filter(([allergen, food]) => !hit(allergen, food))).toEqual([]);
+  });
+
+  it('doesn’t flag a different food with a similar name', () => {
+    const other: [string, string][] = [
+      ['Fish', 'shellfish'], ['Fish', 'crayfish'], ['Tree nuts', 'peanut'], ['Nuts', 'butternut squash'],
+      ['Nuts', 'nutmeg'], ['Peanut allergy', 'chicken'], ['', 'anything'], ['allergy', 'anything'],
+    ];
+    expect(other.filter(([allergen, food]) => hit(allergen, food))).toEqual([]);
+  });
 });
 
 describe('recipe from ingredients', () => {
+  it('tells the AI the latest suggestions, not the oldest', () => {
+    const avoid = Array.from({ length: 12 }, (_, i) => `Recipe ${i + 1}`);
+    const { prompt } = buildRecipeRequest({ ingredients: ['rice'], servings: 2, meal: '', pantry: true, preferences: '', allergies: [], avoid });
+    expect(prompt).toContain('Recipe 12');
+    expect(prompt).not.toContain('"Recipe 1"');
+  });
+
   it('splits what was typed into ingredients', () => {
     expect(splitIngredientList('chicken, rice\n- spinach\nrice')).toEqual(['chicken', 'rice', 'spinach']);
   });

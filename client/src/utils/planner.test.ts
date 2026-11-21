@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { sameLength,
-  plannerFacts, hoursOf, hoursLabel, priorityIndex, layoutDay, timeOf, hhmm, partOf, partOfTime, effectiveDay, hasMigrated, weekOf, parsePlannerOrder, tasksByDay, unscheduled, placeIn, movedOrder,
+  plannerFacts, hoursOf, hoursLabel, priorityIndex, layoutDay, timeOf, hhmm, partOf, effectiveDay, hasMigrated, weekOf, parsePlannerOrder, tasksByDay, unscheduled, placeIn, movedOrder,
   weekLabel, laneLabel, longDayLabel, estimateOf, estimateLabel, type PlannerTask,
 } from './planner.js';
 
@@ -19,7 +19,6 @@ describe('planner', () => {
     expect(plannerFacts(1, { scheduledPart: 'noon' }, 0).part).toBe('');
     expect(partOf({ scheduledPart: 'dawn' })).toBe('morning');
     expect(partOf({})).toBe('morning');
-    expect(['07:30', '12:00', '16:59', '17:00', '', 'x'].map(partOfTime)).toEqual(['morning', 'noon', 'noon', 'night', '', '']);
     expect(plannerFacts(1, { isBacklog: true }, 0).backlog).toBe(true);
     // Started or finished wins over the backlog flag
     expect(plannerFacts(1, { isBacklog: true, isInProgress: true }, 0).backlog).toBe(false);
@@ -160,6 +159,16 @@ describe('a same-day end time sets the length', () => {
     // No end time: only the length changes
     expect(lengthPatch({ scheduledTime: '16:10' }, 2)).not.toHaveProperty('deadlineTime');
   });
+
+  it('moves a same-day end date with the task, and leaves a later deadline where it is', async () => {
+    const { dayPatch, hoursOf } = await import('./planner.js');
+    const short = { scheduledDate: '2026-11-10', scheduledTime: '16:10', deadline: '2026-11-10', deadlineTime: '16:15' };
+    const moved = dayPatch(short, '2026-11-12');
+    expect(moved).toMatchObject({ scheduledDate: '2026-11-12', deadline: '2026-11-12' });
+    expect(hoursOf(moved)).toBeCloseTo(5 / 60);
+    const due = { ...short, deadline: '2026-11-20' };
+    expect(dayPatch(due, '2026-11-12')).toMatchObject({ scheduledDate: '2026-11-12', deadline: '2026-11-20' });
+  });
 });
 
 describe('the month view', () => {
@@ -200,6 +209,9 @@ describe('estimated time', () => {
     expect(hoursOf({ estimatedMinutes: 120 })).toBe(2);
     expect(hoursOf({ estimatedMinutes: 20 })).toBeCloseTo(20 / 60);
     expect(hoursOf({ estimatedMinutes: 120, scheduledHours: 3 })).toBe(3);
+    // "2 days" is not one twelve-hour card
+    expect(hoursOf({ estimatedMinutes: 960 })).toBe(1);
+    expect(hoursOf({ estimatedMinutes: 720 })).toBe(12);
     expect(hoursOf({})).toBe(1);
   });
 });

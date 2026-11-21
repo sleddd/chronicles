@@ -1,13 +1,13 @@
-/* The week / day planner: tasks put on a day (`scheduledDate`, YYYY-MM-DD —
-   by day and, if you like, a part of it — `scheduledPart`: morning (the default), noon
-   or night — never hours). A task can cover more than one part: through
-   `scheduledPartEnd` (morning to night = the whole day). A task with no
-   planned day but a deadline AND a time of day chosen shows on its deadline's
-   day, in that part (`plannedDay`). An unfinished task set to auto-migrate ("Move to
-   tomorrow if unfinished") whose day has passed shows under today — worked out
-   when read, nothing is rewritten. Without it the task stays on its day and
-   is listed as overdue. The order within a day is the sealed setting
-   `plannerOrder` (day → task ids, top first). Pure. */
+/* The week / day planner: tasks put on a day (`scheduledDate`, YYYY-MM-DD) and, when they
+   have one, a time on it (`scheduledTime`), each as long as its same-day end time, its own
+   length or its estimate says (`hoursOf`). A task with no planned day but a deadline AND a time
+   of day chosen shows on its deadline's day (`plannedDay`). An unfinished task set to
+   auto-migrate ("Move to tomorrow if unfinished") whose day has passed shows under today —
+   worked out when read, nothing is rewritten. Without it the task stays on its day and is listed
+   as overdue. The order within a day is the sealed setting `plannerOrder` (day → task ids, top
+   first). The parts of a day (Morning / Noon / Night, `scheduledPart` / `scheduledPartEnd`) are
+   from the planner's earlier rows: the older task form still sets them and `plannedDay` reads
+   them, but the planner itself lays tasks out by the hour. Pure. */
 
 import { addDays, dayOf, dayNumber } from './planTimeline.js';
 import { taskStatusOf } from '../types/goals.js';
@@ -17,15 +17,14 @@ export { addDays };
 /** The parts of a day a task can be planned for (no hours) */
 export type DayPart = 'morning' | 'noon' | 'night';
 
-/* `hours` says when each part is (the same bounds `partOfTime` sorts events by) */
+/* `hours` says when each part is */
 export const DAY_PARTS: { value: DayPart; label: string; hours: string }[] = [
   { value: 'morning', label: 'Morning', hours: 'Before 12 PM' },
   { value: 'noon', label: 'Noon', hours: '12 – 5 PM' },
   { value: 'night', label: 'Night', hours: 'After 5 PM' },
 ];
 
-/** The planner grid's rows. There is no "any time" row: a task on a day with no part chosen sits under Morning */
-export const PLANNER_ROWS = DAY_PARTS;
+/** There is no "any time" part: a task on a day with no part chosen counts as Morning */
 export const DEFAULT_PART: DayPart = 'morning';
 
 /** A task's part of the day from its fields (Morning when none was chosen) */
@@ -52,21 +51,6 @@ export function partsCovered(start: DayPart, end?: DayPart | ''): DayPart[] {
   return DAY_PARTS.slice(a, b + 1).map(p => p.value);
 }
 
-/** Where a task that covered `start`–`end` ends once moved to begin at `to`: the same length, cut off at Night */
-export function movedEnd(start: DayPart, end: DayPart | '' | undefined, to: DayPart): DayPart {
-  const length = partsCovered(start, end).length;
-  return DAY_PARTS[Math.min(DAY_PARTS.length - 1, partIndex(to) + length - 1)].value;
-}
-
-/** "Morning – Noon", "All day"; '' for a single part */
-export function spanLabel(start: DayPart, end?: DayPart | ''): string {
-  const covered = partsCovered(start, end);
-  if (covered.length < 2) return '';
-  if (covered.length === DAY_PARTS.length) return 'All day';
-  const name = (p: DayPart) => DAY_PARTS[partIndex(p)].label;
-  return `${name(covered[0])} – ${name(covered[covered.length - 1])}`;
-}
-
 /**
  * The day a task is planned for: the one it was given ("Planned for"), else
  * its deadline once a time of day was chosen for it — a deadline with
@@ -74,13 +58,6 @@ export function spanLabel(start: DayPart, end?: DayPart | ''): string {
  */
 export function plannedDay(cf: Record<string, unknown> | undefined): string {
   return dayOf(cf?.scheduledDate) || (chosenPart(cf) ? dayOf(cf?.deadline) : '');
-}
-
-/** The part of the day a clock time falls in: before noon, noon to 5 PM, after ('' for no time) */
-export function partOfTime(hhmm: unknown): DayPart | '' {
-  const h = typeof hhmm === 'string' && /^\d{1,2}:\d{2}/.test(hhmm) ? Number(hhmm.split(':')[0]) : NaN;
-  if (!Number.isFinite(h)) return '';
-  return h < 12 ? 'morning' : h < 17 ? 'noon' : 'night';
 }
 
 export interface PlannerTask {
@@ -142,15 +119,17 @@ export function sameDayEnd(cf: Record<string, unknown> | undefined): number | un
 }
 
 /** A task's length in hours: from its start to a same-day end time when it has one (to the
- *  minute — 4:10 to 4:15 is 5 minutes), else its own length (five-minute steps), else its estimate, else an hour */
+ *  minute — 4:10 to 4:15 is 5 minutes), else its own length (five-minute steps), else its estimate
+ *  when that fits in a day's block, else an hour */
 export function hoursOf(cf: Record<string, unknown> | undefined): number {
   const end = sameDayEnd(cf);
   if (end !== undefined) return Math.min(MAX_HOURS, (end - timeOf(cf)!) / 60);
   const n = typeof cf?.scheduledHours === 'number' ? cf.scheduledHours : Number(cf?.scheduledHours);
   if (Number.isFinite(n) && n > 0) return clampHours(n);
-  // No length of its own yet: its estimate
+  // No length of its own yet: its estimate. One longer than a block can be ("2 days") is work
+  // for several sittings, not one twelve-hour card: it starts at the default like any other task
   const est = estimateOf(cf);
-  return est ? clampHours(est / 60) : DEFAULT_HOURS;
+  return est && est <= MAX_HOURS * 60 ? clampHours(est / 60) : DEFAULT_HOURS;
 }
 
 /* ── Estimated time: how long a task is expected to take (`estimatedMinutes`) ── */
@@ -178,6 +157,15 @@ export function startPatch(cf: Record<string, unknown>, start: number): Record<s
   const old = timeOf(cf);
   const out: Record<string, unknown> = { ...cf, scheduledTime: hhmm(start) };
   if (end !== undefined && old !== undefined) out.deadlineTime = hhmm(Math.min(24 * 60 - 1, start + (end - old)));
+  return out;
+}
+/**
+ * The fields after moving a task to another day. An end time on its old day is its length
+ * (4:10 to 4:15 is five minutes), so that end date moves with it; a deadline on any other day stays.
+ */
+export function dayPatch(cf: Record<string, unknown>, day: string): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...cf, scheduledDate: day };
+  if (day && sameDayEnd(cf) !== undefined && cf.deadline && cf.deadline === cf.scheduledDate) out.deadline = day;
   return out;
 }
 /** The fields after giving a task `hours`: its same-day end time follows, when it has one */

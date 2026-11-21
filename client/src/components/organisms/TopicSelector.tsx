@@ -248,6 +248,15 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
     ? sorted.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
     : sorted;
 
+  // A choice closes the list and puts focus back on the trigger, as Escape does: the chosen
+  // option leaves the page, and focus left on it would fall to the top of the page
+  const choose = (act: () => void) => {
+    act();
+    setOpen(false);
+    setSearch('');
+    triggerRef.current?.focus();
+  };
+
   return (
     <Wrapper ref={wrapperRef}>
       <Trigger
@@ -288,13 +297,13 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
           <ItemList id={listId} role="listbox" aria-label="Topics">
             {/* After flipping through topics: one tap back to the default (no topic = Journal) */}
             {!search && onClear && (
-              <ClearItem type="button" role="option" aria-selected={false} onClick={() => { onClear(); setOpen(false); setSearch(''); }}>
+              <ClearItem type="button" role="option" aria-selected={false} onClick={() => choose(onClear)}>
                 <span aria-hidden="true">×</span>
                 Clear
               </ClearItem>
             )}
             {!search && !noClearRow && !onClear && !(selected && !selected.extra && isJournal(selected)) && (
-              <ResetItem type="button" role="option" aria-selected={false} onClick={() => { onSelect(journal.id); setOpen(false); setSearch(''); }}>
+              <ResetItem type="button" role="option" aria-selected={false} onClick={() => choose(() => onSelect(journal.id))}>
                 <span aria-hidden="true">×</span>
                 Clear topic<small>· back to Journal</small>
               </ResetItem>
@@ -312,7 +321,7 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
                   aria-selected={active}
                   data-pinned={journalFirst && !t.extra && isJournal(t) ? '' : undefined}
                   $active={active}
-                  onClick={() => { if (t.extra) onSelectExtra?.(t.extra); else onSelect(t.id); setOpen(false); setSearch(''); }}
+                  onClick={() => choose(() => { if (t.extra) onSelectExtra?.(t.extra); else onSelect(t.id); })}
                 >
                   <TopicIcon $color={accentColor}><TopicGlyph name={t.icon} size={15} /></TopicIcon>
                   {t.name}

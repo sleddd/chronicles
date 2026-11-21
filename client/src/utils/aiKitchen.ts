@@ -1,5 +1,5 @@
 import { approxTokens, cleanLine, firstJsonObject, type SharedLine } from './aiJson.js';
-import { buyingAmount, shoppingName } from './kitchen.js';
+import { MENU_SLOTS, addAmounts, buyingAmount, shoppingName } from './kitchen.js';
 import type {
   MealSlotType, RecipeCategory, RecipeDifficulty, RecipeFieldValues, ShoppingCategory,
 } from '../types/fields.js';
@@ -106,21 +106,26 @@ export interface AiMenu {
   shopping: AiShoppingLine[];
   /** Worked out from the shopping lines, never taken from the answer */
   totalCents: number;
+  /** Shopping lines with no usable price: the total leaves them out */
+  unpriced: number;
   /** The AI's own one-line note (what it aimed for) */
   note: string;
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const SLOT_LABEL: Record<MealSlotType, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack' };
+export const SLOT_LABEL = Object.fromEntries(MENU_SLOTS.map(s => [s.key, s.label])) as Record<MealSlotType, string>;
 
 export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-/** Money as the model writes it ("12.50", "$12.50", 12.5) → cents, or null when it isn't sensible */
+/** "1,50": a comma before exactly two last digits is a decimal comma, not thousands */
+const DECIMAL_COMMA = /^(\d+),(\d{2})$/;
+
+/** Money as the model writes it ("12.50", "$12.50", "1,50", 12.5) → cents, or null when it isn't sensible */
 export function parseMoneyCents(value: unknown): number | null {
   const n = typeof value === 'number' ? value
-    : typeof value === 'string' ? Number(value.replace(/[$,\s]/g, '')) : NaN;
+    : typeof value === 'string' ? Number(value.replace(/[$\s]/g, '').replace(DECIMAL_COMMA, '$1.$2').replace(/,/g, '')) : NaN;
   if (!Number.isFinite(n) || n < 0) return null;
   const cents = Math.round(n * 100);
   return cents > MAX_COST_CENTS ? null : cents;
@@ -206,7 +211,7 @@ export function buildMenuRequest(input: MenuInput): MenuRequest {
 const asList = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   (value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null);
-const minutes = (value: unknown): string => {
+const wholeNumber = (value: unknown): string => {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? parseInt(value, 10) : NaN;
   return Number.isFinite(n) && n > 0 && n <= 24 * 60 ? String(Math.round(n)) : '';
 };
@@ -231,7 +236,7 @@ export function readRecipe(value: unknown, key: string): AiRecipe | null {
   });
   const category = RECIPE_CATEGORIES.includes(r.category as RecipeCategory) ? r.category as RecipeCategory : '';
   const difficulty = DIFFICULTIES.includes(r.difficulty as RecipeDifficulty) ? r.difficulty as RecipeDifficulty : '';
-  const servings = minutes(r.servings);
+  const servings = wholeNumber(r.servings);
   return {
     key,
     fields: {
@@ -240,8 +245,8 @@ export function readRecipe(value: unknown, key: string): AiRecipe | null {
       category,
       cuisine: cleanLine(r.cuisine, 40),
       servings: servings && Number(servings) <= 50 ? servings : '',
-      prepTime: minutes(r.prepMinutes),
-      cookTime: minutes(r.cookMinutes),
+      prepTime: wholeNumber(r.prepMinutes),
+      cookTime: wholeNumber(r.cookMinutes),
       difficulty,
       ingredients,
       steps,
@@ -259,11 +264,12 @@ export function parseMenuPlan(text: string, ctx: MenuContext): AiMenu {
   const keys = new Set<string>();
   for (const item of asList(obj.recipes)) {
     if (recipes.length >= MAX_NEW_RECIPES) break;
-    const rawKey = cleanLine(asRecord(item)?.key, 20) || `r${recipes.length + 1}`;
-    if (keys.has(rawKey)) continue;
-    const recipe = readRecipe(item, rawKey);
+    // A recipe with no key can't be asked for by a meal, and a made-up key could take a later recipe's
+    const key = cleanLine(asRecord(item)?.key, 20);
+    if (!key || keys.has(key)) continue;
+    const recipe = readRecipe(item, key);
     if (!recipe) continue;
-    keys.add(rawKey);
+    keys.add(key);
     recipes.push(recipe);
   }
 
@@ -298,7 +304,7 @@ export function parseMenuPlan(text: string, ctx: MenuContext): AiMenu {
     const had = byName.get(name.toLowerCase());
     if (had) {
       had.estCostCents += cost;
-      if (had.amount !== amount) had.amount = '';
+      had.amount = addAmounts(had.amount, amount);
       continue;
     }
     const line: AiShoppingLine = {
@@ -317,6 +323,7 @@ export function parseMenuPlan(text: string, ctx: MenuContext): AiMenu {
     recipes: recipes.filter(r => used.has(r.key)),
     shopping,
     totalCents: shopping.reduce((n, s) => n + s.estCostCents, 0),
+    unpriced: shopping.filter(s => s.estCostCents === 0).length,
     note: cleanLine(obj.note, 200),
   };
 }
@@ -327,6 +334,9 @@ export function budgetCheck(totalCents: number, budgetCents: number): { over: bo
 }
 
 /* ── Recipe from ingredients ── */
+
+/** How many of the latest suggestions the AI is told not to repeat */
+const MAX_AVOID = 10;
 
 export interface RecipeFromIngredientsInput {
   ingredients: string[];
@@ -372,7 +382,7 @@ export function buildRecipeRequest(input: RecipeFromIngredientsInput): KitchenRe
     pantry: input.pantry,
     ...(prefs ? { preferences: prefs } : {}),
     ...(input.allergies.length ? { allergies: allergyData(input.allergies) } : {}),
-    ...(input.avoid.length ? { avoid: input.avoid.slice(0, 10) } : {}),
+    ...(input.avoid.length ? { avoid: input.avoid.slice(-MAX_AVOID) } : {}),
   };
   const prompt = dataBlock(data);
   const shared: SharedLine[] = [
@@ -380,7 +390,7 @@ export function buildRecipeRequest(input: RecipeFromIngredientsInput): KitchenRe
     { label: `${plural(input.servings, 'serving')}${input.meal ? `, for ${input.meal}` : ''}`, items: [] },
     ...allergyLine(input.allergies),
     ...prefsLine(prefs),
-    ...(input.avoid.length ? [{ label: 'The recipes already suggested (titles)', items: input.avoid }] : []),
+    ...(input.avoid.length ? [{ label: 'The recipes already suggested (titles)', items: input.avoid.slice(-MAX_AVOID) }] : []),
   ];
   return { system: RECIPE_SYSTEM, prompt, shared, approxTokens: approxTokens(RECIPE_SYSTEM, prompt) };
 }
@@ -397,43 +407,121 @@ export function parseRecipeIdea(text: string): AiRecipeIdea {
 
 /** Common allergens and the foods that contain them */
 const ALLERGEN_FOODS: Record<string, string[]> = {
-  milk: ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'yoghurt', 'whey', 'casein', 'ghee', 'lactose', 'buttermilk', 'parmesan', 'mozzarella', 'cheddar', 'ricotta', 'feta', 'kefir'],
-  egg: ['egg', 'mayonnaise', 'mayo', 'meringue', 'aioli'],
-  wheat: ['wheat', 'flour', 'bread', 'pasta', 'noodle', 'couscous', 'semolina', 'breadcrumb', 'panko', 'tortilla', 'cracker', 'soy sauce', 'barley', 'rye', 'spelt', 'bulgur', 'seitan'],
+  milk: [
+    'milk', 'dairy', 'cheese', 'cheesecake', 'butter', 'cream', 'yogurt', 'yoghurt', 'whey', 'casein', 'ghee', 'lactose',
+    'buttermilk', 'half-and-half', 'half and half', 'creme fraiche', 'custard', 'parmesan', 'mozzarella', 'cheddar',
+    'ricotta', 'feta', 'gouda', 'brie', 'mascarpone', 'paneer', 'kefir',
+  ],
+  egg: ['egg', 'mayonnaise', 'mayo', 'meringue', 'aioli', 'omelette', 'omelet', 'frittata', 'quiche', 'custard', 'hollandaise'],
+  wheat: [
+    'wheat', 'gluten', 'flour', 'bread', 'breadcrumb', 'panko', 'pasta', 'spaghetti', 'macaroni', 'penne', 'fettuccine',
+    'linguine', 'lasagna', 'lasagne', 'ravioli', 'orzo', 'gnocchi', 'noodle', 'ramen', 'udon', 'couscous', 'semolina',
+    'tortilla', 'cracker', 'crouton', 'bun', 'bagel', 'pita', 'naan', 'baguette', 'croissant', 'biscuit', 'pancake',
+    'waffle', 'pastry', 'dumpling', 'soy sauce', 'barley', 'rye', 'spelt', 'farro', 'bulgur', 'seitan',
+  ],
   peanut: ['peanut', 'groundnut'],
-  'tree nut': ['almond', 'cashew', 'walnut', 'pecan', 'pistachio', 'hazelnut', 'macadamia', 'brazil nut', 'pine nut', 'praline', 'marzipan', 'nutella'],
-  shellfish: ['shrimp', 'prawn', 'crab', 'lobster', 'crayfish', 'crawfish', 'scallop', 'clam', 'mussel', 'oyster', 'squid', 'calamari'],
-  fish: ['fish', 'salmon', 'tuna', 'cod', 'anchovy', 'anchovies', 'tilapia', 'halibut', 'trout', 'sardine', 'mackerel', 'haddock', 'worcestershire'],
-  soy: ['soy', 'soya', 'tofu', 'tempeh', 'edamame', 'miso', 'soy sauce', 'tamari'],
+  'tree nut': [
+    'nut', 'almond', 'cashew', 'walnut', 'pecan', 'pistachio', 'hazelnut', 'macadamia', 'brazil nut', 'pine nut',
+    'praline', 'marzipan', 'nutella',
+  ],
+  shellfish: ['shellfish', 'shrimp', 'prawn', 'crab', 'lobster', 'crayfish', 'crawfish', 'scallop', 'clam', 'mussel', 'oyster', 'squid', 'calamari'],
+  fish: ['fish', 'salmon', 'tuna', 'cod', 'anchovy', 'tilapia', 'halibut', 'trout', 'sardine', 'mackerel', 'haddock', 'worcestershire'],
+  soy: ['soy', 'soya', 'soybean', 'tofu', 'tempeh', 'edamame', 'miso', 'soy sauce', 'tamari'],
   sesame: ['sesame', 'tahini', 'hummus'],
 };
 const ALLERGEN_ALIASES: Record<string, string> = {
-  dairy: 'milk', lactose: 'milk', milk: 'milk', eggs: 'egg', egg: 'egg',
-  gluten: 'wheat', wheat: 'wheat', peanuts: 'peanut', peanut: 'peanut',
-  'tree nuts': 'tree nut', 'tree nut': 'tree nut', nuts: 'tree nut', nut: 'tree nut',
-  shellfish: 'shellfish', crustacean: 'shellfish', crustaceans: 'shellfish', seafood: 'shellfish',
+  dairy: 'milk', lactose: 'milk', milk: 'milk', egg: 'egg',
+  gluten: 'wheat', wheat: 'wheat', peanut: 'peanut',
+  'tree nut': 'tree nut', nut: 'tree nut',
+  shellfish: 'shellfish', crustacean: 'shellfish', seafood: 'shellfish',
   fish: 'fish', soy: 'soy', soya: 'soy', sesame: 'sesame',
 };
 
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const singular = (word: string) => word.replace(/ies$/, 'y').replace(/(?<=[^s])es$|(?<=[^s])s$/, '');
+/** Words people write around an allergen that say nothing about the food ("Peanut allergy", "Allergic to eggs") */
+const ALLERGEN_FILLER = new Set([
+  'allergy', 'allergies', 'allergic', 'allergen', 'intolerance', 'intolerant', 'sensitivity', 'sensitive',
+  'to', 'of', 'the', 'a', 'an', 'my', 'all', 'any', 'no', 'product', 'products', 'severe', 'mild', 'moderate',
+]);
 
-/** The words to look for, for one allergen as the person wrote it ("Peanuts", "Dairy, eggs") */
+/**
+ * Words that also count inside a longer word ("swordfish", "hazelnuts"), and
+ * the longer words that are something else ("shellfish" is not fish, a peanut
+ * is not a tree nut).
+ */
+const COMPOUND_WORDS: Record<string, string> = {
+  fish: '(?<!shell|cray|craw|jelly)',
+  nut: '(?<!pea|coco|dough|butter)',
+};
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Lower case with accents taken off, so "Crème fraîche" reads as "creme fraiche" */
+const fold = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’`]/g, "'");
+
+/** A word without its plural ending: "olives" → "olive", "berries" → "berry", "peaches" → "peach" */
+function singular(word: string): string {
+  if (/ies$/.test(word) && word.length > 4) return `${word.slice(0, -3)}y`;
+  if (/(ch|sh|x|z|ss|o)es$/.test(word)) return word.slice(0, -2);
+  if (/[^s]s$/.test(word)) return word.slice(0, -1);
+  return word;
+}
+
+/** The plain words of one allergen as written, without punctuation, possessives or filler */
+function allergenTokens(part: string): string[] {
+  return part
+    .replace(/'s\b/g, '')
+    .split(/[^a-z-]+/)
+    .filter(word => word && !ALLERGEN_FILLER.has(word))
+    .map(singular);
+}
+
+/**
+ * The foods to look for, for one allergen as the person wrote it ("Peanuts",
+ * "Dairy, eggs", "Allergic to cow's milk (severe)"), each in the singular.
+ * An allergen this doesn't know ("olive oil") is looked for by its own name.
+ */
 export function allergenWords(allergen: string): string[] {
   const words = new Set<string>();
-  for (const part of allergen.toLowerCase().split(/,|\/|\band\b|&/).map(s => s.trim()).filter(Boolean)) {
-    words.add(singular(part));
-    const group = ALLERGEN_ALIASES[part] ?? ALLERGEN_ALIASES[singular(part)];
-    if (group) for (const food of ALLERGEN_FOODS[group]) words.add(food);
-    // "seafood allergy" also covers fish
-    if (part === 'seafood') for (const food of ALLERGEN_FOODS.fish) words.add(food);
+  for (const part of fold(allergen).split(/[,;/&+()]|\band\b|\bor\b/)) {
+    const tokens = allergenTokens(part);
+    if (tokens.length === 0) continue;
+    words.add(tokens.join(' '));
+    const pairs = tokens.slice(1).map((token, i) => `${tokens[i]} ${token}`);
+    for (const name of [...tokens, ...pairs]) {
+      const group = ALLERGEN_ALIASES[name];
+      if (!group) continue;
+      for (const food of ALLERGEN_FOODS[group]) words.add(food);
+      // "seafood allergy" also covers fish
+      if (name === 'seafood') for (const food of ALLERGEN_FOODS.fish) words.add(food);
+    }
   }
   return [...words];
 }
 
-/** Whole words, with an optional plural: "egg" matches "eggs" but not "eggplant" */
-function mentions(text: string, word: string): boolean {
-  return new RegExp(`(^|[^a-z])${escapeRe(word)}(s|es)?([^a-z]|$)`, 'i').test(text);
+/** One food, singular or plural: "egg" matches "eggs" but not "eggplant", "berry" matches "berries" */
+function foodPattern(food: string): string {
+  const compound = COMPOUND_WORDS[food];
+  const start = compound === undefined ? '(?<![a-z])' : compound;
+  const body = /[^aeiou]y$/.test(food) ? `${escapeRe(food.slice(0, -1))}(?:y|ies)` : `${escapeRe(food)}(?:s|es)?`;
+  return `${start}${body}(?![a-z])`;
+}
+
+/** One pattern per allergen, built once: the review redraws on every tick */
+const allergenPatterns = new Map<string, RegExp | null>();
+function allergenPattern(allergen: string): RegExp | null {
+  let pattern = allergenPatterns.get(allergen);
+  if (pattern === undefined) {
+    const words = allergenWords(allergen);
+    pattern = words.length ? new RegExp(words.map(foodPattern).join('|')) : null;
+    allergenPatterns.set(allergen, pattern);
+  }
+  return pattern;
+}
+
+/** The allergens whose foods are named in a piece of text */
+function allergensIn(text: string, allergies: KitchenAllergy[]): string[] {
+  const folded = fold(text);
+  return allergies.filter(a => allergenPattern(a.allergen)?.test(folded)).map(a => a.allergen);
 }
 
 /** Which of the person's allergens a recipe seems to contain (by its title, ingredients and steps) */
@@ -443,10 +531,10 @@ export function allergenHits(recipe: Pick<RecipeFieldValues, 'recipeName' | 'ing
     ...recipe.ingredients.map(i => `${i.amount} ${i.name}`),
     ...(recipe.steps ?? []).map(s => `${s.title} ${s.text}`),
   ].join('\n');
-  return allergies.filter(a => allergenWords(a.allergen).some(w => mentions(text, w))).map(a => a.allergen);
+  return allergensIn(text, allergies);
 }
 
 /** A meal with no recipe of its own: only its name can be checked */
 export function nameAllergenHits(name: string, allergies: KitchenAllergy[]): string[] {
-  return allergies.filter(a => allergenWords(a.allergen).some(w => mentions(name, w))).map(a => a.allergen);
+  return allergensIn(name, allergies);
 }

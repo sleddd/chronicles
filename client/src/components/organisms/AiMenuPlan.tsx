@@ -16,9 +16,10 @@ import { useKitchenData } from '../../hooks/useKitchenData.js';
 import { aiFeatureJson, aiProviderName } from '../../services/aiAssistant.js';
 import { showFlash } from '../../services/flashNotice.js';
 import {
-  MEAL_SLOTS, allergenHits, budgetCheck, buildMenuRequest, formatCents, nameAllergenHits, parseMenuPlan,
+  MEAL_SLOTS, SLOT_LABEL, allergenHits, budgetCheck, buildMenuRequest, formatCents, nameAllergenHits, parseMenuPlan,
   type AiMenu, type MenuRequest,
 } from '../../utils/aiKitchen.js';
+import { shoppingLineText } from '../../utils/kitchen.js';
 import type { MealSlotType, MenuMealSlot, ShoppingItem } from '../../types/fields.js';
 
 /*
@@ -40,8 +41,6 @@ export interface KitchenPrefs {
   useRecipes: boolean;
 }
 export const DEFAULT_KITCHEN_PREFS: KitchenPrefs = { budgetCents: 10_000, people: 2, slots: ['breakfast', 'lunch', 'dinner'], useRecipes: true };
-
-const SLOT_LABEL: Record<MealSlotType, string> = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack' };
 
 const MoneyBox = styled.label`
   position: relative;
@@ -210,17 +209,22 @@ export function AiMenuPlan({ days, taken, plannedMeals = [], onApply, onClose }:
 
   const recipeById = useMemo(() => new Map(recipes.map(r => [r.id, r])), [recipes]);
   /** Checked against every saved allergy, whether or not they were sent */
-  const mealHits = (m: AiMenu['meals'][number]): string[] => {
-    if (m.newRecipeKey) {
-      const r = menu?.recipes.find(x => x.key === m.newRecipeKey);
-      if (r) return allergenHits(r.fields, allergies);
-    }
-    if (m.recipeId) {
-      const r = recipeById.get(m.recipeId);
-      if (r) return allergenHits({ recipeName: r.title, ingredients: r.ingredients.map(name => ({ id: name, amount: '', name })), steps: [] }, allergies);
-    }
-    return nameAllergenHits(m.mealName, allergies);
+  const recipeHits = (m: AiMenu['meals'][number]): string[] => {
+    const written = m.newRecipeKey ? menu?.recipes.find(x => x.key === m.newRecipeKey) : undefined;
+    if (written) return allergenHits(written.fields, allergies);
+    const saved = m.recipeId ? recipeById.get(m.recipeId) : undefined;
+    if (saved) return allergenHits({ recipeName: saved.title, ingredients: saved.ingredients.map(name => ({ id: name, amount: '', name })), steps: [] }, allergies);
+    return [];
   };
+  /** The meal's own name is checked too: "Peanut noodles" may be linked to a recipe that never says peanut */
+  const mealHits = (m: AiMenu['meals'][number]): string[] =>
+    [...new Set([...recipeHits(m), ...nameAllergenHits(m.mealName, allergies)])];
+
+  /** The shopping list is checked too: its lines, with the allergens each may contain */
+  const listHits = useMemo(() => (menu?.shopping ?? []).flatMap(line => {
+    const hits = nameAllergenHits(line.name, allergies);
+    return hits.length ? [`${line.name} (may contain ${hits.join(', ')})`] : [];
+  }), [menu, allergies]);
 
   const chosenMeals = menu?.meals.filter(m => on(`m${m.day}:${m.slot}`)) ?? [];
   const chosenRecipes = menu?.recipes.filter(r => on(`r${r.key}`) && chosenMeals.some(m => m.newRecipeKey === r.key)) ?? [];
@@ -229,11 +233,11 @@ export function AiMenuPlan({ days, taken, plannedMeals = [], onApply, onClose }:
   const apply = async () => {
     if (!menu) return;
     setStep('saving');
-    let failed = 0;
+    const failed: string[] = [];
     const ids = new Map<string, number>();
     for (const r of chosenRecipes) {
       const id = await createEntry({ name: 'Recipe', icon: 'bowl-food' }, r.fields.recipeName, { ...r.fields });
-      if (id) ids.set(r.key, id); else failed++;
+      if (id) ids.set(r.key, id); else failed.push(`“${r.fields.recipeName}”`);
     }
     const patch: MenuPatch = {};
     for (const m of chosenMeals) {
@@ -245,15 +249,15 @@ export function AiMenuPlan({ days, taken, plannedMeals = [], onApply, onClose }:
     if (chosenMeals.length) onApply(patch);
     if (makeList) {
       const items: ShoppingItem[] = menu.shopping.map(s => ({
-        id: crypto.randomUUID(), name: [s.amount, s.name].filter(Boolean).join(' '), category: s.category, checked: false,
+        id: crypto.randomUUID(), name: shoppingLineText(s), category: s.category, checked: false,
       }));
       const linkedRecipeIds = [...new Set(chosenMeals.map(m => m.recipeId ?? (m.newRecipeKey ? ids.get(m.newRecipeKey) : undefined)).filter((id): id is number => typeof id === 'number'))];
       const title = `Shopping list for ${shortDay(days[0])} – ${shortDay(days[days.length - 1])}`;
       const notes = `Estimated ${formatCents(menu.totalCents)} by AI for a ${formatCents(budgetCents)} budget. ${PRICE_NOTE}`;
       const id = await createEntry({ name: 'Shopping List', icon: 'cart-shopping' }, title, { items, notes, linkedRecipeIds });
-      if (!id) failed++;
+      if (!id) failed.push('the shopping list');
     }
-    if (failed) showFlash(`${failed} ${failed === 1 ? 'thing' : 'things'} didn’t save. The rest are in place.`);
+    if (failed.length) showFlash(`${failed.join(', ')} didn’t save. The rest is in place.`);
     onClose();
   };
 
@@ -375,15 +379,24 @@ export function AiMenuPlan({ days, taken, plannedMeals = [], onApply, onClose }:
                 <Items>
                   {menu.shopping.map((s, i) => (
                     <li key={`${s.name}${i}`}>
-                      <span>{[s.amount, s.name].filter(Boolean).join(' ')}</span>
+                      <span>{shoppingLineText(s)}</span>
                       <span>{s.estCostCents ? `~${formatCents(s.estCostCents)}` : ''}</span>
                     </li>
                   ))}
                 </Items>
+                {listHits.length > 0 && <AllergenFlag $flush>On the list: {listHits.join(', ')}</AllergenFlag>}
                 <Total $over={check.over}>
                   Estimated {formatCents(menu.totalCents)} of your {formatCents(budgetCents)} budget
                   {check.over ? ` · ${formatCents(check.byCents)} over` : ` · ${formatCents(check.byCents)} to spare`}
                 </Total>
+                {menu.unpriced > 0 && (
+                  <ReviewDetail $flush>
+                    {menu.unpriced === 1 ? '1 item has no price and isn’t in the estimate.' : `${menu.unpriced} items have no price and aren’t in the estimate.`}
+                  </ReviewDetail>
+                )}
+                {chosenMeals.length < menu.meals.length && (
+                  <ReviewDetail $flush>The list and its estimate cover every meal the AI planned, the ones you unticked too.</ReviewDetail>
+                )}
                 <ReviewDetail $flush role="note">{PRICE_NOTE}</ReviewDetail>
               </li>
             </ul>

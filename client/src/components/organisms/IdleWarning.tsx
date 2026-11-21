@@ -8,7 +8,9 @@ import { PillButton } from '../atoms/PillButton.js';
  * seconds left and Stay signed in. It doesn't take focus — focusing it would
  * count as someone being here and put the sign-out off by itself — but it is
  * announced (role="alert"), and any key, tap or click anywhere keeps the
- * session, as Stay signed in does.
+ * session, as Stay signed in does. What is announced is one fixed sentence:
+ * the seconds ticking down are for the eye only, or a screen reader would
+ * start the alert again every second and never reach the button.
  */
 
 const Panel = styled.div`
@@ -40,8 +42,9 @@ export function IdleWarning({ signOutAt, onStay }: { signOutAt: number; onStay: 
   }, []);
   const left = Math.max(0, Math.ceil((signOutAt - now) / 1000));
   return createPortal(
-    <Panel role="alert" aria-live="assertive">
-      <span>You’ll be signed out in {left} {left === 1 ? 'second' : 'seconds'} because no one has been here for a while.</span>
+    <Panel role="alert">
+      <span className="sr-only">You’ll be signed out in about a minute because no one has been here for a while.</span>
+      <span aria-hidden="true">You’ll be signed out in {left} {left === 1 ? 'second' : 'seconds'} because no one has been here for a while.</span>
       <PillButton type="button" onClick={onStay}>Stay signed in</PillButton>
     </Panel>,
     document.body,

@@ -185,8 +185,11 @@ export const GlobalStyle = createGlobalStyle`
   main[tabindex="-1"]:focus, [id="main-content"]:focus { outline: none; }
   /* A select keeps a ring too (text fields show their caret and border instead) */
   select:focus-visible { outline: 2px solid var(--focus-ring, #80868f) !important; outline-offset: 2px; }
-  /* Pickers that lay a real <select> invisibly over drawn text: the ring goes on the drawn pill */
-  label:has(> select:focus-visible), div:has(> select:focus-visible) {
+  /* Pickers that lay a real <select> invisibly over drawn text: the ring goes on the drawn pill.
+     Not on a box that holds a visible select beside its label or other fields (the core Select's
+     field, a row of controls): that select has its own ring, and the box would get a second one */
+  label:has(> select:focus-visible),
+  div:has(> select:focus-visible):not(.ch-field):not(:has(> input, > textarea, > label)) {
     outline: 2px solid var(--focus-ring, #80868f);
     outline-offset: 2px;
   }

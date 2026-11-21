@@ -32,7 +32,7 @@ export interface ChecklistItem {
 /** How to put Chronicles on an iPhone or iPad Home Screen (the same in Safari and Chrome) */
 export const HOME_SCREEN_STEPS: readonly string[] = [
   'Open Chronicles in Safari or Chrome. The steps are the same in both.',
-  'Tap the Share button, the square with an arrow pointing up. On iPhone it’s at the bottom of the screen, and on iPad at the top.',
+  'Tap the Share button, the square with an arrow pointing up. In Safari on iPhone it’s at the bottom of the screen. In Chrome, and on iPad, it’s at the top, in or beside the address bar.',
   'Scroll down and tap Add to Home Screen. If you don’t see it, tap Edit Actions and add it.',
   'Tap Add. Chronicles now opens full screen from its icon, like an app.',
 ];
