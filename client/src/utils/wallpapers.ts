@@ -102,8 +102,7 @@ const KEY = 'chronicles.wallpaper-v1';
 
 /** The background everyone starts with in dark theme: Frank van Hulst's beach and
  *  dune grass (0h3McHB_eCc) — the light default until Justin Fisher's qrga71KYbgM came back. Markus Ojanperä's lake (rCHv_7lzLOw) was the dark default
- *  briefly, Madison Kuhn's river valley (aV7_rCZpvGY) before it — still the landing
- *  page's hero photo (HERO_PHOTO in LandingTemplate) — and Justin Fisher's
+ *  briefly, Madison Kuhn's river valley (aV7_rCZpvGY) before it — and Justin Fisher's
  *  qrga71KYbgM for a while; all stay in the list */
 export const DEFAULT_WALLPAPER = 'own-2';
 

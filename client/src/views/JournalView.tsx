@@ -170,6 +170,8 @@ const ModalCard = styled.div<{ $on: boolean; $max: string }>`
   box-shadow: var(--shadow-xl);
   overflow: hidden;
   animation: ${editorExpandIn} 160ms ease-out;
+  /* It takes focus only to hold it inside the dialog — no ring round the whole card */
+  &:focus-visible { outline: none; }
 `;
 
 
@@ -241,7 +243,7 @@ function ModalSlot({ modal, cardRef, label, maxWidth, children }: {
 }) {
   return (
     <ModalCard ref={cardRef} $on={modal} $max={maxWidth} role={modal ? 'dialog' : undefined}
-      aria-modal={modal ? true : undefined} aria-label={modal ? label : undefined}>
+      aria-modal={modal ? true : undefined} aria-label={modal ? label : undefined} tabIndex={modal ? -1 : undefined}>
       {children}
     </ModalCard>
   );
@@ -598,13 +600,24 @@ export function JournalView() {
      keeps the full width; phones / tablets full screen. */
   const wide = !useMediaQuery(NAV_COMPACT_QUERY);
   const editorTopicName = topics.find(t => t.id === editorTopicId)?.name;
-  const hasFields = !!topicKind(editorTopicName)
-    || (editorTopicId != null && (topicCustomFields[editorTopicId]?.length ?? 0) > 0);
   const editorKind = topicKind(editorTopicName);
+  const hasFields = !!editorKind
+    || (editorTopicId != null && (topicCustomFields[editorTopicId]?.length ?? 0) > 0);
   const asModal = wide && editorExpanded && hasFields;
   const modalRef = useRef<HTMLDivElement>(null);
   // No Escape of its own (the journal's Escape closes it); the editor keeps its own focus
   useFocusTrap(modalRef, asModal, undefined, { autoFocus: false });
+  /* …but focus must be in the card: opened with Expand, the Expand button leaves the
+     page and focus drops to <body>. Then the card itself takes it (tabIndex -1), so Tab
+     starts inside it and a screen reader is in the dialog */
+  useEffect(() => {
+    if (!asModal) return;
+    const frame = requestAnimationFrame(() => {
+      const card = modalRef.current;
+      if (card && !card.contains(document.activeElement)) card.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [asModal]);
 
   const collapseEditorRef = useRef(collapseEditor);
   collapseEditorRef.current = collapseEditor;
@@ -612,8 +625,14 @@ export function JournalView() {
   useEffect(() => {
     if (!editorExpanded) return;
     // An Escape a pop-up inside the editor already used (a menu, the Time panel, a
-    // name box) closes only that, never the whole entry
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) collapseEditorRef.current(); };
+    // name box) closes only that, never the whole entry. The writing area marks every
+    // Escape handled (ProseMirror) though nothing there uses it, so that mark doesn't count
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing) return;
+      const inEditor = e.target instanceof Element && !!e.target.closest('.ProseMirror');
+      if (e.defaultPrevented && !inEditor) return;
+      collapseEditorRef.current();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [editorExpanded]);

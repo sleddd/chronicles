@@ -87,6 +87,7 @@
       ]
     }
     </script>
+    <!-- The FAQ, exactly as the landing page shows it (QUESTIONS in LandingView.tsx; the price is BETA_DETAILS.priceMonthly) -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -94,34 +95,42 @@
       "mainEntity": [
         {
           "@type": "Question",
-          "name": "Who is Chronicles for?",
+          "name": "What will it cost?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Chronicles is designed for people who want to track their daily activities, goals, health, and schedule quickly without the overhead of heavy journaling."
+            "text": "During active beta, access is completely free. After official release, pricing will be no more than $15 a month."
           }
         },
         {
           "@type": "Question",
-          "name": "Is my data private on Chronicles?",
+          "name": "Is there a phone app?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Chronicles uses zero-knowledge AES-256 encryption on your device. Your data is encrypted before saving, and servers cannot read your entries."
+            "text": "Chronicles runs smoothly in any modern web browser and installs straight to your phone home screen for a seamless native app experience."
           }
         },
         {
           "@type": "Question",
-          "name": "Does Chronicles cost anything to join?",
+          "name": "Can I import my existing notes or journal entries?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Chronicles is currently accepting signups for its private beta testing phase."
+            "text": "Yes. You can import entries from a CSV file, and export everything, as JSON and CSV, anytime."
           }
         },
         {
           "@type": "Question",
-          "name": "Can I run Chronicles locally on my own computer?",
+          "name": "What happens if I lose my password?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. I’m happy to share a single copy of Chronicles for your personal use only. It isn’t for redistribution or commercial use. Email support@mydailychronicles.com and I’ll invite you to the GitHub repository to download a copy or send it to you as a zip file."
+            "text": "Because Chronicles uses zero-knowledge client-side encryption where your password and keys never leave your device, we can’t recover or reset your password for you. The recovery key you save when you sign up lets you set a new one. Without your password or that key, your journal can’t be opened."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does optional AI work without compromising privacy?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "You bring your own API key (Anthropic, OpenAI or Amazon Bedrock), and requests go from your browser straight to that provider, never through Chronicles. Calorie and nutrient estimates and the chat only see what you type into them. AI planning and journal insights are the two features that send your entries, and both are off until you turn them on. Before every run they list exactly what will be shared and wait for your OK. Anything you send leaves Chronicles’ encryption and is handled under your provider’s terms, including whether it’s kept or used for training. Chronicles never stores the request or the answer."
           }
         }
       ]

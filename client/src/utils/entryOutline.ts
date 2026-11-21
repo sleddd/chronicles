@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import { stripHtml } from './stripHtml.js';
 
 /*
@@ -18,31 +19,65 @@ export interface EntryOutline {
   lines: number;
 }
 
-const BLOCK = /<pre\b[^>]*>([\s\S]*?)<\/pre>|<(p|h[1-6]|li|blockquote|div)\b[^>]*>([\s\S]*?)<\/\2>/gi;
+/** Elements that start a line of their own; lists and quotes only hold them */
+const BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'DIV', 'UL', 'OL', 'PRE']);
 const TITLE_MAX = 120;
 const NOTE_MAX = 160;
 
-function compute(html: string): EntryOutline {
-  const blocks: { text: string; code: boolean }[] = [];
-  let lines = 0;
-  let found = false;
-  for (const m of html.matchAll(BLOCK)) {
-    found = true;
-    if (m[1] !== undefined) {
+type Line = { text: string; code: boolean };
+
+const isBlock = (node: Node): node is Element => node.nodeType === 1 && BLOCK_TAGS.has((node as Element).tagName);
+/** A block that holds lines of its own (a list, a quote of paragraphs) */
+const HOLDS_LINES = 'p, h1, h2, h3, h4, h5, h6, li, pre, blockquote, div';
+
+/**
+ * The entry's lines in order, from its leaf blocks: a paragraph, heading or list
+ * item with no block inside it is one line, so a quote of two paragraphs or a
+ * nested list is two lines, never merged. Text sitting beside blocks in a
+ * container (a list item's own words before its sub-list) is a line too.
+ */
+function collect(parent: ParentNode, lines: Line[]): number {
+  let count = 0;
+  let run = '';
+  const flush = () => {
+    const text = run.replace(/\s+/g, ' ').trim();
+    run = '';
+    if (!text) return;
+    count += 1;
+    lines.push({ text, code: false });
+  };
+  for (const node of Array.from(parent.childNodes)) {
+    if (!isBlock(node)) {
+      run += node.textContent ?? '';
+      continue;
+    }
+    flush();
+    if (node.tagName === 'PRE') {
       // A code block: its own lines, as written (the first non-empty one stands for it)
-      const codeLines = stripHtml(m[1]).replace(/\n+$/, '').split('\n');
-      lines += codeLines.length;
+      const codeLines = (node.textContent ?? '').replace(/\n+$/, '').split('\n');
+      count += codeLines.length;
       const first = codeLines.find(l => l.trim()) ?? '';
-      if (first) blocks.push({ text: first.trimEnd(), code: true });
+      if (first) lines.push({ text: first.trimEnd(), code: true });
+    } else if (node.querySelector(HOLDS_LINES)) {
+      count += collect(node, lines);
     } else {
-      const text = stripHtml(m[3]).replace(/\s+/g, ' ').trim();
-      if (!text) continue;
-      lines += 1;
-      blocks.push({ text, code: false });
+      run = node.textContent ?? '';
+      flush();
     }
   }
-  // Plain text with no blocks (an older or imported entry): its own lines
-  if (!found) {
+  flush();
+  return count;
+}
+
+function compute(html: string): EntryOutline {
+  // Walk DOMPurify's inert fragment: no innerHTML or DOMParser (Trusted Types)
+  const frag = DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true });
+  const blocks: Line[] = [];
+  let lines: number;
+  if (frag.querySelector(HOLDS_LINES)) {
+    lines = collect(frag, blocks);
+  } else {
+    // Plain text with no blocks (an older or imported entry): its own lines
     const plain = stripHtml(html).split('\n').map(l => l.trim()).filter(Boolean);
     lines = plain.length;
     plain.forEach(text => blocks.push({ text, code: false }));

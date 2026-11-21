@@ -28,7 +28,7 @@ const MEDICAL_WORDS = new RegExp([
   'treatments?', 'is (?:this|it) (?:normal|serious)', 'should i (?:see|call) (?:a|my) (?:doctor|dr)',
   'doctors?(?! who)', 'physicians?', 'pharmacists?', 'nurses?', 'allerg(?:y|ies|ic)', 'pregnan\\w*',
   // Everyday ways of asking: how it feels, common conditions, and how much of something to take
-  'pains?', 'painful', 'aches?', '\\w+aches?', 'hurts', 'sore throat', 'nause\\w*', 'vomit\\w*', 'cough\\w*', 'flu',
+  'pains?', 'painful', 'aches?', '(?:head|stomach|tooth|back|ear|belly|tummy)aches?', 'hurts', 'sore throat', 'nause\\w*', 'vomit\\w*', 'cough\\w*', 'flu',
   'feel(?:ing)? (?:sick|ill|unwell)', 'cancer', 'diabet\\w*', 'asthma', 'overdos\\w*', 'medical', 'vitamins?', 'supplements?',
   '\\d+ ?(?:mg|mcg|iu)', 'what should i take', '(?:safe|ok|okay) to take', 'how much \\w+ (?:is safe|can i take)',
 ].map(w => `\\b${w}\\b`).join('|'), 'i');

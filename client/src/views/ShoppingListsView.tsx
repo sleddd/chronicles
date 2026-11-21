@@ -136,7 +136,7 @@ export function ShoppingListsView() {
 
 
           {/* The topic page's table: the list's name, its item count and the date */}
-          <EntryTableList label="Shopping lists" entries={visibleEntries} columns={SHOPPING_COLUMNS}
+          <EntryTableList label="Shopping lists" firstColumn="List" entries={visibleEntries} columns={SHOPPING_COLUMNS}
             noteOf={noNote} prefsKey="shopping-list-v1"
             emptyMessage={tab === 'completed' ? 'No completed lists yet.' : 'No current shopping lists. Use “New list” above to start one.'} />
         </Inner>

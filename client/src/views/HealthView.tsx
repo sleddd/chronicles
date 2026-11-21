@@ -207,7 +207,7 @@ interface HealthViewProps {
   /** One more page action beside New (Recipes: Recipe from ingredients); renders nothing when it has nothing to show */
   extraAction?: React.ReactNode;
   /** Show the entries as the topic page's table (Recipes: Prep, Cook, Serves, Difficulty) */
-  table?: { label: string; columns: EntryTableColumn[]; noteOf?: (e: DecryptedPost) => string | undefined; prefsKey: string };
+  table?: { label: string; firstColumn: string; columns: EntryTableColumn[]; noteOf?: (e: DecryptedPost) => string | undefined; prefsKey: string };
 }
 
 /**
@@ -374,7 +374,7 @@ export function HealthView({ topicNames, metaFields = [], showDateFilter = true,
 
           {table ? (
             <div data-print-hide={printable || undefined}>
-              <EntryTableList label={table.label} entries={sortedEntries} columns={table.columns} noteOf={table.noteOf}
+              <EntryTableList label={table.label} entries={sortedEntries} firstColumn={table.firstColumn} columns={table.columns} noteOf={table.noteOf}
                 prefsKey={table.prefsKey} emptyMessage="No entries yet." />
             </div>
           ) : sortedEntries.length === 0 ? (

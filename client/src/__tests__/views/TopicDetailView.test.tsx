@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent, within } from '@testing-library/react';
 import { TopicDetailView } from '@/views/TopicDetailView';
+import { useUIStore } from '@/stores/uiStore';
 import { renderWithTheme } from '../testUtils';
 
 vi.mock('../../services/privateSettings.js', () => ({
@@ -67,5 +68,21 @@ describe('TopicDetailView', () => {
     fireEvent.change(screen.getByLabelText('Tags'), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'tag' } });
     expect(screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent)).toEqual(['JavaScript', 'PHP', 'WordPress', 'No tag']);
+  });
+
+  it('titles a row by its first field’s own value: a yes / no field never, a 0 always', () => {
+    const ui = (useUIStore as any).getState();
+    const before = state.decryptedEntries;
+    ui.topicCustomFields = { 7: [{ id: 'done', label: 'Done', type: 'boolean' }, { id: 'name', label: 'Name', type: 'text' }] };
+    state.decryptedEntries = [{ id: 9, createdAt: new Date(), content: '<p>From the text</p>', metadata: { _taxonomyId: 7, _customFields: { _userFields: { done: true, name: 'Second field' } } } }];
+    const { unmount } = renderWithTheme(<TopicDetailView />);
+    expect(screen.getByRole('button', { name: /From the text/ })).toBeTruthy();
+    unmount();
+    ui.topicCustomFields = { 7: [{ id: 'count', label: 'Count', type: 'number' }] };
+    state.decryptedEntries = [{ id: 10, createdAt: new Date(), content: '<p>Text line</p>', metadata: { _taxonomyId: 7, _customFields: { _userFields: { count: 0 } } } }];
+    renderWithTheme(<TopicDetailView />);
+    expect(screen.getByRole('button', { name: /^0/ })).toBeTruthy();
+    ui.topicCustomFields = {};
+    state.decryptedEntries = before;
   });
 });

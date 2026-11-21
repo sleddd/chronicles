@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent, within } from '@testing-library/react';
 import { renderWithTheme } from '../testUtils';
-import { GoalTable, TaskTable } from '@/components/organisms/PlanningLists';
+import { GoalTable, MilestoneTable, TaskTable } from '@/components/organisms/PlanningLists';
 import type { GoalEntry, MilestoneEntryData, TaskEntryData } from '@/types/goals';
 
 const created = new Date('2026-11-01');
@@ -52,6 +52,25 @@ describe('TaskTable', () => {
     expect(props.onOpen).toHaveBeenCalledWith(12);
     fireEvent.click(screen.getByRole('button', { name: 'Fold Run a 10K' }));
     expect(screen.queryByText('Tempo run')).toBeNull();
+  });
+});
+
+describe('deleted parents', () => {
+  it('puts a task whose goal was deleted under "No goal", never dropping it', () => {
+    const tasks = [task(10, 'Orphan', 99), task(11, 'Loose', null)];
+    renderWithTheme(<TaskTable tasks={tasks} allTasks={tasks} goals={[goal(1, 'Run a 10K', 'Health')]} milestones={[]} group="goal" titleOf={t => t.title} {...shared()} />);
+    expect(screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent)).toEqual(['No goal']);
+    expect(screen.getByText('Orphan')).toBeTruthy();
+    expect(screen.getByText('Loose')).toBeTruthy();
+  });
+
+  it('puts a milestone whose goal was deleted under "No goal", and counts all of a goal’s milestones', () => {
+    const goals = [goal(1, 'Run a 10K', 'Health')];
+    const all = [milestone(5, 'Shown', 1, true), milestone(6, 'Filtered out', 1), milestone(7, 'Orphan', 99)];
+    renderWithTheme(<MilestoneTable milestones={[all[0], all[2]]} allMilestones={all} goals={goals} tasks={[]} categories={[]} group="goal" {...shared()} />);
+    expect(screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent)).toEqual(['Run a 10K', 'No goal']);
+    expect(screen.getByText('1 of 2')).toBeTruthy();
+    expect(screen.getByText('Orphan')).toBeTruthy();
   });
 });
 

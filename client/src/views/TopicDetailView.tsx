@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
@@ -7,13 +7,9 @@ import { Spinner } from '../components/atoms/Spinner.js';
 import { MaterialIcon } from '../components/atoms/MaterialIcon.js';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { RowMenu } from '../components/molecules/FinanceParts.js';
-import { useOpenInJournal, useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
-import { deleteEntryWithImages } from '../utils/entryActions.js';
-import { builtinEntryName } from '../utils/stripHtml.js';
-import { LoadMore } from '../components/molecules/LoadMore.js';
-import { FilterPick } from '../components/molecules/FilterPick.js';
-import { PlanGroup, PlanRow, PlanTable, PlanMuted, type PlanColumn } from '../components/molecules/PlanTable.js';
-import { SwipeActions } from '../components/molecules/SwipeActions.js';
+import { useNewEntryInJournal } from '../hooks/useOpenInJournal.js';
+import { PlanMuted } from '../components/molecules/PlanTable.js';
+import { EntryTableList, type EntryTableColumn } from '../components/organisms/EntryTableList.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { singular } from '../utils/singular.js';
@@ -22,19 +18,14 @@ import { topics as topicsApi } from '../services/api.js';
 import { usePrivateSettings } from '../services/privateSettings.js';
 import { TopicEditForm } from '../components/molecules/TopicEditForm.js';
 import { TopicIcon } from '../components/molecules/IconPicker.js';
-import { RoundSearch } from '../components/molecules/RoundSearch.js';
 import { entryOutline } from '../utils/entryOutline.js';
-import { tagsInUse, tagsOf, sameTag } from '../utils/entryTags.js';
+import { tagsOf } from '../utils/entryTags.js';
 import { topicKind } from '../utils/topicKind.js';
-import { groupTopicRows, sortTopicRows, type TopicGroup, type TopicSort } from '../utils/topicList.js';
-import { shortDay } from '../utils/planTable.js';
 import { eventCells } from '../utils/eventRow.js';
-import { toDateStr } from '../utils/dateUtils.js';
 import type { UserFieldDef } from '../types/userFields.js';
 import type { DecryptedPost } from '@shared/crypto/types';
-import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 import { onPhoto } from '../styles/wallpaper.js';
-import { topicEntries as entriesOfTopic } from '../utils/topicIndex.js';
+import { topicEntries, type TopicEntries } from '../utils/topicIndex.js';
 
 /* ── Layout (mirrors TopicsView) ── */
 
@@ -142,32 +133,6 @@ const HeadMenu = styled.div`
   @media (max-width: 768px) { display: block; }
 `;
 
-/* "Search books" — the shared rounded search box, at the filter row's right end
-   (its own line, full width, on phones) */
-const Search = styled(RoundSearch)`
-  margin-left: auto;
-  width: 320px;
-  @media (max-width: 768px) { margin-left: 0; width: 100%; order: -1; }
-`;
-
-/* Group / Tags / Sort, the search at the right; a hairline under it, then room before the table */
-const FilterRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-  margin: 24px 0 28px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border-subtle);
-`;
-
-/* A bookmarked entry's mark before its title */
-const Mark = styled.span`
-  display: inline-flex;
-  flex: none;
-  color: var(--color-accent);
-`;
-
 /* ── Rows ── */
 
 /* Everything under the title starts at the topic icon's left edge, not the
@@ -195,88 +160,33 @@ export function TopicDetailView() {
   const navigate = useNavigate();
   const { isReady, isLoading } = useInitializeData();
   const allTopics = useEntriesStore(s => s.allTopics);
-  const entries = useEntriesStore(s => s.decryptedEntries);
-  const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
-  const openInJournal = useOpenInJournal();
-
   const topic = allTopics.find(t => String(t.id) === String(topicId));
+  // Just this topic's entries: the list keeps its identity while nothing in the topic changed
+  const ownEntries = useEntriesStore(s => (topic ? topicEntries(s.decryptedEntries, topic.id) : NO_ENTRIES));
 
   const newEntry = useNewEntryInJournal();
 
-  const handleDeleteEntry = useCallback(async (id: number) => {
-    try {
-      await deleteEntryWithImages(id);
-    } catch (err) { console.error('Failed to delete entry:', err); }
-  }, []);
-
-  const topicEntries = useMemo(() => {
-    if (!topic) return [];
-    return [...entriesOfTopic(entries, topic.id)]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [entries, topic]);
+  // Newest first (the shared list is read-only: copy before sorting)
+  const sortedEntries = useMemo(() => [...ownEntries]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [ownEntries]);
 
   // The topic's own fields: the first one is the row's title, the rest its muted line
   const fieldDefs = useUIStore(s => (topic ? s.topicCustomFields[topic.id] : undefined)) ?? NO_DEFS;
-  const rowText = useCallback((entry: DecryptedPost) => {
-    const vals = (((entry.metadata as Record<string, unknown>)?._customFields as Record<string, unknown>)?._userFields as Record<string, unknown>) ?? {};
-    const texts = fieldDefs.map(d => vals[d.id]).filter(v => v !== undefined && v !== null && v !== '' && typeof v !== 'boolean').map(String);
-    if (!fieldDefs.length || !vals[fieldDefs[0].id]) return null;
-    return { title: texts[0], sub: texts.slice(1).join(' · ') };
+  const ownText = useCallback((entry: DecryptedPost) => {
+    if (!fieldDefs.length) return null;
+    const vals = (fieldsOf(entry)?._userFields as Record<string, unknown> | undefined) ?? {};
+    const first = vals[fieldDefs[0].id];
+    if (!showsAsText(first)) return null;
+    const rest = fieldDefs.slice(1).map(d => vals[d.id]).filter(showsAsText).map(String);
+    return { title: String(first), note: rest.join(' · ') };
   }, [fieldDefs]);
 
   // Custom tags are a text topic's (the journal, a plain topic, one with only the person's own fields)
-  const tagged = !topicKind(topic?.name);
+  const kind = topicKind(topic?.name);
+  const tagged = !kind;
   // Events and meetings: when they start and end, and where, in place of Lines and Date
-  const eventLike = ['event', 'meeting'].includes(topicKind(topic?.name) ?? '');
-
-  // Each entry as a row: its title and next line (the topic's first field and the rest when it has
-  // fields, else its first line and the next — code in a code face), its tags, lines and date
-  const rows = useMemo(() => topicEntries.map(e => {
-    const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
-    const outline = entryOutline(e.content);
-    const own = rowText(e);
-    return {
-      id: e.id,
-      title: own?.title || outline.title || builtinEntryName(cf) || 'Untitled',
-      titleCode: !own && outline.titleCode,
-      note: own ? own.sub : outline.note,
-      noteCode: !own && outline.noteCode,
-      lines: outline.lines,
-      tags: tagged ? tagsOf(cf) : [],
-      bookmarked: !!cf?._isFavorite,
-      event: eventCells(cf, toDateStr(new Date())),
-      created: e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt),
-    };
-  }), [topicEntries, rowText, tagged]);
-
-  const [query, setQuery] = useState('');
-  const [prefs, setPrefs] = useState(readPrefs);
-  const setPref = (next: Partial<Prefs>) => {
-    const all = { ...prefs, ...next };
-    setPrefs(all);
-    try { localStorage.setItem(PREFS_KEY, JSON.stringify({ group: all.group, sort: all.sort })); } catch { /* storage unavailable */ }
-  };
-  const [tagFilter, setTagFilter] = useState('');
-  const tagChoices = useMemo(() => tagsInUse(topicEntries.map(e => (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined)), [topicEntries]);
-  const group: TopicGroup = prefs.group === 'tag' && !tagged ? 'month' : prefs.group;
-  const shown = useMemo(() => {
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const passes = (r: typeof rows[number]) => (!tagFilter || r.tags.some(t => sameTag(t, tagFilter)))
-      && words.every(w => `${r.title} ${r.note} ${r.tags.join(' ')}`.toLowerCase().includes(w));
-    return sortTopicRows(rows.filter(passes), prefs.sort);
-  }, [rows, query, tagFilter, prefs.sort]);
-  // A page of rows at a time (a long topic never draws all of them at once)
-  const [limit, setLimit] = useState(PAGE);
-  useEffect(() => { setLimit(PAGE); }, [query, tagFilter, prefs.sort, group]);
-  const groups = useMemo(() => groupTopicRows(shown.slice(0, limit), group, new Date().getFullYear()), [shown, limit, group]);
-  const [folded, setFolded] = useState<Set<string>>(() => new Set());
-  const toggleFold = (key: string) => setFolded(prev => {
-    const next = new Set(prev);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    return next;
-  });
-  const today = toDateStr(new Date());
-
+  const eventLike = kind === 'event' || kind === 'meeting';
+  const columns = eventLike ? EVENT_COLUMNS : tagged ? [TAGS_COLUMN, LINES_COLUMN] : [LINES_COLUMN];
 
   // Inline topic editor (same as the Topics list's)
   const setTopics = useEntriesStore(s => s.setTopics);
@@ -383,67 +293,14 @@ export function TopicDetailView() {
           </Head>
 
           <Body>
-          {topicEntries.length === 0 ? (
+          {sortedEntries.length === 0 ? (
             <EmptyState message={`No ${topic.name.toLowerCase()} entries yet.`} />
-          ) : (<>
-            <FilterRow role="group" aria-label={`Show ${topic.name}`}>
-              <FilterPick name="Group" value={GROUPS.find(g => g.value === group)?.label ?? 'Month'} set={false}>
-                <select aria-label="Group by" value={group} onChange={e => setPref({ group: e.target.value as TopicGroup })}>
-                  {GROUPS.filter(g => g.value !== 'tag' || tagged).map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                </select>
-              </FilterPick>
-              {tagged && tagChoices.length > 0 && (
-                <FilterPick name="Tags" value={tagFilter || 'All'} set={!!tagFilter}>
-                  <select aria-label="Tags" value={tagFilter} onChange={e => setTagFilter(e.target.value)}>
-                    <option value="">All</option>
-                    {tagChoices.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </FilterPick>
-              )}
-              <FilterPick name="Sort" value={SORTS.find(x => x.value === prefs.sort)?.label ?? 'Newest'} set={false}>
-                <select aria-label="Sort" value={prefs.sort} onChange={e => setPref({ sort: e.target.value as TopicSort })}>
-                  {SORTS.map(x => <option key={x.value} value={x.value}>{x.label}</option>)}
-                </select>
-              </FilterPick>
-              <Search ariaLabel={`Search ${topic.name}`} value={query} onChange={setQuery} placeholder={`Search ${topic.name.toLowerCase()}`} />
-            </FilterRow>
-
-            {shown.length === 0 ? (
-              <EmptyState message="Nothing matches that search." />
-            ) : (
-              <PlanTable label={topic.name} columns={eventLike ? EVENT_COLUMNS : tagged ? COLUMNS : COLUMNS.filter(c => c.label !== 'Tags')}>
-                {groups.map(g => {
-                  const body = g.rows.map(r => (
-                    <SwipeActions key={`${g.key}:${r.id}`} accentColor={accentColor} onDelete={() => handleDeleteEntry(r.id)}>
-                      <PlanRow oneLine
-                        lead={r.bookmarked ? <Mark title="Bookmarked"><MaterialIcon $size={18} aria-label="Bookmarked">bookmark</MaterialIcon></Mark> : undefined}
-                        title={r.title} titleCode={r.titleCode} note={r.note || undefined} noteCode={r.noteCode}
-                        onOpen={() => openInJournal(r.id)}
-                        cells={eventLike ? [
-                          r.event.starts || <PlanMuted key="s">Not set</PlanMuted>,
-                          r.event.ends || <PlanMuted key="e">—</PlanMuted>,
-                          r.event.venue || <PlanMuted key="v">—</PlanMuted>,
-                        ] : [
-                          ...(tagged ? [r.tags.length ? tagText(r.tags) : <PlanMuted key="t">None</PlanMuted>] : []),
-                          String(r.lines),
-                          shortDay(toDateStr(r.created), today),
-                        ]}
-                        endCells={eventLike ? [false, false, false] : tagged ? [true, true, true] : [true, true]}
-                      />
-                    </SwipeActions>
-                  ));
-                  if (!g.title) return body;
-                  return (
-                    <PlanGroup key={g.key} title={g.title} aside={`${g.rows.length} ${g.rows.length === 1 ? 'entry' : 'entries'}`}
-                      open={!folded.has(g.key)} onToggle={() => toggleFold(g.key)}>
-                      {body}
-                    </PlanGroup>
-                  );
-                })}
-                <LoadMore shown={Math.min(limit, shown.length)} total={shown.length} onMore={() => setLimit(l => l + PAGE)} />
-              </PlanTable>
-            )}
-          </>)}
+          ) : (
+            // Keyed by topic: another topic starts with no search, tag or folded groups
+            <EntryTableList key={topic.id} label={topic.name} firstColumn="Entry" entries={sortedEntries}
+              columns={columns} dateColumn={!eventLike} ownText={ownText} tagsOf={tagged ? entryTags : undefined}
+              longest bookmarks prefsKey={PREFS_KEY} emptyMessage={`No ${topic.name.toLowerCase()} entries yet.`} />
+          )}
           </Body>
         </Inner>
       </Page>
@@ -452,34 +309,27 @@ export function TopicDetailView() {
 }
 
 const NO_DEFS: UserFieldDef[] = [];
+const NO_ENTRIES: TopicEntries = [];
 
-/** Rows drawn at a time, more as the foot scrolls into view */
-const PAGE = 100;
-
-const COLUMNS: PlanColumn[] = [
-  { label: 'Entry', width: '' }, { label: 'Tags', width: '180px', end: true }, { label: 'Lines', width: '72px', end: true }, { label: 'Date', width: '90px', end: true },
-];
-/* Events and meetings: when they start and end, and the venue */
-const EVENT_COLUMNS: PlanColumn[] = [
-  { label: 'Entry', width: '' }, { label: 'Starts', width: '170px' }, { label: 'Ends', width: '170px' }, { label: 'Venue', width: '200px' },
-];
-const GROUPS: { value: TopicGroup; label: string }[] = [{ value: 'month', label: 'Month' }, { value: 'tag', label: 'Tag' }, { value: 'none', label: 'None' }];
-const SORTS: { value: TopicSort; label: string }[] = [
-  { value: 'newest', label: 'Newest' }, { value: 'oldest', label: 'Oldest' }, { value: 'title', label: 'Title A–Z' }, { value: 'lines', label: 'Longest' },
-];
+const fieldsOf = (e: DecryptedPost) => (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
+const entryTags = (e: DecryptedPost) => tagsOf(fieldsOf(e));
+/** A field value that reads as text in a row (yes / no fields and blanks don't) */
+const showsAsText = (v: unknown) => v !== undefined && v !== null && v !== '' && typeof v !== 'boolean';
 
 /* How a topic page groups and sorts, remembered per browser (the tag picked isn't — tags are private) */
 const PREFS_KEY = 'topic-list-v1';
-interface Prefs { group: TopicGroup; sort: TopicSort }
-function readPrefs(): Prefs {
-  try {
-    const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') as Partial<Prefs>;
-    return {
-      group: GROUPS.some(g => g.value === saved.group) ? saved.group! : 'month',
-      sort: SORTS.some(x => x.value === saved.sort) ? saved.sort! : 'newest',
-    };
-  } catch { return { group: 'month', sort: 'newest' }; }
-}
+
+const TAGS_COLUMN: EntryTableColumn = {
+  label: 'Tags', width: '180px', end: true,
+  cell: e => { const tags = entryTags(e); return tags.length ? tagText(tags) : <PlanMuted>None</PlanMuted>; },
+};
+const LINES_COLUMN: EntryTableColumn = { label: 'Lines', width: '72px', end: true, cell: e => String(entryOutline(e.content).lines) };
+/* Events and meetings: when they start and end, and the venue */
+const EVENT_COLUMNS: EntryTableColumn[] = [
+  { label: 'Starts', width: '170px', cell: (e, today) => eventCells(fieldsOf(e), today).starts || <PlanMuted>Not set</PlanMuted> },
+  { label: 'Ends', width: '170px', cell: (e, today) => eventCells(fieldsOf(e), today).ends || <PlanMuted>—</PlanMuted> },
+  { label: 'Venue', width: '200px', cell: (e, today) => eventCells(fieldsOf(e), today).venue || <PlanMuted>—</PlanMuted> },
+];
 
 /** An entry's tags in its column: the first, and how many more ("PHP +2") */
 function tagText(tags: string[]): string {

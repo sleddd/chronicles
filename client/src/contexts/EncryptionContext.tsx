@@ -3,6 +3,7 @@ import { encryptionService } from '@shared/crypto/encryptionService.js';
 import { toNonExtractable } from '@shared/crypto/primitives.js';
 import { clearEntryTitleCache } from '../utils/entryTitle.js';
 import { clearEntryOutlineCache } from '../utils/entryOutline.js';
+import { clearAllergenCache } from '../utils/aiKitchen.js';
 import { setEgressAccount } from '../services/deviceConsent.js';
 import { PBKDF2_ITERATIONS } from '@shared/crypto/constants.js';
 import type { EncryptedPostData, DecryptedPost, EncryptedPost, SetupEncryptionResult } from '@shared/crypto/types.js';
@@ -202,6 +203,7 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     // Entry list titles are cached keyed by the decrypted entry HTML
     clearEntryTitleCache();
     clearEntryOutlineCache();
+    clearAllergenCache();
     // Time-tracking sessions (which entries, when) — TimeSync reopens them at the next sign-in
     useTimeStore.getState().reset();
     // Words typed into the planner's search, and the name of a task type

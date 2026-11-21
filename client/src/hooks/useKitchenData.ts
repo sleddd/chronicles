@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { entryTitleText } from '../utils/entryTitle.js';
-import { topicEntries } from '../utils/topicIndex.js';
+import { topicEntries, type TopicEntries } from '../utils/topicIndex.js';
 import type { KitchenAllergy, KitchenRecipeIn } from '../utils/aiKitchen.js';
 import type { RecipeIngredient } from '../types/fields.js';
 
@@ -20,28 +21,39 @@ const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 /** A saved week of the Menu: its Monday and the meal names planned in it */
 export interface MenuWeek { weekStart: string; meals: string[] }
 
-export function useKitchenData(): { allergies: KitchenAllergy[]; recipes: KitchenRecipeIn[]; menuWeeks: MenuWeek[] } {
-  const entries = useEntriesStore(s => s.decryptedEntries);
-  const topics = useEntriesStore(s => s.allTopics);
-  return useMemo(() => {
-    /** Every entry in the topics with one of these names, from the journal's one pass by topic */
-    const entriesIn = (...names: string[]) => topics
-      .filter(t => names.includes(t.name.trim().toLowerCase()))
-      .flatMap(t => topicEntries(entries, t.id));
+/**
+ * The entries of every topic with one of these names, one shared list per topic
+ * (utils/topicIndex). The lists keep their identity while their topics are
+ * unchanged, so a save elsewhere in the journal redoes nothing here.
+ */
+function useTopicsEntries(...names: string[]): TopicEntries[] {
+  return useEntriesStore(useShallow(s => s.allTopics
+    .filter(t => names.includes(t.name.trim().toLowerCase()))
+    .map(t => topicEntries(s.decryptedEntries, t.id))));
+}
 
-    const allergies: KitchenAllergy[] = [];
+export function useKitchenData(): { allergies: KitchenAllergy[]; recipes: KitchenRecipeIn[]; menuWeeks: MenuWeek[] } {
+  const allergyLists = useTopicsEntries('allergy', 'allergies');
+  const menuLists = useTopicsEntries('menu plan', 'menu plans', 'menu');
+  const recipeLists = useTopicsEntries('recipe', 'recipes');
+
+  const allergies = useMemo(() => {
+    const out: KitchenAllergy[] = [];
     const seen = new Set<string>();
-    for (const e of entriesIn('allergy', 'allergies')) {
+    for (const e of allergyLists.flat()) {
       const cf = fieldsOf(e.metadata);
       const allergen = text(cf.allergen) || entryTitleText(e.content);
       if (!allergen || seen.has(allergen.toLowerCase())) continue;
       seen.add(allergen.toLowerCase());
       const severity = typeof cf.severity === 'number' && cf.severity >= 1 && cf.severity <= 10 ? cf.severity : null;
-      allergies.push({ allergen, reaction: text(cf.reaction), severity });
+      out.push({ allergen, reaction: text(cf.reaction), severity });
     }
+    return out;
+  }, [allergyLists]);
 
-    const menuWeeks: MenuWeek[] = [];
-    for (const e of entriesIn('menu plan', 'menu plans', 'menu')) {
+  const menuWeeks = useMemo(() => {
+    const out: MenuWeek[] = [];
+    for (const e of menuLists.flat()) {
       const cf = fieldsOf(e.metadata);
       const weekStart = text(cf.weekStart);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) continue;
@@ -49,19 +61,24 @@ export function useKitchenData(): { allergies: KitchenAllergy[]; recipes: Kitche
       const meals = days.flatMap(day => (day && typeof day === 'object'
         ? Object.values(day as Record<string, unknown>).map(slot => text((slot as { mealName?: unknown } | null)?.mealName))
         : [])).filter(Boolean);
-      menuWeeks.push({ weekStart, meals });
+      out.push({ weekStart, meals });
     }
+    return out;
+  }, [menuLists]);
 
-    const recipes: KitchenRecipeIn[] = [];
-    for (const e of entriesIn('recipe', 'recipes')) {
+  const recipes = useMemo(() => {
+    const out: KitchenRecipeIn[] = [];
+    for (const e of recipeLists.flat()) {
       const cf = fieldsOf(e.metadata);
       const title = text(cf.recipeName) || entryTitleText(e.content);
       if (!title) continue;
       const ingredients = Array.isArray(cf.ingredients)
         ? (cf.ingredients as RecipeIngredient[]).map(i => text(i?.name)).filter(Boolean)
         : [];
-      recipes.push({ id: e.id, title, ingredients });
+      out.push({ id: e.id, title, ingredients });
     }
-    return { allergies, recipes, menuWeeks };
-  }, [entries, topics]);
+    return out;
+  }, [recipeLists]);
+
+  return useMemo(() => ({ allergies, recipes, menuWeeks }), [allergies, recipes, menuWeeks]);
 }

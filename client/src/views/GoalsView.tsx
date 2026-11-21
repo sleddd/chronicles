@@ -208,7 +208,6 @@ const FilterRow = styled.div`
   margin: 28px 0 12px;
 `;
 
-/* Clear completed: the app's neutral outlined pill, with a count; asks once */
 /* The list view's summary at the filter row's end: "11 open · 2 late" */
 const Summary = styled.span`
   font-family: var(--font-sans);
@@ -235,6 +234,7 @@ function readGroups(): ListGroups {
   } catch { return DEFAULT_GROUPS; }
 }
 
+/* Clear completed: the app's neutral outlined pill, with a count; asks once */
 const ClearCount = styled.em`
   margin-left: 8px;
   font-style: normal;
@@ -315,13 +315,15 @@ const ViewBtn = styled.button<{ $active: boolean }>`
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
-/* A category's heading over its goals in the list view (MonthGroups' heading) */
 type PlanTab = 'goals' | 'milestones' | 'tasks' | 'todos';
 type PlanView = 'board' | 'list';
 /* List or Board per tab, per browser. v2 (2026-11-21): List became the default, and a choice made
    while Board was the default isn't carried over — everyone starts on List again */
 const VIEW_KEY = 'planning-view-v2';
-try { localStorage.removeItem('planning-view-v1'); } catch { /* storage unavailable */ }
+/** Drop the v1 choice (once, when the page mounts) */
+function forgetOldViews(): void {
+  try { localStorage.removeItem('planning-view-v1'); } catch { /* storage unavailable */ }
+}
 
 function readViews(): Partial<Record<PlanTab, PlanView>> {
   try { return JSON.parse(localStorage.getItem(VIEW_KEY) || '{}') as Partial<Record<PlanTab, PlanView>>; }
@@ -596,6 +598,7 @@ export function GoalsView() {
 
   /* ── List | Board, remembered per tab ── */
   const [views, setViews] = useState(readViews);
+  useEffect(forgetOldViews, []);
   const view: PlanView = views[tab] ?? 'list';
   const setView = (v: PlanView) => {
     const next = { ...views, [tab]: v };
@@ -1121,7 +1124,7 @@ export function GoalsView() {
                     onMove={persistMilestoneStatus} onReorder={refined ? undefined : reorder('milestones', orderedMilestones)}
                     onAdd={key => addIn({ ...milestoneFieldsForStatus(key), ...(goalFilter ? { parentGoalId: goalFilter } : {}) })()} />
                 : shownMilestones.length > 0 && (
-                  <MilestoneTable milestones={shownMilestones} goals={orderedGoals} tasks={tasks} categories={categories} group={groups.milestones} {...tableProps} />
+                  <MilestoneTable milestones={shownMilestones} allMilestones={orderedMilestones} goals={orderedGoals} tasks={tasks} categories={categories} group={groups.milestones} {...tableProps} />
                 ))}
 
             {tab === 'tasks' && (tasks.length === 0

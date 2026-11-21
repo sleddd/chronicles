@@ -43,7 +43,18 @@ const RowGrid = styled.div`
 const HeadRow = styled(RowGrid)`
   padding: 0 0 14px;
   border-bottom: 1px solid var(--border-default);
-  @media (max-width: 768px) { display: none; }
+  /* Phones: hidden from view (each row's columns sit as a muted line), still read out */
+  @media (max-width: 768px) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 `;
 
 const ColName = styled.span<{ $end?: boolean }>`
@@ -66,7 +77,7 @@ export function PlanTable({ label, columns, children }: { label: string; columns
 
 /* ── Group headings ── */
 
-const GroupRow = styled.div<{ $folded: boolean }>`
+const GroupRow = styled.div`
   display: flex;
   align-items: center;
   gap: 16px;
@@ -129,7 +140,7 @@ export function PlanGroup({ title, aside, progress, open, onToggle, children }: 
   const shown = open ?? true;
   return (
     <section aria-label={title}>
-      <GroupRow $folded={!shown}>
+      <GroupRow>
         <GroupTitle>{title}</GroupTitle>
         {aside && <Aside>{aside}</Aside>}
         <GroupEnd>

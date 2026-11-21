@@ -1,6 +1,6 @@
 /* The week / day planner: tasks put on a day (`scheduledDate`, YYYY-MM-DD) and, when they
-   have one, a time on it (`scheduledTime`), each as long as its same-day end time, its own
-   length or its estimate says (`hoursOf`). A task with no planned day but a deadline AND a time
+   have one, a time on it (`scheduledTime`), each as long as its own length or its estimate
+   says (`hoursOf`) — a deadline is never its end. A task with no planned day but a deadline AND a time
    of day chosen shows on its deadline's day (`plannedDay`). An unfinished task set to
    auto-migrate ("Move to tomorrow if unfinished") whose day has passed shows under today —
    worked out when read, nothing is rewritten. Without it the task stays on its day and is listed
@@ -13,6 +13,10 @@ import { addDays, dayOf, dayNumber } from './planTimeline.js';
 import { taskStatusOf } from '../types/goals.js';
 
 export { addDays };
+
+/* TODO: DAY_PARTS, partsCovered and chosenPart (and the part fields) are kept only for the
+   legacy TaskFields form and plannedDay's deadline-with-a-time-of-day rule. The planner lays
+   tasks out by the hour now; drop these once TaskFields goes. */
 
 /** The parts of a day a task can be planned for (no hours) */
 export type DayPart = 'morning' | 'noon' | 'night';
@@ -104,45 +108,40 @@ export function hhmm(mins: number): string {
 export const MIN_HOURS = 5 / 60;
 export const MAX_HOURS = 12;
 export const DEFAULT_HOURS = 1;
-/** A same-day end time (the task's Ends time on its planned day, after its start), in minutes */
-export function sameDayEnd(cf: Record<string, unknown> | undefined): number | undefined {
-  const start = timeOf(cf);
-  const v = cf?.deadlineTime;
-  if (start === undefined || typeof v !== 'string') return undefined;
-  const m = /^(\d{1,2}):(\d{2})$/.exec(v);
-  if (!m) return undefined;
-  const end = Number(m[1]) * 60 + Number(m[2]);
-  const deadline = typeof cf?.deadline === 'string' ? cf.deadline : '';
-  const day = typeof cf?.scheduledDate === 'string' ? cf.scheduledDate : '';
-  if (deadline && day && deadline !== day) return undefined;
-  return end > start ? end : undefined;
-}
+/** Kept in range and rounded to the minute: a saved length keeps its precision when read back */
+const readHours = (h: number): number => Math.min(MAX_HOURS, Math.max(MIN_HOURS, Math.round(h * 60) / 60));
 
-/** A task's length in hours: from its start to a same-day end time when it has one (to the
- *  minute — 4:10 to 4:15 is 5 minutes), else its own length (five-minute steps), else its estimate
- *  when that fits in a day's block, else an hour */
+/** A task's length in hours: its own length (`scheduledHours`), else its estimate when that fits
+ *  in a day's block, else an hour. A deadline is never an end time, so it never sets the length */
 export function hoursOf(cf: Record<string, unknown> | undefined): number {
-  const end = sameDayEnd(cf);
-  if (end !== undefined) return Math.min(MAX_HOURS, (end - timeOf(cf)!) / 60);
   const n = typeof cf?.scheduledHours === 'number' ? cf.scheduledHours : Number(cf?.scheduledHours);
-  if (Number.isFinite(n) && n > 0) return clampHours(n);
+  if (Number.isFinite(n) && n > 0) return readHours(n);
   // No length of its own yet: its estimate. One longer than a block can be ("2 days") is work
   // for several sittings, not one twelve-hour card: it starts at the default like any other task
   const est = estimateOf(cf);
-  return est && est <= MAX_HOURS * 60 ? clampHours(est / 60) : DEFAULT_HOURS;
+  return est && est <= MAX_HOURS * 60 ? readHours(est / 60) : DEFAULT_HOURS;
 }
 
 /* ── Estimated time: how long a task is expected to take (`estimatedMinutes`) ── */
 
-/** A task's estimate in minutes, or undefined when it has none (anything odd is ignored) */
+/** A working day, for estimates: 8 hours */
+const WORK_DAY = 8 * 60;
+/** The longest estimate: a working week of seven 8-hour days */
+export const MAX_ESTIMATE = 7 * WORK_DAY;
+/** Estimates from here up (in whole working days) read as days; anything shorter reads as hours */
+const DAYS_FROM = 5 * WORK_DAY;
+
+/** A task's estimate in minutes, or undefined when it has none (anything odd is ignored). Read up
+ *  to a calendar week, so an estimate typed before the working-week cap still shows */
 export function estimateOf(cf: Record<string, unknown> | undefined): number | undefined {
   const n = typeof cf?.estimatedMinutes === 'number' ? cf.estimatedMinutes : Number(cf?.estimatedMinutes);
   return Number.isFinite(n) && n > 0 && n <= 7 * 24 * 60 ? Math.round(n) : undefined;
 }
 
-/** An estimate as words: "15 min", "1 h 30 min", "6 h", "2 days" (a day = 8 working hours) */
+/** An estimate as words: "15 min", "1 h 30 min", "16 h"; days only from five whole working
+ *  days up ("5 days", a day = 8 working hours) */
 export function estimateLabel(minutes: number): string {
-  if (minutes >= 16 * 60 && minutes % (8 * 60) === 0) return `${minutes / (8 * 60)} days`;
+  if (minutes >= DAYS_FROM && minutes % WORK_DAY === 0) return `${minutes / WORK_DAY} days`;
   if (minutes < 60) return `${minutes} min`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -151,7 +150,7 @@ export function estimateLabel(minutes: number): string {
 /**
  * A typed estimate in minutes: "45" or "45 min", "1.5 h", "1 h 30 min", "1h30", "1:30",
  * "2 days" (a day = 8 working hours, as estimateLabel shows it). A bare number is minutes.
- * '' → null (no estimate); anything it can't read, or over a week → undefined.
+ * '' → null (no estimate); anything it can't read, or over a working week (7 × 8 h) → undefined.
  */
 export function parseEstimate(text: string): number | null | undefined {
   const t = text.trim().toLowerCase();
@@ -167,7 +166,7 @@ export function parseEstimate(text: string): number | null | undefined {
       if (!m[0]) break;
       const n = Number(m[1]);
       const unit = m[2] ?? '';
-      if (unit.startsWith('d')) total += n * 8 * 60;
+      if (unit.startsWith('d')) total += n * WORK_DAY;
       else if (unit.startsWith('h')) total += n * 60;
       else if (unit.startsWith('m')) total += n;
       // "1h30": a bare number after hours is minutes; on its own it is minutes too
@@ -177,32 +176,23 @@ export function parseEstimate(text: string): number | null | undefined {
     if (read !== t.length) return undefined;
   }
   const minutes = Math.round(total);
-  return minutes > 0 && minutes <= 7 * 24 * 60 ? minutes : undefined;
+  return minutes > 0 && minutes <= MAX_ESTIMATE ? minutes : undefined;
 }
 
-/** The fields after moving a task's start to `start` (minutes), its same-day end time moved with it */
+/* The patches below never touch `deadline` / `deadlineTime`: a deadline is when the task is due,
+   not when its block on the planner ends. Moving or stretching a card changes only its plan */
+
+/** The fields after moving a task's start to `start` (minutes); its length is untouched */
 export function startPatch(cf: Record<string, unknown>, start: number): Record<string, unknown> {
-  const end = sameDayEnd(cf);
-  const old = timeOf(cf);
-  const out: Record<string, unknown> = { ...cf, scheduledTime: hhmm(start) };
-  if (end !== undefined && old !== undefined) out.deadlineTime = hhmm(Math.min(24 * 60 - 1, start + (end - old)));
-  return out;
+  return { ...cf, scheduledTime: hhmm(start) };
 }
-/**
- * The fields after moving a task to another day. An end time on its old day is its length
- * (4:10 to 4:15 is five minutes), so that end date moves with it; a deadline on any other day stays.
- */
+/** The fields after moving a task to another day; its length (`scheduledHours` / estimate) goes with it */
 export function dayPatch(cf: Record<string, unknown>, day: string): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...cf, scheduledDate: day };
-  if (day && sameDayEnd(cf) !== undefined && cf.deadline && cf.deadline === cf.scheduledDate) out.deadline = day;
-  return out;
+  return { ...cf, scheduledDate: day };
 }
-/** The fields after giving a task `hours`: its same-day end time follows, when it has one */
+/** The fields after giving a task `hours` (five-minute steps) */
 export function lengthPatch(cf: Record<string, unknown>, hours: number): Record<string, unknown> {
-  const start = timeOf(cf);
-  const out: Record<string, unknown> = { ...cf, scheduledHours: clampHours(hours) };
-  if (sameDayEnd(cf) !== undefined && start !== undefined) out.deadlineTime = hhmm(Math.min(24 * 60 - 1, start + Math.round(hours * 60)));
-  return out;
+  return { ...cf, scheduledHours: clampHours(hours) };
 }
 
 /** Whether two lengths (hours) are the same to the minute. Lengths are kept in hours, so five

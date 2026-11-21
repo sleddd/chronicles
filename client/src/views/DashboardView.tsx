@@ -577,8 +577,8 @@ const Col = styled.div`
   flex-direction: column;
   gap: 36px;
   min-width: 0;
-  /* The top row: cards two to a row where they fit together (wellness two thirds beside
-     Shortcuts…), in thirds — one column on phones */
+  /* A zone in thirds (under the Quick entry, the top row): one wrapper across all three
+     columns, its rows (ThirdsRow) laying out the thirds — one column on phones */
   &[data-grid] {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -588,7 +588,6 @@ const Col = styled.div`
   }
 `;
 
-/* A card's place in the top row: one, two or all three thirds */
 /* A row of a zone in thirds: up to three columns, each a stack of cards (one column on phones) */
 const ThirdsRow = styled.div`
   display: grid;
@@ -2547,10 +2546,10 @@ const AddItem = styled.form`
   &:focus-within { border-color: var(--color-accent); }
 `;
 
-/** `compact`: the Day at a glance look — the items as a numbered checklist like Priorities */
 /** Items a shopping list shows before it folds ("Show all 23") */
 const SHOP_ROWS = 8;
 
+/** `compact`: the Day at a glance look — the items as a numbered checklist like Priorities */
 export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show: string; onShow: (next: string) => void; compact?: boolean }) {
   const [show, onShow] = useCardChoice(savedShow, saveShow);
   const openInJournal = useOpenInJournal();
@@ -2575,6 +2574,9 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
   const items = ((list ? cfOf(list).items : undefined) as ShoppingItem[] | undefined) ?? [];
   // A long list folds to its first few items, with "Show all N" under them
   const [showAllItems, setShowAllItems] = useState(false);
+  // Folded again whenever the card shows another list
+  const [foldedFor, setFoldedFor] = useState(list?.id);
+  if (foldedFor !== list?.id) { setFoldedFor(list?.id); setShowAllItems(false); }
   const folds = items.length > SHOP_ROWS;
   const visibleItems = folds && !showAllItems ? items.slice(0, SHOP_ROWS) : items;
 
@@ -2586,7 +2588,11 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
     setDraft('');
     setError('');
     const item: ShoppingItem = { id: crypto.randomUUID(), name, category: 'other', checked: false };
-    if (list) return save(list, { ...cfOf(list), items: [...items, item] });
+    if (list) {
+      // An item past the fold would land out of sight: open the list to show it
+      if (items.length >= SHOP_ROWS) setShowAllItems(true);
+      return save(list, { ...cfOf(list), items: [...items, item] });
+    }
     try {
       await createList(defaultShoppingListTitle(), [item]);
     } catch (err) {
@@ -2854,19 +2860,21 @@ export function DashboardView() {
     setDragging(false);
     const from = dragFrom.current;
     dragFrom.current = null;
-    const col = colOf(active.id);
+    const key = active.id as SectionKey;
+    const gap = over && typeof over.id === 'string' && over.id.startsWith('gap:') ? over.id.split(':') : null;
+    // The space under a column's cards: at the foot of that column (under its last card)
+    const foot = over && typeof over.id === 'string' && over.id.startsWith('cell:') ? over.id.split(':') : null;
+    // Where it was let go decides the zone — read from what it's over, not from where the card
+    // sits in `layout`, which onDragOver's pause can leave a zone behind on a quick drop
+    const zone = ((gap ? gap[1] : foot ? foot[1] : null) as ColId | null)
+      ?? (over ? colOf(over.id) : null) ?? colOf(active.id);
     // The zones in thirds (under the Quick entry, the top row): where it's let go decides its place —
     // on a card's left / right side a column beside it, on its top / bottom half above / below it,
     // on the strip between rows a full-width row (utils/dashboardGrid)
     const point = activatorEvent && 'clientX' in activatorEvent
       ? { x: (activatorEvent as PointerEvent).clientX + delta.x, y: (activatorEvent as PointerEvent).clientY + delta.y }
       : null;
-    const key = active.id as SectionKey;
-    const gap = over && typeof over.id === 'string' && over.id.startsWith('gap:') ? over.id.split(':') : null;
-    // The space under a column's cards: at the foot of that column (under its last card)
-    const foot = over && typeof over.id === 'string' && over.id.startsWith('cell:') ? over.id.split(':') : null;
-    const zone = (gap ? gap[1] : foot ? foot[1] : col) as ColId | null;
-    if (zone && THIRDS.has(zone) && over && (gap || point)) {
+    if (zone && THIRDS.has(zone) && over) {
       const saved = fullLayout(config.layout);
       // The zone's rows as they were, without the card if it came from elsewhere
       const shownIn = (z: ColId) => saved[z].filter(k => visible(k) && (z === zone || k !== key));
@@ -2882,13 +2890,18 @@ export function DashboardView() {
           // Let go on itself or the zone's empty space: back where it was, or a full row at the end
           if (from === zone) { setLayout(saved); return; }
           rows = dropOnGap(rows, key, rows.length);
-        } else {
+        } else if (point) {
           const r = over.rect;
-          const inside = point!.y >= r.top && point!.y <= r.top + r.height;
-          const place = inside && point!.x < r.left + r.width * 0.3 ? 'before'
-            : inside && point!.x > r.left + r.width * 0.7 ? 'after'
-            : point!.y < r.top + r.height / 2 ? 'above' : 'below';
+          const inside = point.y >= r.top && point.y <= r.top + r.height;
+          const place = inside && point.x < r.left + r.width * 0.3 ? 'before'
+            : inside && point.x > r.left + r.width * 0.7 ? 'after'
+            : point.y < r.top + r.height / 2 ? 'above' : 'below';
           rows = dropOnCard(rows, key, target, place);
+        } else {
+          // From the keyboard (no pointer): above or below the card, the way it was travelling
+          const order = flattenGrid(rows);
+          const at = order.indexOf(key);
+          rows = dropOnCard(rows, key, target, at >= 0 && at < order.indexOf(target) ? 'below' : 'above');
         }
       }
       const grids = { ...config.grids, [zone]: rows };
@@ -2905,10 +2918,17 @@ export function DashboardView() {
       void saveConfig({ ...config, layout: next, grids });
       return;
     }
+    // A column: before the card it's over (after it, dragged down within its column), or at
+    // the foot of an empty one — into that column even when onDragOver hadn't moved it yet
     let next = layout;
-    if (over && col && colOf(over.id) === col && over.id !== active.id && over.id !== col) {
-      const list = layout[col];
-      next = { ...layout, [col]: arrayMove(list, list.indexOf(active.id as SectionKey), list.indexOf(over.id as SectionKey)) };
+    if (over && zone && over.id !== active.id && !(over.id === zone && layout[zone].includes(key))) {
+      const target = layout[zone];
+      const list = target.filter(k => k !== key);
+      const overAt = target.indexOf(over.id as SectionKey);
+      list.splice(overAt < 0 ? list.length : overAt, 0, key);
+      next = { ...layout };
+      for (const c of COLS) if (c !== zone) next[c] = layout[c].filter(k => k !== key);
+      next[zone] = list;
       setLayout(next);
     }
     const saved = fullLayout(config.layout);

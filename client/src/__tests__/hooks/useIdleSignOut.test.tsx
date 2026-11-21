@@ -139,6 +139,28 @@ describe('useIdleSignOut', () => {
     expect(browserIsIdle()).toBe(true);
   });
 
+  it('a tab catching the shared record up never moves it back past a newer time from another tab', () => {
+    const t0 = Date.now();
+    vi.setSystemTime(t0 + 10 * MIN);
+    localStorage.setItem(ACTIVITY_STORE_KEY, String(t0 + 10 * MIN)); // another tab, just now
+    markActivity(t0 + 5 * MIN); // this tab, what it saw five minutes ago
+    expect(Number(localStorage.getItem(ACTIVITY_STORE_KEY))).toBe(t0 + 10 * MIN);
+    markActivity();
+    expect(Number(localStorage.getItem(ACTIVITY_STORE_KEY))).toBe(t0 + 10 * MIN);
+    vi.setSystemTime(t0 + 12 * MIN);
+    markActivity();
+    expect(Number(localStorage.getItem(ACTIVITY_STORE_KEY))).toBe(t0 + 12 * MIN);
+  });
+
+  it('a time ahead of the clock in the shared record keeps nobody signed in', () => {
+    vi.setSystemTime(new Date('2026-11-15T10:20:00Z'));
+    localStorage.setItem(ACTIVITY_STORE_KEY, String(new Date('2027-01-01T00:00:00Z').getTime()));
+    expect(browserIsIdle()).toBe(true);
+    // …and isn't carried forward by the next write
+    markActivity();
+    expect(Number(localStorage.getItem(ACTIVITY_STORE_KEY))).toBe(Date.now());
+  });
+
   it('checks when the page comes back into view', async () => {
     renderHook(() => useIdleSignOut());
     vi.setSystemTime(new Date('2026-11-15T10:20:00Z'));

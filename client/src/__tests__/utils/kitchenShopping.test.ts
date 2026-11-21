@@ -40,6 +40,17 @@ describe('shopping list amounts', () => {
     expect(addAmounts('2', '')).toBe('');
   });
 
+  it('never adds up a range as a number and a unit', () => {
+    expect(addAmounts('2-3', '2-3')).toBe('');
+    expect(addAmounts('2 – 3 lb', '1 lb')).toBe('');
+    expect(addAmounts('1 to 2', '1 to 2')).toBe('');
+    expect(addAmounts('1 tomato', '1 tomato')).toBe('2 tomato');
+    expect(shoppingLines([
+      { amount: '2-3', name: 'onions' },
+      { amount: '1', name: 'onions' },
+    ])).toEqual([{ amount: '', name: 'onions' }]);
+  });
+
   it('lists an item once across recipes, adding up its amounts', () => {
     expect(shoppingLines([
       { amount: '2', name: 'chicken breasts' },

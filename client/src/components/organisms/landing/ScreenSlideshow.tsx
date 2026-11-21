@@ -8,7 +8,7 @@ import { PAGE_INK } from '../../templates/LandingTemplate.js';
    every view in dark, with one light shot, the dashboard, right after the dark one.
    Screenshots live in src/assets/landing/<key>.jpg (JPEG on purpose: the PWA
    precaches png/svg, and these shouldn't ride along to every signed-in user).
-   A slide whose file is missing is skipped. No frame or border: the screenshot itself with rounded corners, on the hero's night-sky photo. Advances every 6s; pauses while
+   A slide whose file is missing is skipped. Framed in a dark border with rounded corners, on the hero's photo. Advances every 6s; pauses while
    pointed at or focused, and doesn't advance at all for reduced motion. Swipe sideways, the ‹ › arrows or the arrow keys move it by hand. */
 
 export const SLIDES = [
@@ -32,7 +32,11 @@ export const SLIDES = [
   { key: 'settings-dark', name: 'Settings', caption: 'Light or dark, and an accent of your own' },
 ] as const;
 
-const FILES = import.meta.glob<string>('../../../assets/landing/*.jpg', { eager: true, query: '?url', import: 'default' });
+/* Only the slides' own files are bundled (a glob must be written out, so keep this list in step with SLIDES) */
+const FILES = import.meta.glob<string>(
+  '../../../assets/landing/{dashboard-dark-v3,journal-dark,health-dark,reports-dark,vision-dark,goals-list-dark,milestones-list-dark,roadmap-dark,tasks-list-dark,tasks-dark,planner-dark,calendar-dark,kitchen-dark,shopping-dark,finance-dark,settings-dark}.jpg',
+  { eager: true, query: '?url', import: 'default' },
+);
 const urlFor = (key: string) => FILES[`../../../assets/landing/${key}.jpg`];
 
 const AVAILABLE = SLIDES.flatMap(s => {

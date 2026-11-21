@@ -5,6 +5,7 @@ import { useUIStore } from '../../stores/uiStore.js';
 import { NotificationBell } from './NotificationBell.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 import { TOP_BAR_SLOT_ID } from './TopBarAction.js';
+import { registerTopBarSlot } from '../../stores/topBarSlotStore.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { useNavItems, type NavItem } from '../../hooks/useNavItems.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
@@ -43,8 +44,10 @@ const BarActions = styled.div`
   align-items: center;
   gap: 8px;
   flex: none;
-  /* Nothing in it: no actions at all, or only the boxes of actions with nothing to show */
-  &:empty, &:not(:has(> * > *)) { display: none; }
+  /* Nothing in it: no actions at all, or only the boxes of actions with nothing to show.
+     Two rules: a browser without :has drops a whole selector list that uses it */
+  &:empty { display: none; }
+  &:not(:has(> * > *)) { display: none; }
 `;
 
 /* The logo and page name — the button that opens and closes the menu (there's no ☰) */
@@ -324,7 +327,7 @@ export function MobileChrome() {
         </LogoContainer>
         {/* The page's main action lands here (TopBarAction), then the reminders bell */}
         <BarEnd>
-          <BarActions id={TOP_BAR_SLOT_ID} />
+          <BarActions id={TOP_BAR_SLOT_ID} ref={registerTopBarSlot} />
           <NotificationBell variant="bar" />
         </BarEnd>
       </MobileNavBar>

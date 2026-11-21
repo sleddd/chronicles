@@ -1,5 +1,5 @@
 import { ChangeFields, type ChangeFieldValues } from '../molecules/fields/ChangeFields.js';
-import { useState, useEffect, useMemo, useRef, Fragment, type MutableRefObject, type ReactNode, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment, type MutableRefObject, type ReactNode, type CSSProperties } from 'react';
 import styled, { css, keyframes } from 'styled-components';
 import { onPhoto, photoTokens, solidUnderPhoto } from '../../styles/wallpaper.js';
 import { cardLabel } from '../../styles/cardLabel.js';
@@ -1143,15 +1143,6 @@ export function quickTopicPhrase(name: string): string {
   return name.trim().toLowerCase() || 'journal';
 }
 
-/* ── Helpers ── */
-
-
-/** Topics whose entry name is a field rather than the text (see nameKey below) */
-
-/** Which built-in kind a topic holds (utils/topicKind) */
-const getCustomType = topicKind;
-
-
 /* ── Component ── */
 
 interface EntryFormProps {
@@ -1316,10 +1307,12 @@ export function EntryForm({
   useEffect(() => {
     if (!moreOpen) return;
     const onDown = (e: MouseEvent) => { if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMoreOpen(false); };
+    // Heard on the document (before the journal's window listener) and marked used,
+    // so this Escape closes only the menu, never the whole entry
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); setMoreOpen(false); } };
     document.addEventListener('mousedown', onDown);
-    window.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey); };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [moreOpen]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -1349,24 +1342,24 @@ export function EntryForm({
   const userFieldDefs = topicId != null ? (topicCustomFields[topicId] ?? []) : [];
 
   const selectedTopic = topics.find(t => t.id === topicId);
-  const customType = getCustomType(selectedTopic?.name);
+  const customType = topicKind(selectedTopic?.name);
   // Custom tags: text entries only (the journal, a plain topic, a topic with the person's own
   // fields) — never a task, goal or other built-in kind. Offered from every text entry's tags
   const tagsOn = !customType;
   const entryTags = tagsOf(customFields);
-  const tagSuggestions = useMemo(() => {
-    if (!tagsOn) return [];
-    const typeOf = new Map(topics.map(t => [t.id, getCustomType(t.name)]));
+  // Worked out only when the tag box opens, never on every change to the journal
+  const tagSuggestions = useCallback(() => {
+    const typeOf = new Map(topics.map(t => [t.id, topicKind(t.name)]));
     return tagsInUse(entries
       .filter(e => !typeOf.get((e.metadata as Record<string, unknown> | undefined)?._taxonomyId as number))
       .map(e => (e.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown> | undefined));
-  }, [tagsOn, entries, topics]);
+  }, [entries, topics]);
   const setEntryTags = (tags: string[]) => {
     const next = { ...customFields };
     if (tags.length) next.tags = tags; else delete next.tags;
     onCustomFieldsChange(next);
   };
-  const tagsField = <EntryTagsField value={entryTags} suggestions={tagSuggestions} onChange={setEntryTags} />;
+  const tagsField = <EntryTagsField value={entryTags} getSuggestions={tagSuggestions} onChange={setEntryTags} />;
   // Every tag on the media shelf, for a media entry's Tags chips
   const mediaTagOptions = useMemo(() => {
     if (customType !== 'media') return [];
@@ -1390,7 +1383,7 @@ export function EntryForm({
       const meta = e.metadata as Record<string, unknown>;
       const tid = meta?._taxonomyId as number | undefined;
       const t = tid ? topics.find(tp => tp.id === tid) : undefined;
-      return t && getCustomType(t.name) === 'goal';
+      return t && topicKind(t.name) === 'goal';
     })
     .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Goal #${e.id}` })), [entries, topics, entryId]);
 
@@ -1400,7 +1393,7 @@ export function EntryForm({
       const meta = e.metadata as Record<string, unknown>;
       const tid = meta?._taxonomyId as number | undefined;
       const t = tid ? topics.find(tp => tp.id === tid) : undefined;
-      return t && getCustomType(t.name) === 'milestone';
+      return t && topicKind(t.name) === 'milestone';
     })
     .map(e => {
       const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
@@ -1415,7 +1408,7 @@ export function EntryForm({
   const needsCategories = customType === 'exercise' || customType === 'routine';
   const trainingCategoryOptions = useMemo(() => {
     if (!needsCategories) return [];
-    const planTopic = topics.find(t => getCustomType(t.name) === 'training_plan');
+    const planTopic = topics.find(t => topicKind(t.name) === 'training_plan');
     return categoryNames(trainingPlans(entries, planTopic?.id, stripHtml));
   }, [entries, topics, needsCategories]);
 
@@ -1425,7 +1418,7 @@ export function EntryForm({
       const meta = e.metadata as Record<string, unknown>;
       const tid = meta?._taxonomyId as number | undefined;
       const t = tid ? topics.find(tp => tp.id === tid) : undefined;
-      return t && getCustomType(t.name) === 'recipe' && e.id !== entryId;
+      return t && topicKind(t.name) === 'recipe' && e.id !== entryId;
     })
     .map(e => {
       const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
@@ -1439,7 +1432,7 @@ export function EntryForm({
       const meta = e.metadata as Record<string, unknown>;
       const tid = meta?._taxonomyId as number | undefined;
       const t = tid ? topics.find(tp => tp.id === tid) : undefined;
-      return t && getCustomType(t.name) === 'shopping_list' && e.id !== entryId;
+      return t && topicKind(t.name) === 'shopping_list' && e.id !== entryId;
     })
     .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Shopping List #${e.id}` })), [entries, topics, entryId]);
 
@@ -1450,7 +1443,7 @@ export function EntryForm({
       const cf = meta?._customFields as Record<string, unknown> | undefined;
       const tid = meta?._taxonomyId as number | undefined;
       const t = tid ? topics.find(tp => tp.id === tid) : undefined;
-      return t && getCustomType(t.name) === 'task' && cf?.parentMilestoneId === entryId;
+      return t && topicKind(t.name) === 'task' && cf?.parentMilestoneId === entryId;
     })
     .map(e => {
       const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
@@ -1464,7 +1457,7 @@ export function EntryForm({
       const cf = meta?._customFields as Record<string, unknown> | undefined;
       const tid = meta?._taxonomyId as number | undefined;
       const t = tid ? topics.find(tp => tp.id === tid) : undefined;
-      return t && getCustomType(t.name) === 'task' && (entryId == null || cf?.parentMilestoneId !== entryId) && !cf?.isCompleted;
+      return t && topicKind(t.name) === 'task' && (entryId == null || cf?.parentMilestoneId !== entryId) && !cf?.isCompleted;
     })
     .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Task #${e.id}` })), [entries, topics, entryId]);
 

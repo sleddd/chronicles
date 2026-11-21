@@ -119,13 +119,32 @@ export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-/** "1,50": a comma before exactly two last digits is a decimal comma, not thousands */
-const DECIMAL_COMMA = /^(\d+),(\d{2})$/;
+/**
+ * A typed price as a number: "$1,234.56", "1.234,56" and "12,50" all read.
+ * With both a dot and a comma the last one is the decimal point; a lone comma
+ * is a decimal point only before exactly two digits.
+ */
+function priceNumber(text: string): number {
+  let s = text.replace(/[$\s]/g, '');
+  const dot = s.lastIndexOf('.');
+  const comma = s.lastIndexOf(',');
+  if (dot >= 0 && comma >= 0) {
+    const [thousands, decimal] = dot > comma ? [',', '.'] : ['.', ','];
+    const halves = s.split(decimal);
+    const groups = halves[0].split(thousands);
+    const grouped = /^\d{1,3}$/.test(groups[0]) && groups.slice(1).every(g => /^\d{3}$/.test(g));
+    if (halves.length !== 2 || !grouped || !/^\d+$/.test(halves[1])) return NaN;
+    s = `${groups.join('')}.${halves[1]}`;
+  } else if (comma >= 0) {
+    if (/^\d+,\d{2}$/.test(s)) s = s.replace(',', '.');
+    else if (/^\d{1,3}(?:,\d{3})+$/.test(s)) s = s.replace(/,/g, '');
+    else return NaN;
+  }
+  return /^\d+(?:\.\d*)?$|^\.\d+$/.test(s) ? Number(s) : NaN;
+}
 
-/** Money as the model writes it ("12.50", "$12.50", "1,50", 12.5) → cents, or null when it isn't sensible */
 export function parseMoneyCents(value: unknown): number | null {
-  const n = typeof value === 'number' ? value
-    : typeof value === 'string' ? Number(value.replace(/[$\s]/g, '').replace(DECIMAL_COMMA, '$1.$2').replace(/,/g, '')) : NaN;
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? priceNumber(value) : NaN;
   if (!Number.isFinite(n) || n < 0) return null;
   const cents = Math.round(n * 100);
   return cents > MAX_COST_CENTS ? null : cents;
@@ -433,7 +452,7 @@ const ALLERGEN_ALIASES: Record<string, string> = {
   dairy: 'milk', lactose: 'milk', milk: 'milk', egg: 'egg',
   gluten: 'wheat', wheat: 'wheat', peanut: 'peanut',
   'tree nut': 'tree nut', nut: 'tree nut',
-  shellfish: 'shellfish', crustacean: 'shellfish', seafood: 'shellfish',
+  shellfish: 'shellfish', 'shell fish': 'shellfish', crustacean: 'shellfish', seafood: 'shellfish',
   fish: 'fish', soy: 'soy', soya: 'soy', sesame: 'sesame',
 };
 
@@ -441,7 +460,20 @@ const ALLERGEN_ALIASES: Record<string, string> = {
 const ALLERGEN_FILLER = new Set([
   'allergy', 'allergies', 'allergic', 'allergen', 'intolerance', 'intolerant', 'sensitivity', 'sensitive',
   'to', 'of', 'the', 'a', 'an', 'my', 'all', 'any', 'no', 'product', 'products', 'severe', 'mild', 'moderate',
+  'in', 'like',
 ]);
+
+/**
+ * Words that describe a food rather than name it ("raw carrots", "Kiwi fruit"):
+ * dropped when another word is left, kept when they're all there is ("Fruit").
+ */
+const SOFT_FILLER = new Set(['raw', 'fresh', 'cooked', 'fruit', 'whole', 'dried']);
+
+/**
+ * Last words too general to look for on their own: "olive oil" shouldn't flag
+ * every oil, nor "peanut butter" every butter. The whole name is still looked for.
+ */
+const GENERIC_HEADS = new Set(['oil', 'sauce', 'seed', 'juice', 'powder', 'extract', 'paste', 'butter', 'food', 'flavor', 'flavour']);
 
 /**
  * Words that also count inside a longer word ("swordfish", "hazelnuts"), and
@@ -466,34 +498,48 @@ function singular(word: string): string {
   return word;
 }
 
-/** The plain words of one allergen as written, without punctuation, possessives or filler */
+/** The plain words of one allergen as written, without punctuation, hyphens, possessives or filler */
 function allergenTokens(part: string): string[] {
-  return part
+  const words = part
     .replace(/'s\b/g, '')
-    .split(/[^a-z-]+/)
-    .filter(word => word && !ALLERGEN_FILLER.has(word))
-    .map(singular);
+    .split(/[^a-z]+/)
+    .filter(word => word && !ALLERGEN_FILLER.has(word));
+  const named = words.filter(word => !SOFT_FILLER.has(word));
+  return (named.length ? named : words).map(singular);
 }
 
 /**
  * The foods to look for, for one allergen as the person wrote it ("Peanuts",
- * "Dairy, eggs", "Allergic to cow's milk (severe)"), each in the singular.
- * An allergen this doesn't know ("olive oil") is looked for by its own name.
+ * "Dairy, eggs", "Allergic to cow's milk (severe)", "Sulfites in wine"), each
+ * in the singular. An allergen this doesn't know ("Bell peppers") is looked
+ * for by its own name and by its last word ("pepper"), so a recipe that names
+ * it differently still warns.
  */
 export function allergenWords(allergen: string): string[] {
   const words = new Set<string>();
-  for (const part of fold(allergen).split(/[,;/&+()]|\band\b|\bor\b/)) {
+  for (const part of fold(allergen).split(/[,;/&+()]|\band\b|\bor\b|\bin\b/)) {
     const tokens = allergenTokens(part);
     if (tokens.length === 0) continue;
     words.add(tokens.join(' '));
-    const pairs = tokens.slice(1).map((token, i) => `${tokens[i]} ${token}`);
-    for (const name of [...tokens, ...pairs]) {
-      const group = ALLERGEN_ALIASES[name];
-      if (!group) continue;
-      for (const food of ALLERGEN_FOODS[group]) words.add(food);
+    const groups = new Set<string>();
+    const paired = new Set<number>();
+    // Two-word names first, so "shell fish" is shellfish, not fish
+    tokens.slice(1).forEach((token, i) => {
+      const group = ALLERGEN_ALIASES[`${tokens[i]} ${token}`];
+      if (!group) return;
+      groups.add(group);
+      paired.add(i).add(i + 1);
+    });
+    tokens.forEach((token, i) => {
+      if (paired.has(i)) return;
+      const group = ALLERGEN_ALIASES[token];
+      if (group) groups.add(group);
       // "seafood allergy" also covers fish
-      if (name === 'seafood') for (const food of ALLERGEN_FOODS.fish) words.add(food);
-    }
+      if (token === 'seafood') groups.add('fish');
+    });
+    for (const group of groups) for (const food of ALLERGEN_FOODS[group]) words.add(food);
+    const last = tokens.length - 1;
+    if (!paired.has(last) && !GENERIC_HEADS.has(tokens[last])) words.add(tokens[last]);
   }
   return [...words];
 }
@@ -508,6 +554,11 @@ function foodPattern(food: string): string {
 
 /** One pattern per allergen, built once: the review redraws on every tick */
 const allergenPatterns = new Map<string, RegExp | null>();
+
+/** Forget the patterns (they hold the person's allergy names) when the session ends */
+export function clearAllergenCache(): void {
+  allergenPatterns.clear();
+}
 function allergenPattern(allergen: string): RegExp | null {
   let pattern = allergenPatterns.get(allergen);
   if (pattern === undefined) {

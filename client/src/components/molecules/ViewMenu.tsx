@@ -118,22 +118,24 @@ export function ViewMenu({ label, heading, items, extra }: { label: string; head
   }, [open]);
 
   if (items.length === 0 && !extra) return null;
+  // With controls of its own in it, it's a small dialog rather than a menu of items:
+  // its items are then plain buttons (a menuitem belongs only in a menu)
+  const asDialog = !!extra;
   return (
     <Wrap ref={wrap}>
-      <Trigger type="button" $open={open} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open}
+      <Trigger type="button" $open={open} aria-label={label} title={label} aria-haspopup={asDialog ? 'dialog' : 'menu'} aria-expanded={open}
         onClick={() => { setOpen(o => !o); setConfirming(null); }}>
         <Icon name="more-horizontal" size={18} strokeWidth={2} />
       </Trigger>
       {open && (
-        // With controls of its own in it, it's a small dialog rather than a menu of items
-        <List role={extra ? 'dialog' : 'menu'} aria-label={label}>
+        <List role={asDialog ? 'dialog' : 'menu'} aria-label={label}>
           {extra && <Extra role="group" aria-label="Show">{extra}</Extra>}
           {extra && items.length > 0 && <Rule />}
           {heading && <Heading>{heading}</Heading>}
           {items.map((item, i) => (
             <Fragment key={item.label}>
               {item.danger && i > 0 && <Rule />}
-              <Item type="button" role="menuitem" $danger={item.danger}
+              <Item type="button" role={asDialog ? undefined : 'menuitem'} $danger={item.danger}
                 onClick={() => {
                   if (item.confirmLabel && confirming !== item.label) { setConfirming(item.label); return; }
                   setOpen(false); setConfirming(null);

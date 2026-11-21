@@ -123,9 +123,12 @@ export function shoppingName(name: string): string {
 /** "2", "1.5 lb", "1/2 can", "1 1/2 lb" → the number and what it counts */
 const AMOUNT = /^(\d+ \d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?)\s*(.*)$/;
 
+/** What follows the number in a range ("2-3", "2 – 3 lb", "1 to 2"): not a unit */
+const RANGE_REST = /^(?:[-–—]|to\b)|\d/i;
+
 function readAmount(amount: string): { n: number; unit: string } | null {
   const m = AMOUNT.exec(amount.trim());
-  if (!m) return null;
+  if (!m || RANGE_REST.test(m[2])) return null;
   const n = m[1].split(' ').reduce((sum, piece) => {
     const [top, bottom] = piece.split('/').map(Number);
     return sum + (bottom === undefined ? top : top / bottom);

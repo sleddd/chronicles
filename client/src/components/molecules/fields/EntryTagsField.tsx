@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { AddChip, AddChipBox, Chips, RemoveChip } from './formKit.js';
 import { sameTag, withTag, withoutTag, TAGS_PER_ENTRY } from '../../../utils/entryTags.js';
 
@@ -8,15 +8,18 @@ import { sameTag, withTag, withoutTag, TAGS_PER_ENTRY } from '../../../utils/ent
  * takes it off, then "+ Add tag", which opens a box suggesting the tags
  * already in use (Enter or a comma adds one, Escape stops). Props only.
  */
-export function EntryTagsField({ value, suggestions, onChange }: {
+export function EntryTagsField({ value, getSuggestions, onChange }: {
   value: string[];
-  /** Tags used on other entries, offered as you type */
-  suggestions: string[];
+  /** Tags used on other entries, offered as you type — read only while the add box is
+      open (it walks the whole journal, so never on every render) */
+  getSuggestions: () => string[];
   onChange: (tags: string[]) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const listId = useId();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- read once each time the box opens
+  const suggestions = useMemo(() => (adding ? getSuggestions() : []), [adding]);
   const offered = suggestions.filter(s => !value.some(v => sameTag(v, s)));
 
   const commit = (keepOpen: boolean) => {

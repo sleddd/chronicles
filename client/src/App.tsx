@@ -642,7 +642,7 @@ function R({ children }: { children: React.ReactNode }) {
 }
 
 /** Recipes as the topic page's table: Prep, Cook, Serves, Difficulty; the description muted beside the name */
-const RECIPE_TABLE = { label: 'Recipes', columns: RECIPE_COLUMNS, noteOf: recipeNote, prefsKey: 'recipe-list-v1' };
+const RECIPE_TABLE = { label: 'Recipes', firstColumn: 'Recipe', columns: RECIPE_COLUMNS, noteOf: recipeNote, prefsKey: 'recipe-list-v1' };
 
 export function App() {
   const accentColor = useUIStore(s => s.accentColor);

@@ -10,10 +10,14 @@ describe('ViewMenu with controls of the page', () => {
       <ViewMenu label="View options" items={[{ label: 'Save view', icon: 'bookmark', onSelect }]}
         extra={<label>Type <select aria-label="Type"><option>All</option></select></label>} />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'View options' }));
+    const trigger = screen.getByRole('button', { name: 'View options' });
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
+    fireEvent.click(trigger);
     expect(screen.getByRole('dialog', { name: 'View options' })).toBeTruthy();
     expect(screen.getByRole('combobox', { name: 'Type' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Save view' }));
+    // In a dialog its items are plain buttons, not menu items
+    expect(screen.queryByRole('menuitem')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save view' }));
     expect(onSelect).toHaveBeenCalled();
   });
 

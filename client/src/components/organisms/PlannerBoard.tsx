@@ -810,25 +810,37 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
      straight on the card, no re-layout, so it's smooth), its length shown live to the nearest five
      minutes. Let go, the day takes the new length at once (`pending`) until the save comes back */
   const [resizingId, setResizingId] = useState<number | null>(null);
-  const [pending, setPending] = useState<{ id: number; hours: number } | null>(null);
+  // Each card's new length, keyed by card id: several can wait on their saves at once
+  const [pending, setPending] = useState<ReadonlyMap<number, number>>(() => new Map());
+  /** Forget a card's waiting length (only `hours`, when given: a newer one for that card stays) */
+  const dropPending = useCallback((id: number, hours?: number) => setPending(p => {
+    if (!p.has(id) || (hours !== undefined && p.get(id) !== hours)) return p;
+    const next = new Map(p);
+    next.delete(id);
+    return next;
+  }), []);
+  // A save that never answers: back to what's saved after a while, card by card
+  const pendingTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const showPending = (id: number, hours: number) => {
+    setPending(p => new Map(p).set(id, hours));
+    clearTimeout(pendingTimers.current.get(id));
+    pendingTimers.current.set(id, setTimeout(() => { pendingTimers.current.delete(id); dropPending(id, hours); }, PENDING_MS));
+  };
+  useEffect(() => { const timers = pendingTimers.current; return () => timers.forEach(clearTimeout); }, []);
   // Done with once the saved length shows (or the card has gone)
   useEffect(() => {
-    if (!pending) return;
-    const now = givenLanes.flatMap(l => l.cards).find(c => c.id === pending.id);
-    if (!now || sameLength(now.hours, pending.hours)) setPending(null);
-  }, [pending, givenLanes]);
-  // A save that never answers: back to what's saved after a while (its own effect, so a re-render
-  // of the planner doesn't start the wait again)
-  useEffect(() => {
-    if (!pending) return;
-    const t = setTimeout(() => setPending(null), PENDING_MS);
-    return () => clearTimeout(t);
-  }, [pending]);
+    if (!pending.size) return;
+    const cards = new Map(givenLanes.flatMap(l => l.cards).map(c => [c.id, c]));
+    for (const [id, hours] of pending) {
+      const now = cards.get(id);
+      if (!now || sameLength(now.hours, hours)) dropPending(id, hours);
+    }
+  }, [pending, givenLanes, dropPending]);
   /** Give a card its new length: shown at once, saved, and put back if the save fails */
   const applyLength = (id: number, hours: number) => {
-    setPending({ id, hours });
+    showPending(id, hours);
     // Only this length goes back: a newer one for the same card (a second key press) stays
-    const undo = () => setPending(p => (p?.id === id && p.hours === hours ? null : p));
+    const undo = () => dropPending(id, hours);
     void Promise.resolve()
       .then((): void | boolean | Promise<boolean> => onResize?.(id, hours))
       .then(ok => { if (ok === false) undo(); }, undo);
@@ -846,8 +858,8 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
   const flushKeySaveRef = useRef(flushKeySave);
   flushKeySaveRef.current = flushKeySave;
   useEffect(() => () => flushKeySaveRef.current(), []);
-  const lanes = pending
-    ? givenLanes.map(l => ({ ...l, cards: l.cards.map(c => (c.id === pending.id ? { ...c, hours: pending.hours } : c)) }))
+  const lanes = pending.size
+    ? givenLanes.map(l => ({ ...l, cards: l.cards.map(c => (pending.has(c.id) ? { ...c, hours: pending.get(c.id)! } : c)) }))
     : givenLanes;
   const backlog = [...overdue, ...open, ...ideas];
   const all = [...backlog, ...lanes.flatMap(l => l.cards)];
@@ -1124,7 +1136,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
       refocusGrip.current = card.id;
       if (keySave.current && keySave.current.id !== card.id) flushKeySave();
       clearTimeout(keySave.current?.timer);
-      setPending({ id: card.id, hours: next });
+      showPending(card.id, next);
       keySave.current = { id: card.id, hours: next, timer: setTimeout(flushKeySave, KEY_SAVE_MS) };
     },
   };

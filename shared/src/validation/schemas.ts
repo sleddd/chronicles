@@ -472,7 +472,21 @@ export const imageStorageConfigSchema = z.object({
 export const settingKeySchema = z.string().min(1).max(100).regex(/^[^\u0000-\u001f\u007f]*$/, 'Invalid setting key');
 /** A setting's value as stored, or null when it can't be: nested too deep to
  *  serialize, or holding a zero byte (Postgres refuses one in JSON) */
+/** Deeper than Postgres' jsonb will take; checked without recursion, since newer
+ *  engines no longer throw from JSON.stringify on deep nesting */
+const MAX_JSON_DEPTH = 1000;
+function tooDeep(value: unknown): boolean {
+  const stack: [unknown, number][] = [[value, 1]];
+  while (stack.length) {
+    const [v, depth] = stack.pop()!;
+    if (v === null || typeof v !== 'object') continue;
+    if (depth > MAX_JSON_DEPTH) return true;
+    for (const child of Object.values(v)) stack.push([child, depth + 1]);
+  }
+  return false;
+}
 function storableJson(value: unknown): string | null {
+  if (tooDeep(value)) return null;
   let json: string | undefined;
   try { json = JSON.stringify(value); } catch { return null; }
   if (json === undefined || json.includes('\\u0000')) return null;

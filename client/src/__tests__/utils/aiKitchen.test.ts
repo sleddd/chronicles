@@ -123,6 +123,17 @@ describe('money and budget', () => {
     expect(parseMoneyCents('free')).toBeNull();
     expect(parseMoneyCents(5000)).toBeNull();
   });
+
+  it('reads either decimal mark, and refuses what it can’t tell', () => {
+    expect(parseMoneyCents('12,50')).toBe(1250);
+    expect(parseMoneyCents('1.000,00')).toBe(100000);
+    expect(parseMoneyCents('1,000.00')).toBe(100000);
+    expect(parseMoneyCents('$ 1,000')).toBe(100000);
+    expect(parseMoneyCents('1,2,3')).toBeNull();
+    expect(parseMoneyCents('1.2.3,4')).toBeNull();
+    expect(parseMoneyCents('12.50.1')).toBeNull();
+    expect(parseMoneyCents('12$abc')).toBeNull();
+  });
   it('compares the estimate with the budget', () => {
     expect(budgetCheck(9000, 8000)).toEqual({ over: true, byCents: 1000 });
     expect(budgetCheck(7000, 8000)).toEqual({ over: false, byCents: 1000 });
@@ -172,10 +183,21 @@ describe('allergens', () => {
     expect(hidden.filter(([allergen, food]) => !hit(allergen, food))).toEqual([]);
   });
 
+  it('splits hyphens and looks for an unknown allergen by its last word', () => {
+    const found: [string, string][] = [
+      ['Tree-nuts', 'Pecan pie'], ['Tree nut', 'Pecan pie'], ['Kiwi fruit', 'Kiwi salad'],
+      ['Bell peppers', 'Stuffed pepper'], ['Allergic to raw carrots', 'Carrot soup'],
+      ['Sulfites in wine', 'Coq au vin with red wine'], ['Shell fish', 'Shrimp tacos'],
+      ['shell-fish', 'Garlic prawns'], ['Fresh fruit', 'Fruit salad'],
+    ];
+    expect(found.filter(([allergen, food]) => !hit(allergen, food))).toEqual([]);
+  });
+
   it('doesn’t flag a different food with a similar name', () => {
     const other: [string, string][] = [
       ['Fish', 'shellfish'], ['Fish', 'crayfish'], ['Tree nuts', 'peanut'], ['Nuts', 'butternut squash'],
       ['Nuts', 'nutmeg'], ['Peanut allergy', 'chicken'], ['', 'anything'], ['allergy', 'anything'],
+      ['Shell fish', 'Grilled salmon'], ['Olive oil', 'vegetable oil'], ['Peanut butter', 'butter cookies'],
     ];
     expect(other.filter(([allergen, food]) => hit(allergen, food))).toEqual([]);
   });

@@ -221,7 +221,7 @@ describe('GoalsView (loading)', () => {
 describe('GoalsView saved views', () => {
   const view = { id: 'v1', name: 'By title', tab: 'goals', view: 'list', query: '', sort: 'title', goalId: null, milestoneId: null, status: '' };
   beforeEach(() => {
-    try { localStorage.clear(); sessionStorage.clear(); localStorage.setItem('planning-view-v1', JSON.stringify({ goals: 'list' })); } catch { /* none */ }
+    try { localStorage.clear(); sessionStorage.clear(); localStorage.setItem('planning-view-v2', JSON.stringify({ goals: 'list' })); } catch { /* none */ }
     privateMap.current = { planningViews: [view, { ...view, id: 'v2', name: 'Other', sort: 'oldest' }] };
     entriesState.decryptedEntries = [{ id: 10, content: 'Run a 10k', metadata: { _taxonomyId: 1, _customFields: { goalObjective: 'Run a 10k' } }, createdAt: new Date(), updatedAt: new Date() }];
     savePrivateSetting.mockClear();

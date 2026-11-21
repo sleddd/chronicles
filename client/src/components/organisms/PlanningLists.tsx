@@ -42,6 +42,29 @@ function useTaskGoal(milestones: MilestoneEntryData[]) {
   }, [milestones]);
 }
 
+/** `list` grouped by `keyOf`, in one pass */
+function groupBy<T, K>(list: T[], keyOf: (x: T) => K): Map<K, T[]> {
+  const out = new Map<K, T[]>();
+  for (const x of list) {
+    const k = keyOf(x);
+    const bucket = out.get(k);
+    if (bucket) bucket.push(x); else out.set(k, [x]);
+  }
+  return out;
+}
+const NONE: never[] = [];
+
+/** `by`'s buckets in `order`, with every key not in it (no owner, or one since deleted) in a last
+ *  `null` bucket — so a task whose goal was deleted still shows, under "No goal" */
+function orderedBuckets<T>(by: Map<number | null, T[]>, order: number[]): { id: number | null; items: T[] }[] {
+  const known = new Set(order);
+  const out = order.filter(id => by.has(id)).map(id => ({ id: id as number | null, items: by.get(id)! }));
+  const rest: T[] = [];
+  for (const [id, items] of by) if (id === null || !known.has(id)) rest.push(...items);
+  if (rest.length) out.push({ id: null, items: rest });
+  return out;
+}
+
 /** Done of total */
 const tally = (list: { isCompleted: boolean }[]) => ({ done: list.filter(x => x.isCompleted).length, total: list.length });
 
@@ -70,10 +93,14 @@ export function GoalTable({ goals, milestones, tasks, categories, group, ...shar
   const goalOfTask = useTaskGoal(milestones);
   const [open, toggleOpen] = useIdSet<number>();
   const [folded, toggleFold] = useIdSet<string>();
+  // Built once per change, not filtered again for every row
+  const milestonesByGoal = useMemo(() => groupBy(milestones, m => m.parentGoalId), [milestones]);
+  const tasksByGoal = useMemo(() => groupBy(tasks, goalOfTask), [tasks, goalOfTask]);
+  const tasksByMilestone = useMemo(() => groupBy(tasks, t => t.parentMilestoneId), [tasks]);
 
   const row = (g: GoalEntry) => {
-    const ms = milestones.filter(m => m.parentGoalId === g.id);
-    const ts = tasks.filter(t => goalOfTask(t) === g.id);
+    const ms = milestonesByGoal.get(g.id) ?? NONE;
+    const ts = tasksByGoal.get(g.id) ?? NONE;
     const done = goalDone(g);
     const pct = goalPercent(done, ts.map(t => ({ done: t.isCompleted })), ms.map(m => ({ done: m.isCompleted })));
     const count = tally(ts);
@@ -94,7 +121,7 @@ export function GoalTable({ goals, milestones, tasks, categories, group, ...shar
           />
         </SwipeActions>
         {isOpen && ms.map(m => {
-          const mt = tally(tasks.filter(t => t.parentMilestoneId === m.id));
+          const mt = tally(tasksByMilestone.get(m.id) ?? NONE);
           const mPct = m.isCompleted ? 100 : mt.total ? Math.round((mt.done / mt.total) * 100) : 0;
           return (
             <PlanRow key={m.id} indent={1} lead={<MilestoneMark done={m.isCompleted} />}
@@ -138,16 +165,22 @@ const MILESTONE_COLUMNS: PlanColumn[] = [
   { label: 'Deadline', width: '220px' }, { label: 'Tasks', width: '72px', end: true },
 ];
 
-export function MilestoneTable({ milestones, goals, tasks, categories, group, ...shared }: Shared & {
-  milestones: MilestoneEntryData[]; goals: GoalEntry[]; tasks: TaskEntryData[]; categories: string[]; group: MilestoneGroup;
+export function MilestoneTable({ milestones, allMilestones = milestones, goals, tasks, categories, group, ...shared }: Shared & {
+  /** The milestones the tab shows (search, filters and sort applied) */
+  milestones: MilestoneEntryData[];
+  /** Every milestone, for a goal group's "16 of 20" */
+  allMilestones?: MilestoneEntryData[];
+  goals: GoalEntry[]; tasks: TaskEntryData[]; categories: string[]; group: MilestoneGroup;
 }) {
   const { today, onOpen, onToggleTask } = shared;
   const [open, toggleOpen] = useIdSet<number>();
   const [folded, toggleFold] = useIdSet<string>();
   const goalById = useMemo(() => new Map(goals.map(g => [g.id, g])), [goals]);
+  const tasksByMilestone = useMemo(() => groupBy(tasks, t => t.parentMilestoneId), [tasks]);
+  const allByGoal = useMemo(() => groupBy(allMilestones, m => m.parentGoalId), [allMilestones]);
 
   const row = (m: MilestoneEntryData) => {
-    const ts = tasks.filter(t => t.parentMilestoneId === m.id);
+    const ts = tasksByMilestone.get(m.id) ?? NONE;
     const count = tally(ts);
     const pct = m.isCompleted ? 100 : count.total ? Math.round((count.done / count.total) * 100) : 0;
     const isOpen = open.has(m.id);
@@ -183,22 +216,16 @@ export function MilestoneTable({ milestones, goals, tasks, categories, group, ..
     );
   };
 
-  // By goal: in the goals' own order, "No goal" last. By area: the goal's area
-  const goalGroups = () => {
-    const byGoal = new Map<number | null, MilestoneEntryData[]>();
-    for (const m of milestones) byGoal.set(m.parentGoalId, [...(byGoal.get(m.parentGoalId) ?? []), m]);
-    const keys = [...goals.map(g => g.id).filter(id => byGoal.has(id)), ...(byGoal.has(null) ? [null] : [])];
-    return keys.map(id => {
+  // By goal: in the goals' own order, "No goal" last (with any whose goal was deleted). By area: the goal's area
+  const goalGroups = () =>
+    orderedBuckets(groupBy(milestones, m => m.parentGoalId), goals.map(g => g.id)).map(({ id, items }) => {
       const g = id === null ? undefined : goalById.get(id);
-      const items = byGoal.get(id) ?? [];
-      const ms = milestones.filter(m => m.parentGoalId === id);
       return {
         key: String(id), title: g?.title ?? 'No goal',
         aside: g ? goalCategoryOf(g.customFields) || undefined : `${items.length} ${items.length === 1 ? 'milestone' : 'milestones'}`,
-        progress: g ? tally(ms) : undefined, items,
+        progress: g ? tally(allByGoal.get(g.id) ?? NONE) : undefined, items,
       };
     });
-  };
   const categoryGroups = () => groupByCategory(milestones, m => (m.parentGoalId ? goalCategoryOf(goalById.get(m.parentGoalId)?.customFields) : ''), categories)
     .map(gr => ({ key: gr.category, title: gr.category || 'No category', aside: `${gr.items.length} ${gr.items.length === 1 ? 'milestone' : 'milestones'}`, progress: undefined, items: gr.items }));
 
@@ -234,15 +261,15 @@ export function TaskTable({ tasks, allTasks, goals, milestones, group, titleOf, 
   const { today, onOpen, onToggleTask } = shared;
   const goalOfTask = useTaskGoal(milestones);
   const [folded, toggleFold] = useIdSet<string>();
-  const milestoneTitle = useMemo(() => new Map(milestones.map(m => [m.id, m.title])), [milestones]);
-  const goalTitle = useMemo(() => new Map(goals.map(g => [g.id, g.title])), [goals]);
+  const milestoneById = useMemo(() => new Map(milestones.map(m => [m.id, m])), [milestones]);
+  const goalById = useMemo(() => new Map(goals.map(g => [g.id, g])), [goals]);
 
   const row = (t: TaskEntryData) => {
     const title = titleOf(t);
     const estimate = estimateOf(t.customFields);
     // What it's part of, unless the group already says so; else its type
-    const note = (group !== 'milestone' && t.parentMilestoneId ? milestoneTitle.get(t.parentMilestoneId) : undefined)
-      ?? (group === 'none' && t.parentGoalId ? goalTitle.get(t.parentGoalId) : undefined)
+    const note = (group !== 'milestone' && t.parentMilestoneId ? milestoneById.get(t.parentMilestoneId)?.title : undefined)
+      ?? (group === 'none' && t.parentGoalId ? goalById.get(t.parentGoalId)?.title : undefined)
       ?? (taskTypeOf(t.customFields) || undefined);
     return (
       <SwipeActions key={t.id} accentColor={shared.accentColor} onDelete={() => shared.onDelete(t.id)}>
@@ -263,23 +290,27 @@ export function TaskTable({ tasks, allTasks, goals, milestones, group, titleOf, 
   const groups = useMemo(() => {
     if (group === 'none') return [];
     const keyOf = (t: TaskEntryData) => (group === 'goal' ? goalOfTask(t) : t.parentMilestoneId);
-    const by = new Map<number | null, TaskEntryData[]>();
-    for (const t of tasks) by.set(keyOf(t), [...(by.get(keyOf(t)) ?? []), t]);
+    const allBy = groupBy(allTasks, keyOf);
     const order = group === 'goal' ? goals.map(g => g.id) : milestones.map(m => m.id);
-    const keys = [...order.filter(id => by.has(id)), ...(by.has(null) ? [null] : [])];
-    return keys.map(id => {
-      const items = by.get(id) ?? [];
+    // A task whose goal or milestone was deleted goes under "No goal" / "No milestone"
+    return orderedBuckets(groupBy(tasks, keyOf), order).map(({ id, items }) => {
       if (id === null) {
         return { key: 'none', title: group === 'goal' ? 'No goal' : 'No milestone', aside: `${items.length} ${items.length === 1 ? 'task' : 'tasks'}`, progress: undefined, items };
       }
-      const owner = group === 'goal' ? goals.find(g => g.id === id) : milestones.find(m => m.id === id);
-      const all = allTasks.filter(t => keyOf(t) === id);
-      const aside = group === 'goal'
-        ? goalCategoryOf((owner as GoalEntry | undefined)?.customFields) || undefined
-        : ((owner as MilestoneEntryData | undefined)?.parentGoalId ? goalTitle.get((owner as MilestoneEntryData).parentGoalId!) : undefined);
-      return { key: String(id), title: owner?.title ?? 'Untitled', aside, progress: tally(all), items };
+      let title: string | undefined;
+      let aside: string | undefined;
+      if (group === 'goal') {
+        const g = goalById.get(id);
+        title = g?.title;
+        aside = goalCategoryOf(g?.customFields) || undefined;
+      } else {
+        const m = milestoneById.get(id);
+        title = m?.title;
+        aside = m?.parentGoalId ? goalById.get(m.parentGoalId)?.title : undefined;
+      }
+      return { key: String(id), title: title ?? 'Untitled', aside, progress: tally(allBy.get(id) ?? NONE), items };
     });
-  }, [group, tasks, allTasks, goals, milestones, goalOfTask, goalTitle]);
+  }, [group, tasks, allTasks, goals, milestones, goalOfTask, goalById, milestoneById]);
 
   return (
     <PlanTable label="Tasks" columns={TASK_COLUMNS}>

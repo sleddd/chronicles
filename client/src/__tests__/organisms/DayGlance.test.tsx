@@ -100,12 +100,12 @@ describe('Your Agenda', () => {
       expect.objectContaining({ scheduledDate: today, scheduledTime: expect.stringMatching(/^\d{2}:(00|15|30|45)$/) })));
   });
 
-  it('arrow keys move a focused schedule card 15 minutes', () => {
+  it('arrow keys move a focused schedule card 5 minutes, as a drag does', () => {
     useEntriesStore.setState({ decryptedEntries: [task(1, 'Write report', { scheduledDate: today, scheduledTime: '09:00' })] as never });
     renderGlance();
     const card = screen.getByTitle(/^Write report · /);
     fireEvent.keyDown(card, { key: 'ArrowDown' });
-    expect(saveFields).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ scheduledTime: '09:15' }));
+    expect(saveFields).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ scheduledTime: '09:05' }));
   });
 
   it('a long medications list stays within the screen and scrolls, so the last dose can be ticked', () => {

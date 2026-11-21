@@ -30,10 +30,12 @@ export const LEGAL_DETAILS = {
 /**
  * The public landing page's beta offer. `seats` is the number of beta places;
  * applications after the last seat join the waitlist automatically.
+ * `priceMonthly` is the most the hosted app will cost a month (US dollars) after
+ * the beta: the landing page's points and its pricing answer both read it.
  */
 export const BETA_DETAILS = {
   seats: 30,
-  priceTerms: 'Billing starts when it releases after the beta. The price is still being set, but it won’t be more than $15 a month.',
+  priceMonthly: 15,
   copyrightHolder: 'Claudette Raynor',
   githubUrl: 'https://github.com/sleddd/chronicles',
 } as const;

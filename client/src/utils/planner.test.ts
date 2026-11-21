@@ -90,9 +90,9 @@ describe('planner', () => {
     expect(movedOrder(order, 3, '', [], null, TODAY)).toEqual({ '2026-11-11': [1, 2] });
   });
 
-  it('reads a task’s length in hours, in five-minute steps', () => {
+  it('reads a task’s length in hours, to the minute', () => {
     expect(hoursOf(undefined)).toBe(1);
-    expect(hoursOf({ scheduledHours: 2.4 })).toBeCloseTo(29 / 12);
+    expect(hoursOf({ scheduledHours: 2.4 })).toBeCloseTo(2.4);
     expect(hoursOf({ scheduledHours: 5 / 60 })).toBeCloseTo(5 / 60);
     expect(hoursOf({ scheduledHours: 0.01 })).toBeCloseTo(5 / 60);
     expect(hoursOf({ scheduledHours: 40 })).toBe(12);
@@ -144,30 +144,24 @@ describe('planner', () => {
     expect(plannerFacts(1, { scheduledTime: '10:00' }, 0).at).toBeUndefined(); // no day, no time
   });
 });
-describe('a same-day end time sets the length', () => {
-  it('4:10 to 4:15 is five minutes, to the minute', async () => {
+describe('a deadline is never an end time', () => {
+  it('a task due 5 PM dropped at 10:00 keeps its own length', async () => {
     const { hoursOf } = await import('./planner.js');
-    expect(hoursOf({ scheduledDate: '2026-11-18', scheduledTime: '16:10', deadlineTime: '16:15' }) * 60).toBeCloseTo(5);
-    // An end on another day doesn't count — the task's own length (or an hour) stands
-    expect(hoursOf({ scheduledDate: '2026-11-18', scheduledTime: '16:10', deadline: '2026-11-20', deadlineTime: '16:15' })).toBe(1);
+    expect(hoursOf({ scheduledDate: '2026-11-18', scheduledTime: '10:00', deadline: '2026-11-18', deadlineTime: '17:00' })).toBe(1);
+    expect(hoursOf({ scheduledDate: '2026-11-18', scheduledTime: '10:00', deadlineTime: '17:00', scheduledHours: 0.5 })).toBe(0.5);
   });
-  it('moving or stretching keeps the end time in step', async () => {
-    const { startPatch, lengthPatch } = await import('./planner.js');
-    const cf = { scheduledDate: '2026-11-18', scheduledTime: '16:10', deadlineTime: '16:15' };
-    expect(startPatch(cf, 9 * 60)).toMatchObject({ scheduledTime: '09:00', deadlineTime: '09:05' });
-    expect(lengthPatch(cf, 1.5)).toMatchObject({ scheduledHours: 1.5, deadlineTime: '17:40' });
-    // No end time: only the length changes
-    expect(lengthPatch({ scheduledTime: '16:10' }, 2)).not.toHaveProperty('deadlineTime');
+  it('keeps a saved length to the minute', async () => {
+    const { hoursOf } = await import('./planner.js');
+    expect(hoursOf({ scheduledHours: 7 / 60 }) * 60).toBeCloseTo(7);
   });
-
-  it('moves a same-day end date with the task, and leaves a later deadline where it is', async () => {
-    const { dayPatch, hoursOf } = await import('./planner.js');
-    const short = { scheduledDate: '2026-11-10', scheduledTime: '16:10', deadline: '2026-11-10', deadlineTime: '16:15' };
-    const moved = dayPatch(short, '2026-11-12');
-    expect(moved).toMatchObject({ scheduledDate: '2026-11-12', deadline: '2026-11-12' });
-    expect(hoursOf(moved)).toBeCloseTo(5 / 60);
-    const due = { ...short, deadline: '2026-11-20' };
-    expect(dayPatch(due, '2026-11-12')).toMatchObject({ scheduledDate: '2026-11-12', deadline: '2026-11-20' });
+  it('moving or stretching never writes the deadline', async () => {
+    const { startPatch, lengthPatch, dayPatch, hoursOf } = await import('./planner.js');
+    const cf = { scheduledDate: '2026-11-18', scheduledTime: '16:10', deadline: '2026-11-18', deadlineTime: '17:00', scheduledHours: 0.25 };
+    expect(startPatch(cf, 9 * 60)).toMatchObject({ scheduledTime: '09:00', deadline: '2026-11-18', deadlineTime: '17:00' });
+    expect(lengthPatch(cf, 1.5)).toMatchObject({ scheduledHours: 1.5, deadlineTime: '17:00' });
+    const moved = dayPatch(cf, '2026-11-12');
+    expect(moved).toMatchObject({ scheduledDate: '2026-11-12', deadline: '2026-11-18', deadlineTime: '17:00' });
+    expect(hoursOf(moved)).toBe(0.25); // its length goes with it
   });
 });
 
@@ -203,7 +197,9 @@ describe('estimated time', () => {
     expect(estimateLabel(15)).toBe('15 min');
     expect(estimateLabel(90)).toBe('1 h 30 min');
     expect(estimateLabel(360)).toBe('6 h');
-    expect(estimateLabel(960)).toBe('2 days');
+    expect(estimateLabel(960)).toBe('16 h');
+    expect(estimateLabel(39 * 60)).toBe('39 h');
+    expect(estimateLabel(2400)).toBe('5 days');
   });
   it('sizes a task on the planner until it has a length of its own', () => {
     expect(hoursOf({ estimatedMinutes: 120 })).toBe(2);

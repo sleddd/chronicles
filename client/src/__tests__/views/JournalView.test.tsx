@@ -156,6 +156,7 @@ vi.mock('@/components/organisms/EntryForm', () => ({
       <button onClick={onNew}>new</button>
       <button onClick={() => onContentChange('<p>Hi</p>')}>type</button>
       <button onClick={onSave}>save</button>
+      <div className="ProseMirror" data-testid="writing" tabIndex={0} />
     </div>
   ),
 }));
@@ -265,12 +266,12 @@ describe('JournalView (edit view — opened from another view)', () => {
   });
 
   // A task (an entry with fields) opened from another page
-  const withTask = (fn: () => void) => {
+  const withTask = async (fn: () => void | Promise<void>) => {
     const entry = { id: 9, content: '<p>Call</p>', metadata: { _taxonomyId: 5 }, isEncrypted: true, createdAt: new Date(), updatedAt: new Date() };
     entriesState.decryptedEntries = [entry];
     entriesState.topics = [{ id: 5, name: 'Task' }];
     (uiState as any).selectedEntryId = 9;
-    try { fn(); } finally {
+    try { await fn(); } finally {
       entriesState.decryptedEntries = [];
       entriesState.topics = [];
       (uiState as any).selectedEntryId = null;
@@ -291,6 +292,29 @@ describe('JournalView (edit view — opened from another view)', () => {
     expect(nav).not.toHaveBeenCalled();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(nav).toHaveBeenCalledWith('/goals/tasks');
+  }));
+
+  it('Escape while typing closes the card, though the editor marks every Escape handled', () => withTask(() => {
+    unlocked();
+    const nav = vi.fn();
+    vi.mocked(useNavigate).mockReturnValue(nav);
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/goals/tasks' }, key: 'm5' } as any);
+    renderWithTheme(<JournalView />);
+    const writing = screen.getByTestId('writing');
+    // Still composing (an IME): never closes
+    writing.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, isComposing: true }));
+    expect(nav).not.toHaveBeenCalled();
+    const fromEditor = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    fromEditor.preventDefault();
+    writing.dispatchEvent(fromEditor);
+    expect(nav).toHaveBeenCalledWith('/goals/tasks');
+  }));
+
+  it('the card takes focus when it opens with nothing in it focused', () => withTask(async () => {
+    unlocked();
+    vi.mocked(useLocation).mockReturnValue({ pathname: '/journal', state: { from: '/goals/tasks' }, key: 'm6' } as any);
+    renderWithTheme(<JournalView />);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('dialog')));
   }));
 
   it('a click on the dim behind the card does not close it', () => withTask(() => {

@@ -7,6 +7,7 @@ import { ShotSlides, type Slide } from '../components/organisms/landing/ShotSlid
 import { ScreenSlideshow } from '../components/organisms/landing/ScreenSlideshow.js';
 import { BetaSignup } from '../components/organisms/landing/BetaSignup.js';
 import { useScrollReveal } from '../hooks/useScrollReveal.js';
+import { BETA_DETAILS } from '@shared/legal/index.js';
 
 /* The public home page at `/` (2026-11, the user's mockup): the hero on the photo with the app's
    slideshow, the problem, how it works (with an example goal), what's inside and a numbered row
@@ -17,9 +18,18 @@ import { useScrollReveal } from '../hooks/useScrollReveal.js';
 /** The home page's title (also in index.html, for crawlers) */
 export const SEO_TITLE = 'Chronicles — Zero-Knowledge Encrypted Journal & Digital Day Planner';
 
-/* Feature screenshots (dark theme, test account): src/assets/landing/features/<key>.jpg */
-const SHOTS = import.meta.glob<string>('../assets/landing/features/*.jpg', { eager: true, query: '?url', import: 'default' });
-const shotUrl = (key: string) => SHOTS[`../assets/landing/features/${key}.jpg`];
+/* Feature screenshots (dark theme, test account): src/assets/landing/features/<key>-dark.jpg, else
+   <key>.jpg. Only the files the rows below use are bundled: add a new shot's file name to this list */
+const SHOTS = import.meta.glob<string>(
+  '../assets/landing/features/{planning-vision,planning-goals-list,planning-milestones-list,planning-roadmap,planning-tasks-list,planning-tasks,planning-planner,health-meals,health-dashboard,health-exercise-history,health-reports,finance,finance-bills,finance-savings,kitchen-dashboard,kitchen-recipes,kitchen-recipe-view,kitchen-shopping-lists,journal,topics-list,topic-research,topic-event,media,media-entry,media-following,ai-plan-share,ai-plan,ai-plan-roadmap,ai-insights-share,ai-insights}-dark.jpg',
+  { eager: true, query: '?url', import: 'default' },
+);
+/* The one shot that has only a light copy */
+const LIGHT_SHOTS = import.meta.glob<string>('../assets/landing/features/media-public.jpg', { eager: true, query: '?url', import: 'default' });
+const shotUrl = (key: string) => {
+  const path = `../assets/landing/features/${key}.jpg`;
+  return SHOTS[path] ?? LIGHT_SHOTS[path];
+};
 
 /** A row's slides: one shot of each screen, in dark (the light one only where there's no dark) */
 function slidesFor(f: Feature): Slide[] {
@@ -38,16 +48,12 @@ const delay = (i: number) => ({ '--reveal-delay': `${i * 0.1}s` }) as CSSPropert
 interface Feature {
   /** Its anchor (the What's inside pills link to it) */
   id: string;
-  /** The tracked line over the title, after its number ("01 · Goal planner and task manager") */
-  label: string;
   /** "Takes the place of …" under the facts */
   takes?: string;
   title: string;
   body: string;
-  points: string[];
   /** Label rows under the text: a small tracked-caps label beside a line (the mockup's STREAM / SEARCH / MEDIA) */
   facts?: { label: string; text: string }[];
-  note?: string;
   /** One screenshot key, or several for a slideshow */
   shot: string | string[];
   size: [number, number];
@@ -58,9 +64,8 @@ interface Feature {
 
 const FEATURES: Feature[] = [
   {
-    id: 'planning', label: 'Goal planner and task manager', title: 'Plan the decade.\nThen plan Thursday.',
+    id: 'planning', title: 'Plan the decade.\nThen plan Thursday.',
     body: 'Every task ties back to a vision, goal, milestone, and tasks, so the small things you do each day add up to the big ones.',
-    points: [],
     facts: [
       { label: 'Goals', text: 'Set a vision, then break it into goals and milestones on a draggable roadmap.' },
       { label: 'Tasks', text: 'Work as a list or a Kanban board, filtered by goal or category.' },
@@ -80,9 +85,8 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    id: 'health', label: 'Health and medication tracker', title: 'Your health, day by day.',
+    id: 'health', title: 'Your health, day by day.',
     body: 'Track what you eat, how you feel and what you take, then see how they connect.',
-    points: [],
     facts: [
       { label: 'Wellness', text: 'Mood, sleep, water and meals, with calorie and nutrient targets.' },
       { label: 'Medication', text: 'A dose schedule you check off, with a full history behind it.' },
@@ -92,16 +96,15 @@ const FEATURES: Feature[] = [
     shot: ['health-meals', 'health-dashboard', 'health-exercise-history', 'health-reports'],
     size: [1268, 1300],
     alt: [
-      'The health dashboard with nutrients against goals, the macro split, the wellness check-in, quick logs, today’s doses and a quick symptom log',
       'The meals log with the day’s calories and vitamins against goals beside the protein, carbs and fat split, and what was eaten',
+      'The health dashboard with nutrients against goals, the macro split, the wellness check-in, quick logs, today’s doses and a quick symptom log',
       'Exercise history showing each exercise’s sessions, days, time and distance this month',
       'Health reports with mood, sleep, social time, exercise and stress over time, and what goes with better days',
     ],
   },
   {
-    id: 'money', label: 'Budget planner', title: 'Know what’s left before you spend it.',
+    id: 'money', title: 'Know what’s left before you spend it.',
     body: 'Plan the month, log what you spend, and your balance keeps itself current.',
-    points: [],
     facts: [
       { label: 'Budget', text: 'Set category budgets and recurring bills, then mark them paid as you go.' },
       { label: 'Savings', text: 'Build funds for what you’re working toward, and pay debts down beside them.' },
@@ -116,9 +119,8 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    id: 'kitchen', label: 'Meal planner', title: 'Plan the week.\nShop once.',
+    id: 'kitchen', title: 'Plan the week.\nShop once.',
     body: 'Plan your meals, keep your recipes, and turn the menu into a shopping list.',
-    points: [],
     facts: [
       { label: 'Menu', text: 'See today’s meals at a glance and plan the week ahead.' },
       { label: 'Recipes', text: 'Keep recipes with prep and cook times, servings and difficulty.' },
@@ -134,9 +136,8 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    id: 'journal', label: 'Journal', title: 'A journal that keeps up with you.',
+    id: 'journal', title: 'A journal that keeps up with you.',
     body: 'Everything you capture lands here, plans and all, in a stream you can search, review and edit.',
-    points: [],
     facts: [
       { label: 'Stream', text: 'Notes, wellness checks and meals, newest first.' },
       { label: 'Search', text: 'Find any entry by word, topic or date.' },
@@ -153,9 +154,8 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    id: 'media', label: 'Media journal', title: 'A shelf for everything you read, watch and hear.',
+    id: 'media', title: 'A shelf for everything you read, watch and hear.',
     body: 'Keep track of your books, films, shows and albums at your own pace.',
-    points: [],
     facts: [
       { label: 'Track', text: 'Drag a progress bar as you go, and rate in half stars.' },
       { label: 'Add', text: 'Search a title and the cover, creator, year and genre fill in for you.' },
@@ -171,9 +171,8 @@ const FEATURES: Feature[] = [
     ],
   },
   {
-    id: 'ai', label: 'AI planner', title: 'An AI planner that asks first.',
+    id: 'ai', title: 'An AI planner that asks first.',
     body: 'Bring your own AI key and let it plan your week or reflect on your journal. It runs only when you press the button, and only on what you agree to share.',
-    points: [],
     facts: [
       { label: 'Plan', text: 'It reads your tasks, goals and calendar, then suggests a schedule, new tasks and a fuller roadmap. You review every change before anything is saved.' },
       { label: 'Reflect', text: 'Ask for insights on your journal and get a short reflection with prompts to write about.' },
@@ -231,24 +230,25 @@ const PRIVACY = [
   { title: 'AI on your terms', body: 'Optional, with your own key. Requests go from your browser straight to the provider.' },
 ];
 
-const BETA_POINTS = ['Free for the whole beta', 'A say in what gets built next', '$15 a month or less after release'];
+/* The price after the beta, from BETA_DETAILS (one source for the points and the answer) */
+const PRICE = `$${BETA_DETAILS.priceMonthly} a month`;
+
+const BETA_POINTS = ['Free for the whole beta', 'A say in what gets built next', `${PRICE} or less after release`];
 
 /* The mockup shows the questions; the answers are the page's own */
 const QUESTIONS = [
-  { q: 'What will it cost?', a: 'During active beta, access is completely free. After official release, pricing will be no more than $15 a month.' },
+  { q: 'What will it cost?', a: `During active beta, access is completely free. After official release, pricing will be no more than ${PRICE}.` },
   { q: 'Is there a phone app?', a: 'Chronicles runs smoothly in any modern web browser and installs straight to your phone home screen for a seamless native app experience.' },
-  { q: 'Can I import my existing notes or journal entries?', a: 'Yes. Chronicles supports full JSON backups and CSV exports so you can migrate or restore your data anytime.' },
-  { q: 'What happens if I lose my password?', a: 'Because Chronicles uses zero-knowledge client-side encryption where your password and keys never leave your device, we cannot recover or reset your password for you. Your data remains strictly private.' },
+  { q: 'Can I import my existing notes or journal entries?', a: 'Yes. You can import entries from a CSV file, and export everything, as JSON and CSV, anytime.' },
+  { q: 'What happens if I lose my password?', a: 'Because Chronicles uses zero-knowledge client-side encryption where your password and keys never leave your device, we can’t recover or reset your password for you. The recovery key you save when you sign up lets you set a new one. Without your password or that key, your journal can’t be opened.' },
   { q: 'How does optional AI work without compromising privacy?', a: 'You bring your own API key (Anthropic, OpenAI or Amazon Bedrock), and requests go from your browser straight to that provider, never through Chronicles. Calorie and nutrient estimates and the chat only see what you type into them. AI planning and journal insights are the two features that send your entries, and both are off until you turn them on. Before every run they list exactly what will be shared and wait for your OK. Anything you send leaves Chronicles’ encryption and is handled under your provider’s terms, including whether it’s kept or used for training. Chronicles never stores the request or the answer.' },
 ];
 
 /* ——— Shared pieces ——— */
 
-/* The teal of the mockup's buttons and dots; a pale teal on the dark bands */
+/* The teal of the mockup's buttons and dots, and the deep teal of its bands */
 const TEAL = '#34a5a2';
-const PALE_TEAL = '#86d9d3';
 const DEEP_TEAL = '#1b4b4b';
-
 
 /* Section headings: big thin Work Sans, sentence case */
 const H2 = styled.h2<{ $center?: boolean }>`
@@ -343,7 +343,6 @@ const HeroPill = styled.a<{ $solid?: boolean }>`
   &:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 `;
 
-
 /* The hero's slideshow of the app */
 const Showcase = styled.div`
   max-width: 1048px;
@@ -367,9 +366,6 @@ const Tools = styled.div`
   .arrow { color: #a3a8b0; padding: 0 4px; }
   .us { padding: 10px 20px; border-radius: 999px; background: ${DEEP_TEAL}; color: #fff; font-weight: 600; }
 `;
-
-
-
 
 /* ——— How it works ——— */
 
@@ -604,19 +600,20 @@ const Faq = styled.div`
     &[aria-expanded='true']::after { content: '−'; }
     &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   }
-  [role='region'] {
+  [data-answer] {
     display: grid;
     grid-template-rows: 0fr;
     opacity: 0;
     transition: grid-template-rows 0.35s ease, opacity 0.3s ease;
   }
-  [role='region'][data-open='true'] { grid-template-rows: 1fr; opacity: 1; }
-  [role='region'] > div { overflow: hidden; }
+  [data-answer][data-open='true'] { grid-template-rows: 1fr; opacity: 1; }
+  [data-answer] > div { overflow: hidden; }
   p { margin: 0 4px 24px; max-width: 950px; font-size: 16px; line-height: 1.7; color: var(--text-soft); }
-  @media (prefers-reduced-motion: reduce) { [role='region'] { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { [data-answer] { transition: none; } }
 `;
 
-/** One question: a button that slides its answer open and shut */
+/** One question: a button that slides its answer open and shut. The answer is no region
+    landmark (a page of closed ones would read as empty landmarks), and is inert while shut */
 function FaqItem({ id, q, a, style }: { id: string; q: string; a: string; style?: CSSProperties }) {
   const [open, setOpen] = useState(false);
   return (
@@ -624,7 +621,7 @@ function FaqItem({ id, q, a, style }: { id: string; q: string; a: string; style?
       <h3>
         <button type="button" id={`${id}-q`} aria-expanded={open} aria-controls={`${id}-a`} onClick={() => setOpen(o => !o)}>{q}</button>
       </h3>
-      <div role="region" id={`${id}-a`} aria-labelledby={`${id}-q`} data-open={open} inert={!open}>
+      <div data-answer id={`${id}-a`} aria-labelledby={`${id}-q`} data-open={open} inert={!open}>
         <div><p>{a}</p></div>
       </div>
     </div>
@@ -751,7 +748,7 @@ export function LandingView() {
                     {f.takes && <p className="takes"><strong>Takes the place of</strong> {f.takes}</p>}
                   </div>
                   <div data-reveal style={delay(1.5)}>
-                    <ShotSlides slides={slidesFor(f).filter((sl, n) => Array.isArray(f.shot) || n === 0)} />
+                    <ShotSlides slides={slidesFor(f)} />
                   </div>
                 </FeatureRow>
               ))}
@@ -825,7 +822,7 @@ export function LandingView() {
                 plans without handing them to five companies. The apps that came close either couldn't promise privacy or
                 locked the useful parts behind a subscription.
               </p>
-              <p className="body">So the code is public and free to run yourself. The hosted version carries a price after beta, to cover hosting and keep the project going.</p>
+              <p className="body">So the source is available on request, for your own personal use. The hosted version carries a price after beta, to cover hosting and keep the project going.</p>
               <p className="from">From the developer of Chronicles</p>
             </div>
             <div data-reveal style={delay(1.5)}>

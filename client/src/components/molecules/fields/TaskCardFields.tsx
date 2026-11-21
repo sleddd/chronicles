@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import styled from 'styled-components';
 import { Icon } from '../../atoms/core/Icon.jsx';
@@ -610,6 +610,7 @@ function EstimateBox({ value, onChange }: { value: number | undefined; onChange:
   const [editing, setEditing] = useState(false);
   const [bad, setBad] = useState(false);
   const cancelled = useRef(false);
+  const noteId = useId();
   useEffect(() => { if (!editing) setDraft(shown); }, [shown, editing]);
   const commit = () => {
     setEditing(false);
@@ -623,7 +624,7 @@ function EstimateBox({ value, onChange }: { value: number | undefined; onChange:
   return (
     <EstimateWrap>
       <BoxInput aria-label="Time estimate" placeholder="e.g. 45 min, 1.5 h, 2 days" value={draft}
-        aria-invalid={bad || undefined}
+        aria-invalid={bad || undefined} aria-describedby={bad ? noteId : undefined}
         onFocus={() => { setEditing(true); setBad(false); }}
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
@@ -631,7 +632,7 @@ function EstimateBox({ value, onChange }: { value: number | undefined; onChange:
           if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
           if (e.key === 'Escape') { e.preventDefault(); cancelled.current = true; (e.target as HTMLInputElement).blur(); }
         }} />
-      {bad && <EstimateNote role="status">Try a time like 45 min, 1.5 h or 2 days.</EstimateNote>}
+      {bad && <EstimateNote id={noteId} role="status">Try a time like 45 min, 1.5 h or 2 days.</EstimateNote>}
     </EstimateWrap>
   );
 }

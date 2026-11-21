@@ -207,8 +207,9 @@ export function PlannerView() {
     } else if (t.scheduled !== day) {
       // Dropped somewhere, a task that was on its deadline's day gets a planned day of its own;
       // taken off its day, it loses its time of day too (or its deadline would put it straight back)
-      // …and a time it was dragged to on the dashboard goes: it takes its place in the new day's order
-      const fields = day ? { ...t.fields, scheduledDate: day, scheduledTime: '' } : { ...t.fields, scheduledDate: '', scheduledPart: '', scheduledPartEnd: '', scheduledTime: '' };
+      // …and a time it was dragged to on the dashboard goes: it takes its place in the new day's order.
+      // Its length (`scheduledHours`, else its estimate) goes with it
+      const fields = day ? { ...dayPatch(t.fields, day), scheduledTime: '' } : { ...t.fields, scheduledDate: '', scheduledPart: '', scheduledPartEnd: '', scheduledTime: '' };
       void saveFields(t.entry, fields).then(ok => {
         if (!ok) showFlash('Couldn’t save that task’s day, so it’s back where it was. Try again.');
       });

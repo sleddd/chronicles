@@ -25,7 +25,7 @@ describe('mentionsMedical', () => {
     ]) expect(mentionsMedical(t), t).toBe(true);
   });
   it('leaves ordinary talk alone', () => {
-    for (const t of ['What should I cook tonight?', 'Help me plan my week', 'I had a rough day at work', 'Plan a dinner with chicken', 'I made a rash decision', 'watching Doctor Who tonight'])
+    for (const t of ['What should I cook tonight?', 'Help me plan my week', 'I had a rough day at work', 'Plan a dinner with chicken', 'I made a rash decision', 'watching Doctor Who tonight', 'My son teaches piano', 'We drove to the beaches', 'She coaches soccer', 'He reaches the top shelf', 'two approaches to it'])
       expect(mentionsMedical(t)).toBe(false);
   });
 });

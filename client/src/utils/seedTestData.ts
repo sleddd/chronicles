@@ -840,7 +840,6 @@ async function seedPlanning(deps: SeedDeps): Promise<number> {
   // there open (not moving on to today), so the week reads cleanly — only a couple are done
   const weekStart = -new Date().getDay();
   const wk = (i: number) => d(weekStart + i);
-  const by = (_i: number, open: 'todo' | 'in_progress' = 'todo') => open;
 
   // Goals: New, Planned, In progress, Paused, Achieved
   const ship = await goal('Ship the Chronicles rebuild', 'long_term', 'in_progress', d(60), 'Phase 1 parity, then the beta.', 'Career', d(-45));
@@ -858,19 +857,19 @@ async function seedPlanning(deps: SeedDeps): Promise<number> {
   const desk = await milestone('Desk, chair and lighting', home, 'completed', d(-12), d(-30));
 
   // Tasks (linked): To do, In progress, Done — every priority
-  await task('Write encryption unit tests for shared/crypto', by(1, 'in_progress'), 'high', d(2), ship, foundation, '', wk(1), { time: '09:00', minutes: 120 });
+  await task('Write encryption unit tests for shared/crypto', 'in_progress', 'high', d(2), ship, foundation, '', wk(1), { time: '09:00', minutes: 120 });
   await task('Port the TipTap editor with its full toolbar', 'done', 'medium', d(-15), ship, foundation);
   await task('Review the auth routes PR', 'done', 'high', d(-16), ship, foundation, '', wk(5), { time: '10:00', minutes: 90 });
-  await task('Invite the first ten testers', by(2, 'in_progress'), 'urgent', d(0), ship, beta, 'Send the welcome email with the sign-up link.', wk(2), { time: '09:30', minutes: 90 });
-  await task('Write the beta FAQ', by(0), 'medium', d(3), ship, beta, '', wk(0), { time: '10:00', minutes: 90 });
-  await task('Set up the feedback channel', by(3), 'low', d(5), ship, beta, '', wk(3), { time: '10:00', minutes: 90 });
-  await task('Fix the iPad keyboard overlap', by(4), 'urgent', d(-1), ship, beta, 'Overdue: testers hit it on day one.', wk(4), { time: '09:00', minutes: 120 });
+  await task('Invite the first ten testers', 'in_progress', 'urgent', d(0), ship, beta, 'Send the welcome email with the sign-up link.', wk(2), { time: '09:30', minutes: 90 });
+  await task('Write the beta FAQ', 'todo', 'medium', d(3), ship, beta, '', wk(0), { time: '10:00', minutes: 90 });
+  await task('Set up the feedback channel', 'todo', 'low', d(5), ship, beta, '', wk(3), { time: '10:00', minutes: 90 });
+  await task('Fix the iPad keyboard overlap', 'todo', 'urgent', d(-1), ship, beta, 'Overdue: testers hit it on day one.', wk(4), { time: '09:00', minutes: 120 });
   await task('Add the GitHub Actions workflow', 'todo', 'high', d(10), ship, ci);
   await task('Staging environment on Render', 'todo', 'medium', d(14), ship, ci);
-  await task('Exercises 1–20 on conditional types', by(2, 'in_progress'), 'medium', d(4), ts, generics, '', wk(2), { time: '14:00', minutes: 90 });
+  await task('Exercises 1–20 on conditional types', 'in_progress', 'medium', d(4), ts, generics, '', wk(2), { time: '14:00', minutes: 90 });
   await task('Read the mapped types chapter', 'done', 'low', d(-3), ts, generics);
-  await task('Buy proper running shoes', by(5), 'medium', d(6), run, tenK, '', wk(5), { time: '15:00', minutes: 90 });
-  await task('Three easy 3K runs this week', by(6, 'in_progress'), 'low', d(5), run, tenK, '', wk(6), { time: '10:00', minutes: 90 });
+  await task('Buy proper running shoes', 'todo', 'medium', d(6), run, tenK, '', wk(5), { time: '15:00', minutes: 90 });
+  await task('Three easy 3K runs this week', 'in_progress', 'low', d(5), run, tenK, '', wk(6), { time: '10:00', minutes: 90 });
   await task('Assemble the desk', 'done', 'none', d(-12), home, desk);
   await task('Book a Spanish tutor', 'todo', 'low', d(30), spanish, null);
 
@@ -902,12 +901,12 @@ async function seedPlanning(deps: SeedDeps): Promise<number> {
   await createEntry(deps, 'Offline mode for the mobile app', 'Task', { taskDescription: 'Offline mode for the mobile app', isBacklog: true, isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: ship, parentMilestoneId: null, deadline: '', priority: 'none' });
   await task('Renew car registration', 'todo', 'urgent', d(-2), null, null, 'Overdue.');
   await task('Call the dentist to reschedule', 'done', 'high', d(0), null, null, '', wk(1), { time: '13:00', minutes: 60 });
-  await task('Pick up the dry cleaning', by(3), 'low', d(1), null, null, '', wk(3), { time: '16:30', minutes: 60 });
+  await task('Pick up the dry cleaning', 'todo', 'low', d(1), null, null, '', wk(3), { time: '16:30', minutes: 60 });
   await task('Pay the electricity bill', 'done', 'high', d(-4));
-  await task('Order a birthday gift for Mum', by(6, 'in_progress'), 'medium', d(3), null, null, '', wk(6), { time: '13:00', minutes: 60 });
+  await task('Order a birthday gift for Mum', 'in_progress', 'medium', d(3), null, null, '', wk(6), { time: '13:00', minutes: 60 });
   await task('Clear out the garage', 'todo', 'none', d(14));
   await task('Back up the laptop', 'done', 'medium', d(-1));
-  await task('Return the library books', by(4, 'in_progress'), 'low', d(2), null, null, '', wk(4), { time: '16:00', minutes: 60 });
+  await task('Return the library books', 'in_progress', 'low', d(2), null, null, '', wk(4), { time: '16:00', minutes: 60 });
   await task('Plan the weekend hike', 'todo', 'medium', '');
 
   return n;

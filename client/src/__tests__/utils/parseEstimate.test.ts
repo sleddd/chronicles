@@ -17,8 +17,11 @@ describe('parseEstimate', () => {
     expect(parseEstimate('soon')).toBeUndefined();
     expect(parseEstimate('0')).toBeUndefined();
     expect(parseEstimate('30 days')).toBeUndefined();
+    expect(parseEstimate('7 days')).toBe(3360);
+    expect(parseEstimate('8 days')).toBeUndefined();
+    expect(parseEstimate('57 h')).toBeUndefined();
   });
   it('reads back what estimateLabel writes', () => {
-    for (const m of [15, 45, 60, 90, 135, 360, 960]) expect(parseEstimate(estimateLabel(m))).toBe(m);
+    for (const m of [15, 45, 60, 90, 135, 360, 960, 2400, 3360]) expect(parseEstimate(estimateLabel(m))).toBe(m);
   });
 });

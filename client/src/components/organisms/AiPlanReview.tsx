@@ -17,7 +17,7 @@ import { eventOccurrences } from '../../utils/plannerEvents.js';
 import { entryTitleText } from '../../utils/entryTitle.js';
 import { builtinEntryName } from '../../utils/stripHtml.js';
 import { EMPTY_GOAL_CATEGORIES, areaInfo, goalCategoryList, parseGoalCategories, type GoalCategoryConfig } from '../../utils/goalCategories.js';
-import { addDays, dayLabel, estimateOf, hhmm, hoursLabel, lengthPatch, plannerFacts, startPatch, unscheduled } from '../../utils/planner.js';
+import { addDays, dayLabel, dayPatch, estimateOf, hhmm, hoursLabel, lengthPatch, plannerFacts, startPatch, unscheduled } from '../../utils/planner.js';
 import { taskFieldsForStatus } from '../../types/goals.js';
 import { taskTypeList, taskTypeOf } from '../../utils/taskTypes.js';
 import { repeatRuleOf } from '../../utils/recurrence.js';
@@ -115,8 +115,9 @@ function taskFieldsAfter(now: Fields, change: TaskChange | undefined, slot: Sche
   if (change?.title) fields[NAME_FIELD_BY_TYPE.task] = change.title;
   if (change && change.goalId !== undefined) { fields.parentGoalId = change.goalId; fields.parentMilestoneId = change.milestoneId ?? null; }
   if (slot) {
-    // Its day, its time (or none — the planner then places it), its length; an idea becomes something to do
-    fields = { ...fields, scheduledDate: slot.date, scheduledTime: '' };
+    // Its day, its time (or none — the planner then places it), its length; an idea becomes something
+    // to do. Its deadline is never touched
+    fields = { ...dayPatch(fields, slot.date), scheduledTime: '' };
     if (slot.time !== undefined) fields = startPatch(fields, slot.time);
     fields = lengthPatch(fields, slot.hours);
     if (fields.isBacklog) fields = { ...fields, ...taskFieldsForStatus('todo') };

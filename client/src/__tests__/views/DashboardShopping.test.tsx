@@ -41,4 +41,21 @@ describe('dashboard Shopping list card', () => {
     expect(screen.getByText('Nails')).toBeInTheDocument();
     expect((screen.getByLabelText('Which shopping list') as HTMLSelectElement).value).toBe('2');
   });
+
+  it('a long list folds; an item added past the fold opens it, and another list starts folded', () => {
+    const nine = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9'];
+    useEntriesStore.setState({
+      allTopics: [{ id: 9, name: 'Shopping List' }] as never,
+      decryptedEntries: [list(1, 'Groceries', nine, '2026-11-05'), list(2, 'Party', nine, '2026-11-01')] as never,
+    });
+    render(<ThemeProvider theme={lightTheme}><MemoryRouter><Harness /></MemoryRouter></ThemeProvider>);
+    expect(screen.queryByText('A9')).not.toBeInTheDocument();
+    const box = screen.getByLabelText('Add an item to the shopping list');
+    fireEvent.change(box, { target: { value: 'Bread' } });
+    fireEvent.submit(box.closest('form')!);
+    expect(screen.getByText('A9')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Which shopping list'), { target: { value: '2' } });
+    expect(screen.getByRole('button', { name: 'Show all 9' })).toBeInTheDocument();
+  });
 });

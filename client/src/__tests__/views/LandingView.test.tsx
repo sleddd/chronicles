@@ -53,6 +53,17 @@ describe('LandingView', () => {
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
+  it('finds every screenshot it lists (the narrowed globs) and keeps closed answers out of the landmarks', async () => {
+    await renderPage();
+    // Each row's carousel names its slides; a missing file would drop one
+    expect(screen.getByRole('group', { name: /^The meals log .* \(dark mode\) and The health dashboard .* \(dark mode\) and Exercise history/ })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /A public shelf as visitors see it, with the shared covers and ratings and The Following view/ })).toBeInTheDocument();
+    // The hero's first and last slides
+    expect(document.querySelectorAll('img[alt^="Dashboard: "], img[alt^="Settings: "]')).toHaveLength(2);
+    expect(screen.getAllByRole('region').filter(r => r.id.startsWith('faq-'))).toHaveLength(0);
+    expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', { level: 1 }));
+  });
+
   it('thanks a late applicant the same way, without saying the beta is full', async () => {
     apply.mockResolvedValue({ status: 'waitlist' });
     await renderPage();

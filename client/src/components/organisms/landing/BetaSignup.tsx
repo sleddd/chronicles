@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { Checkbox } from '../../atoms/core/Checkbox.jsx';
 import { beta } from '../../../services/api.js';
@@ -40,7 +40,7 @@ const Field = styled.label`
   font-size: 15px;
   font-weight: 500;
   color: var(--text-primary);
-  /* The label is the box's placeholder on screen; kept for screen readers */
+  /* The placeholder names the box on screen; the label stays for screen readers (visually hidden) */
   > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   input {
     height: 48px;
@@ -140,6 +140,11 @@ export function BetaSignup({ head }: { head?: ReactNode } = {}) {
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
+  // The error under the form names what went wrong: the fields and boxes point at it while it shows
+  const errorId = useId();
+  const describedBy = error ? errorId : undefined;
+  const boxesMissing = error !== '' && (!adult || !understood);
+
   // The thank-you replaces the form: move focus to it so keyboard and screen reader users land on it
   const doneRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (done) doneRef.current?.focus(); }, [done]);
@@ -175,23 +180,26 @@ export function BetaSignup({ head }: { head?: ReactNode } = {}) {
         ) : (
           <form onSubmit={apply}>
             <Fields>
-              <Field><span>Name</span><input placeholder="Name" value={name} onChange={e => setName(e.target.value)} autoComplete="name" maxLength={100} required data-underline /></Field>
-              <Field><span>Email</span><input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" maxLength={254} required data-underline /></Field>
+              <Field><span>Name</span><input placeholder="Name" value={name} onChange={e => setName(e.target.value)} autoComplete="name" maxLength={100} required data-underline aria-describedby={describedBy} /></Field>
+              <Field><span>Email</span><input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" maxLength={254} required data-underline aria-describedby={describedBy} /></Field>
             </Fields>
             <Honeypot aria-hidden tabIndex={-1} autoComplete="off" name="website" value={trap} onChange={e => setTrap(e.target.value)} />
             <Checks>
-              <Checkbox label="I’m 18 or older" checked={adult} onChange={e => setAdult(e.target.checked)} />
+              <Checkbox label="I’m 18 or older" checked={adult} onChange={e => setAdult(e.target.checked)}
+                aria-describedby={describedBy} aria-invalid={boxesMissing && !adult ? true : undefined} />
               <Checkbox
                 label="I understand Chronicles is still in development, things may break, and I’m responsible for keeping my recovery key safe"
                 checked={understood}
                 onChange={e => setUnderstood(e.target.checked)}
+                aria-describedby={describedBy}
+                aria-invalid={boxesMissing && !understood ? true : undefined}
               />
             </Checks>
             <Submit>
               <SubmitButton type="submit" disabled={sending}>{sending ? 'Sending…' : 'Request a beta seat'}</SubmitButton>
               <Muted>For adults 18 and older. When seats fill, you’ll join the waitlist.</Muted>
             </Submit>
-            {error && <ErrorText role="alert">{error}</ErrorText>}
+            {error && <ErrorText id={errorId} role="alert">{error}</ErrorText>}
           </form>
         )}
       </BetaCard>

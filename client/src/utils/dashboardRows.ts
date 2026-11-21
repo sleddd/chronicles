@@ -20,15 +20,12 @@ function pair(a: Size, b: Size): [number, number] | null {
   return null;
 }
 
-/** Each card's width in thirds (1, 2 or 3), pairing cards next to each other in order.
-    `chosen`: widths the person set — those stand, and such a card never pairs by default */
-export function topRowSpans(keys: string[], chosen: Record<string, number | undefined> = {}): Map<string, number> {
+/** Each card's width in thirds (1, 2 or 3), pairing cards next to each other in order */
+export function topRowSpans(keys: string[]): Map<string, number> {
   const out = new Map<string, number>();
-  const fixed = (k: string) => chosen[k] === 1 || chosen[k] === 2 || chosen[k] === 3;
   for (let i = 0; i < keys.length; i++) {
-    if (fixed(keys[i])) { out.set(keys[i], chosen[keys[i]]!); continue; }
     const a = SIZES[keys[i]];
-    const b = i + 1 < keys.length && !fixed(keys[i + 1]) ? SIZES[keys[i + 1]] : undefined;
+    const b = i + 1 < keys.length ? SIZES[keys[i + 1]] : undefined;
     const fit = a && b ? pair(a, b) : null;
     if (fit) {
       out.set(keys[i], fit[0]);

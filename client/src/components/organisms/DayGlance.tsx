@@ -31,7 +31,7 @@ import { builtinEntryName } from '../../utils/stripHtml.js';
 import { billOccurrences, formatCents } from '../../utils/finance.js';
 import type { ScheduledDose } from '../../types/health.js';
 import { taskFieldsForStatus } from '../../types/goals.js';
-import { addDays, layoutDay, overlapColumns, startPatch, lengthPatch, parsePlannerOrder, plannerFacts, tasksByDay, hoursLabel, clampHours, hhmm, type PlannerOrder } from '../../utils/planner.js';
+import { addDays, layoutDay, overlapColumns, startPatch, lengthPatch, dayPatch, parsePlannerOrder, plannerFacts, tasksByDay, hoursLabel, clampHours, hhmm, type PlannerOrder } from '../../utils/planner.js';
 
 /* Day at a glance (the home dashboard, under the add row): one panel for a day —
    its schedule (events, meetings and the Planner's tasks on one timeline, med
@@ -60,7 +60,6 @@ function readMorningOpen(): boolean {
 }
 /** Tasks are laid out from 8 AM (or the day's first event, when earlier), as in the Planner */
 const TASK_START = 8 * 60;
-const px = (mins: number) => (mins / 60) * HOUR_PX;
 /** The shortest a card is drawn (about 20 minutes), so even a 5-minute one can be read and grabbed */
 const MIN_CARD = 30;
 const hourName = (h: number) => (h === 0 || h === 24 ? '12 AM' : h === 12 ? '12 PM' : h < 12 ? `${h} AM` : `${h - 12} PM`);
@@ -962,8 +961,11 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const [drag, setDrag] = useState<{ key: string; start: number; end: number; mode: 'move' | 'end'; dy: number } | null>(null);
   // The schedule's scale and the cards' places as drawn: kept fresh each render and frozen when a
   // drag starts, so a card dropped on another takes that card's time
-  type Scale = { yAt: (mins: number) => number; minutesAt: (y: number) => number; cards: { key: string; top: number; bottom: number; start: number }[] };
+  // A card's `left` / `right` are fractions of the cards' lane (overlapping cards sit side by side)
+  type Scale = { yAt: (mins: number) => number; minutesAt: (y: number) => number; cards: { key: string; top: number; bottom: number; left: number; right: number; start: number }[] };
   const scaleRef = useRef<Scale | null>(null);
+  // The cards' lane (the schedule's cards are placed inside it)
+  const blocksRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ b: Block; mode: 'move' | 'end'; y0: number; moved: boolean; start: number; end: number; scale: Scale | null } | null>(null);
   const onCardDown = (b: Block, mode: 'move' | 'end', e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -991,8 +993,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     const snap = (m: number) => Math.round(m / step) * step;
     if (d.mode === 'move') {
       // Over another card (or anywhere on a stack sharing a time): that card's time, so it joins them
-      const r = hoursRef.current?.getBoundingClientRect();
-      const onCard = r ? cardTimeAt(d.scale, e.clientY - r.top - 7, d.b.key) : undefined;
+      const onCard = cardTimeAt(d.scale, e.clientX, e.clientY, d.b.key);
       d.start = onCard ?? Math.max(0, Math.min(24 * 60 - len, snap(at(d.b.start))));
       d.end = d.start + len;
     } else {
@@ -1017,7 +1018,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
       const t = dayTasks.find(x => x.id === b.id);
       if (!t) return;
       const fields = mode === 'move'
-        ? startPatch(t.fields, start) // a same-day end time moves with it
+        ? startPatch(t.fields, start)
         : lengthPatch(t.fields, (end - start) / 60);
       void saveFields(t.entry, fields).then(ok => { if (!ok) failed(); });
       return;
@@ -1027,14 +1028,14 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     const cf = ((entry.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown>) ?? {};
     void saveFields(entry, { ...cf, startTime: hhmm(start), endTime: hhmm(Math.min(end, 24 * 60 - 1)) }).then(ok => { if (!ok) failed(); });
   };
-  // A focused card: ArrowUp / ArrowDown move it 15 minutes earlier / later
+  // A focused card: ArrowUp / ArrowDown move it 5 minutes earlier / later, as a drag does
   const onCardKey = (b: Block, e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
     e.preventDefault();
     // One step, one save a press: a held key repeats thirty times a second, each a save of its own
     if (e.repeat) return;
     const len = b.end - b.start;
-    const start = Math.max(0, Math.min(24 * 60 - len, b.start + (e.key === 'ArrowUp' ? -15 : 15)));
+    const start = Math.max(0, Math.min(24 * 60 - len, b.start + (e.key === 'ArrowUp' ? -5 : 5)));
     saveCardTimes(b, 'move', start, start + len);
   };
   const toggleEvening = () => setEveningOpen(v => {
@@ -1208,14 +1209,20 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     scaleRef.current = {
       yAt, minutesAt,
       cards: shownBlocks.map(b => {
-        const sl = slot.get(b.key) ?? { top: yAt(b.start), height: yAt(b.end) - yAt(b.start) };
-        return { key: b.key, top: sl.top, bottom: sl.top + sl.height, start: b.start };
+        const sl = slot.get(b.key) ?? { top: yAt(b.start), height: yAt(b.end) - yAt(b.start), col: 0, cols: 1 };
+        return { key: b.key, top: sl.top, bottom: sl.top + sl.height, left: sl.col / sl.cols, right: (sl.col + 1) / sl.cols, start: b.start };
       }),
     };
   }
-  /** The time of the card at height `y` on the schedule (not `skip`), if the pointer is on one */
-  const cardTimeAt = (sc: Scale | null, y: number, skip?: string): number | undefined =>
-    sc?.cards.find(c => c.key !== skip && y >= c.top && y < c.bottom)?.start;
+  /** The time of the card under the pointer (client `x`, `y`; not `skip`), if it is on one — inside
+   *  the card's height and its column, so a card beside the dragged one doesn't catch it */
+  const cardTimeAt = (sc: Scale | null, x: number, y: number, skip?: string): number | undefined => {
+    const r = blocksRef.current?.getBoundingClientRect();
+    if (!sc || !r || !r.width) return undefined;
+    const top = y - r.top;
+    const across = (x - r.left) / r.width;
+    return sc.cards.find(c => c.key !== skip && top >= c.top && top < c.bottom && across >= c.left && across < c.right)?.start;
+  };
 
 
   /* Doses as icons at their times (one per time), the later ones as a note under the scale */
@@ -1295,7 +1302,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     const r = hoursRef.current?.getBoundingClientRect();
     if (!r || x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
     // Over a card (or a stack sharing a time): that card's time, so any number can share one
-    const onCard = cardTimeAt(scaleRef.current, y - r.top - 7);
+    const onCard = cardTimeAt(scaleRef.current, x, y);
     if (onCard !== undefined) return onCard;
     // A task dropped on the schedule lands to the nearest five minutes, as in the Planner
     return Math.min(23 * 60 + 55, Math.round(minutesAt(y - r.top - 7) / 5) * 5);
@@ -1322,7 +1329,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const planAt = async (id: number, at: number) => {
     const t = tasks.find(x => x.id === id);
     if (!t) return false;
-    const fields: Record<string, unknown> = { ...t.fields, scheduledDate: day, scheduledTime: hhmm(at) };
+    // Its length (`scheduledHours`, else its estimate) goes with it
+    const fields: Record<string, unknown> = startPatch(dayPatch(t.fields, day), at);
     // An idea from the backlog becomes a planned task once it's on the schedule
     if (t.fields.isBacklog) Object.assign(fields, taskFieldsForStatus('todo'));
     const ok = await saveFields(t.entry, fields);
@@ -1511,7 +1519,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
               {carry?.at != null && (
                 <DropLine style={{ top: yAt(carry.at) + 7 }} aria-hidden="true"><span>{clock(carry.at)}</span></DropLine>
               )}
-              <Blocks style={{ top: 7 }}>
+              <Blocks ref={blocksRef} style={{ top: 7 }}>
                 {shownBlocks.map(b => {
                   // While dragged: where it would go (on its own time); else its slot
                   const moving = drag?.key === b.key;

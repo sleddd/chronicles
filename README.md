@@ -181,7 +181,7 @@ Each section is a collapsible card (all start collapsed; Settings remembers whic
 
 ### Installation
 
-1. Clone the repository
+1. Clone the repository (it's invite-only: email support@mydailychronicles.com for an invite, or for a zip file)
 
 2. Install dependencies:
    ```bash
@@ -254,8 +254,8 @@ npm run test:coverage    # Run tests with coverage
 
 © 2025–2026 Claudette Raynor. All rights reserved.
 
-**Personal copies are welcome.** Download Chronicles, run it for yourself, and change your own copy however you like on your own devices. **Commercial use of any kind is prohibited**, including selling it, charging for access, hosting it as a service, using it for a business or client, and distributing it through any app store or marketplace (paid or free). The license covers the **visual design, theme system and assets** (layouts, look and feel, design tokens and colour palettes, the name, logo, icons, screenshots and artwork) as well as the code, whether copied or closely recreated. See [LICENSE](LICENSE) for the full terms.
+**Personal copies are welcome, on request.** The repository is invite-only. Email support@mydailychronicles.com and you'll be invited to it or sent a zip file. Run your copy yourself, and change your own copy however you like on your own devices. **Commercial use of any kind is prohibited**, including selling it, charging for access, hosting it as a service, using it for a business or client, and distributing it through any app store or marketplace (paid or free). The license covers the **visual design, theme system and assets** (layouts, look and feel, design tokens and colour palettes, the name, logo, icons, screenshots and artwork) as well as the code, whether copied or closely recreated. See [LICENSE](LICENSE) for the full terms.
 
-**No distribution — not even non-commercial.** "Personal, non-commercial use" means *using* it yourself. It does not mean you may share it. You may not copy, re-host, mirror, upload, bundle or hand out Chronicles (original or changed, source or built, whole or in part) to anyone, free or paid, public or private — friends and family included. Anyone who wants it gets it from this repository. Your own changes stay on your own machine; the only way to share a change is a pull request to this repository (LICENSE, Section 6).
+**No distribution — not even non-commercial.** "Personal, non-commercial use" means *using* it yourself. It does not mean you may share it. You may not copy, re-host, mirror, upload, bundle or hand out Chronicles (original or changed, source or built, whole or in part) to anyone, free or paid, public or private — friends and family included. Anyone who wants a copy asks for one at support@mydailychronicles.com. Your own changes stay on your own machine; the only way to share a change is a pull request to this repository (LICENSE, Section 6).
 
 **Contributions.** Pull requests and bug reports through GitHub issues are welcome. Contributions don't change the license: the app stays personal-use only, and anything you contribute can be used in Chronicles (see LICENSE, Section 6). Please keep personal or health information out of issues, and report security problems privately to support@mydailychronicles.com. You can also report a bug or send feedback in the app (Settings → Feedback/Report a Bug).

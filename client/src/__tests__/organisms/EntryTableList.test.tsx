@@ -14,7 +14,7 @@ const recipe = (id: number, name: string, cf: Record<string, unknown>) => ({
 
 describe('EntryTableList', () => {
   it('shows a recipe’s stats in their columns and opens it from its title', () => {
-    renderWithTheme(<EntryTableList label="Recipes" prefsKey="t-recipes" emptyMessage="None" columns={RECIPE_COLUMNS} noteOf={recipeNote}
+    renderWithTheme(<EntryTableList label="Recipes" firstColumn="Recipe" prefsKey="t-recipes" emptyMessage="None" columns={RECIPE_COLUMNS} noteOf={recipeNote}
       entries={[recipe(1, 'Creamy Soup', { prepTime: '15', cookTime: '35', servings: '3', difficulty: 'easy', description: 'Dairy-free' })] as any} />);
     for (const h of ['Recipe', 'Prep', 'Cook', 'Serves', 'Difficulty', 'Date']) expect(screen.getByRole('columnheader', { name: h })).toBeInTheDocument();
     expect(screen.getByText('15 min')).toBeInTheDocument();
@@ -25,12 +25,25 @@ describe('EntryTableList', () => {
   });
 
   it('a shopping list shows its item count; search narrows the rows', () => {
-    renderWithTheme(<EntryTableList label="Shopping lists" prefsKey="t-shop" emptyMessage="None" columns={SHOPPING_COLUMNS}
+    renderWithTheme(<EntryTableList label="Shopping lists" firstColumn="List" prefsKey="t-shop" emptyMessage="None" columns={SHOPPING_COLUMNS}
       entries={[recipe(2, 'Groceries', { items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }), recipe(3, 'Clothes', { items: [] })] as any} />);
     expect(screen.getByRole('columnheader', { name: 'Items' })).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Search Shopping lists'), { target: { value: 'cloth' } });
     expect(screen.queryByText('Groceries')).not.toBeInTheDocument();
     expect(screen.getByText('Clothes')).toBeInTheDocument();
+  });
+
+  it('names its title column as asked, and stops filtering by a tag no entry has any more', () => {
+    const tagged = (id: number, name: string, tags: string[]) => ({ ...recipe(id, name, { tags }) });
+    const tagsOf = (e: any) => e.metadata._customFields.tags as string[];
+    const props = { label: 'Notes', firstColumn: 'Note', prefsKey: 't-notes', emptyMessage: 'None', columns: [], tagsOf };
+    const { rerender } = renderWithTheme(<EntryTableList {...props} entries={[tagged(4, 'Alpha', ['php']), tagged(5, 'Beta', [])] as any} />);
+    expect(screen.getByRole('columnheader', { name: 'Note' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Tags'), { target: { value: 'php' } });
+    expect(screen.queryByText('Beta')).not.toBeInTheDocument();
+    rerender(<EntryTableList {...props} entries={[tagged(4, 'Alpha', []), tagged(5, 'Beta', [])] as any} />);
+    expect(screen.getByText('Alpha')).toBeInTheDocument();
+    expect(screen.getByText('Beta')).toBeInTheDocument();
   });
 });
