@@ -87,7 +87,7 @@ const Act = styled.a`
   color: var(--text-primary);
   text-decoration: none;
   &:hover { border-color: var(--color-accent-line, var(--color-accent)); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const Actions = styled.div`
@@ -241,7 +241,7 @@ const FindLink = styled.button`
   color: var(--color-accent-link, var(--color-accent));
   cursor: pointer;
   &:hover { text-decoration: underline; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   svg { transition: transform 150ms; }
   &[aria-expanded='true'] svg { transform: rotate(180deg); }
 `;

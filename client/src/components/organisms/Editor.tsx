@@ -220,9 +220,11 @@ interface EditorProps {
   dictationControlRef?: React.MutableRefObject<DictationControls | null>;
   drawingControlRef?: React.MutableRefObject<DrawingControls | null>;
   onDictationChange?: (isListening: boolean, interimText: string, error: string) => void;
+  /** The writing area's accessible name. */
+  ariaLabel?: string;
 }
 
-export function Editor({ content, onChange, readOnly = false, placeholder = 'Start writing...', charLimit, onEnterSave, toolbarOpen: externalToolbarOpen, onToolbarToggle, hideToolbarToggle, dictationControlRef, drawingControlRef, onDictationChange }: EditorProps) {
+export function Editor({ ariaLabel = 'Entry text', content, onChange, readOnly = false, placeholder = 'Start writing...', charLimit, onEnterSave, toolbarOpen: externalToolbarOpen, onToolbarToggle, hideToolbarToggle, dictationControlRef, drawingControlRef, onDictationChange }: EditorProps) {
   const [internalToolbarOpen, setInternalToolbarOpen] = useState(false);
   const [drawingOpen, setDrawingOpen] = useState(false);
   const toolbarOpen = externalToolbarOpen ?? internalToolbarOpen;
@@ -316,6 +318,14 @@ export function Editor({ content, onChange, readOnly = false, placeholder = 'Sta
     ],
     content,
     editable: !readOnly,
+    editorProps: {
+      attributes: {
+        role: 'textbox',
+        'aria-multiline': 'true',
+        'aria-label': ariaLabel,
+        ...(readOnly ? { 'aria-readonly': 'true' } : {}),
+      },
+    },
     onUpdate: ({ editor: ed }) => {
       const html = ed.getHTML();
       lastEmittedRef.current = html;

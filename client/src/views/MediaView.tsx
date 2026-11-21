@@ -151,7 +151,7 @@ const PublicLink = styled.a`
   ${onPhoto}
   html[data-wallpaper] & { opacity: 0.88; }
   &:hover { color: var(--text-primary); text-decoration: underline; opacity: 1; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 /* The list layout: the app's flush rows (title, a muted line, the date), under a top rule */
@@ -191,7 +191,7 @@ const Bookmark = styled.button<{ $on: boolean }>`
   cursor: pointer;
   svg { fill: ${({ $on }) => ($on ? 'currentColor' : 'none')}; }
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* The shelf's name, first in the meta row — a quiet button in thin italic
@@ -222,7 +222,7 @@ const NameBtn = styled.button`
   & > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* The pencil in the same colour as the name (it inherits, white on a wallpaper too) */
   svg { flex: none; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 4px; }
 `;
 
 const NameInput = styled.input`

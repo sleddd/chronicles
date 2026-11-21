@@ -204,7 +204,7 @@ const WeekDay = styled.button<{ $active: boolean }>`
   font-size: 14px;
   color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
   cursor: pointer;
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const UntilInput = styled.input`

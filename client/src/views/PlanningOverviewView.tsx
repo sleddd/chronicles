@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useRef, useState, useEffect, type RefObject } from 'react';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
+import { usePopover } from '../hooks/usePopover.js';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
@@ -125,7 +126,7 @@ const GripBtn = styled.button<{ $onPhoto: boolean }>`
   cursor: grab;
   touch-action: none;
   &:active { cursor: grabbing; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 6px; }
 `;
 
 const PhotoBtn = styled.button<{ $onPhoto: boolean }>`
@@ -140,7 +141,7 @@ const PhotoBtn = styled.button<{ $onPhoto: boolean }>`
   color: ${({ $onPhoto }) => ($onPhoto ? '#fff' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { border-color: ${({ $onPhoto }) => ($onPhoto ? 'rgba(255, 255, 255, 0.7)' : 'var(--border-strong)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const Body = styled.div`
@@ -480,6 +481,7 @@ function AreaCard({ area, config, onSave, onSaveStrict, today, week, goals, prog
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(info.vision ?? '');
   const [picking, setPicking] = useState<DOMRect | null>(null);
+  const photoBtnRef = useRef<HTMLButtonElement>(null);
   const done = weekTasks.filter(t => t.completed).length + weekHabits.filter(habitDoneToday).length;
   const total = weekTasks.length + weekHabits.length;
 
@@ -496,13 +498,13 @@ function AreaCard({ area, config, onSave, onSaveStrict, today, week, goals, prog
         <GripBtn ref={setActivatorNodeRef} type="button" $onPhoto={!!photo} aria-label={`Move ${area}`} title="Drag to move" {...attributes} {...listeners}>
           <Icon name="grip" size={18} strokeWidth={2.6} />
         </GripBtn>
-        <PhotoBtn type="button" $onPhoto={!!photo} aria-label={`Choose a photo for ${area}`} title="Choose a photo"
+        <PhotoBtn ref={photoBtnRef} type="button" $onPhoto={!!photo} aria-expanded={!!picking} aria-haspopup="dialog" aria-label={`Choose a photo for ${area}`} title="Choose a photo"
           onClick={e => setPicking(picking ? null : (e.currentTarget as HTMLElement).getBoundingClientRect())}>
           <MaterialIcon $size={20} aria-hidden="true">photo_camera</MaterialIcon>
         </PhotoBtn>
       </Header>
       {picking && (
-        <PhotoPicker anchor={picking} value={info.photo ?? null} onClose={() => setPicking(null)}
+        <PhotoPicker anchor={picking} triggerRef={photoBtnRef} value={info.photo ?? null} onClose={() => setPicking(null)}
           onChange={id => { savePhotoChoice(id ?? ''); setPicking(null); }}
           own={imagesReady ? {
             image: info.photoImage ?? null, chosen: ownChosen,
@@ -646,8 +648,10 @@ const DragGhost = styled.div`
 `;
 
 /* The header photo picker: portalled, under the camera button; Escape or a click outside closes it */
-function PhotoPicker({ anchor, value, onChange, onClose, own }: {
+function PhotoPicker({ anchor, value, onChange, onClose, own, triggerRef }: {
   anchor: DOMRect; value: string | null; onChange: (id: string | null) => void; onClose: () => void;
+  /** The camera button (focus goes back to it) */
+  triggerRef: RefObject<HTMLButtonElement | null>;
   /** The "Your photo" tile (Entry Images on and set up) */
   own?: { image: EntryImage | null; chosen: boolean; onPick: () => void; onSet: (image: EntryImage) => void; onRemove: () => void };
 }) {
@@ -656,11 +660,11 @@ function PhotoPicker({ anchor, value, onChange, onClose, own }: {
   const modalOpen = useRef(false);
   useEffect(() => {
     const down = (e: MouseEvent) => { if (!modalOpen.current && ref.current && !ref.current.contains(e.target as Node)) onClose(); };
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && !modalOpen.current) onClose(); };
     document.addEventListener('mousedown', down);
-    document.addEventListener('keydown', key);
-    return () => { document.removeEventListener('mousedown', down); document.removeEventListener('keydown', key); };
+    return () => { document.removeEventListener('mousedown', down); };
   }, [onClose]);
+  // Keyboard: into the panel, Escape back to the camera, focus leaving closes it (not while the library dialog is open)
+  usePopover({ open: true, onClose, triggerRef, panelRef: ref, ignore: () => modalOpen.current });
   const width = Math.min(560, window.innerWidth - 32);
   const left = Math.max(16, Math.min(anchor.right - width, window.innerWidth - width - 16));
   const top = Math.min(anchor.bottom + 8, window.innerHeight - 200);

@@ -1,3 +1,4 @@
+import { SkipLink } from '../atoms/SkipLink.js';
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import type { ReactNode } from 'react';
@@ -8,30 +9,6 @@ import { MobileChrome } from '../organisms/MobileChrome.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { onBackdrop } from '../../styles/darkBackdrop.js';
 
-const SkipLink = styled.a`
-  position: absolute;
-  left: -9999px;
-  top: auto;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  z-index: 9999;
-  padding: var(--s-2, 8px) var(--s-4, 16px);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font-size: var(--text-sm, 15px);
-  text-decoration: none;
-  border: 2px solid var(--border-default);
-  border-radius: var(--r-md, 1px);
-
-  &:focus {
-    position: fixed;
-    left: var(--s-2, 8px);
-    top: var(--s-2, 8px);
-    width: auto;
-    height: auto;
-  }
-`;
 
 /* 3px accent stripe pinned to the very top of the app chrome (DS signature). */
 const AccentStripe = styled.div<{ $hidden?: boolean }>`
@@ -104,7 +81,7 @@ export function AppTemplate({ children, hideSidebar, transparentContent, hideAcc
       <Background />
       {!hideSidebar && !focusMode && <MobileChrome />}
       <Layout $hideAccentStripe={hideAccentStripe} $focusMode={focusMode}>
-        <SkipLink href="#main-content">Skip to content</SkipLink>
+        <SkipLink />
         {!hideSidebar && <Sidebar />}
         <MainColumn>
           <Header />

@@ -223,7 +223,7 @@ const FoldBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 /* Hidden from sight, still read out */
@@ -296,7 +296,7 @@ const MealLabelCell = styled.button`
   > span:first-child { transition: transform 150ms ease; }
   &[aria-expanded='true'] > span:first-child { transform: rotate(90deg); }
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { > span:first-child { transition: none; } }
 `;
 
@@ -336,7 +336,7 @@ const AddSlotBtn = styled.button`
   transition: color 120ms, border-color 120ms;
   /* Hover: a firmer dashed outline (no fill) and a brighter + */
   &:hover { color: var(--text-soft); border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 /* A planned meal: a filled tile with its name, a × to clear it, and the recipe link */
@@ -822,7 +822,7 @@ export function MenuView() {
           )}
           <RemoveBtn
             type="button"
-            aria-label={`Clear ${label.toLowerCase()}`}
+            aria-label={`Clear ${label.toLowerCase()}, ${new Date(`${dateStr}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`}
             title="Clear"
             onMouseDown={e => e.preventDefault()}
             onClick={() => { setEditingCell(null); setLinkingCell(null); handleRecipeChange(dateStr, slotKey, null); }}

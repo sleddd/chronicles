@@ -87,7 +87,7 @@ const Stepper = styled.div`
   }
   button:hover:not(:disabled) { color: var(--text-primary); }
   button:disabled { color: var(--text-disabled); cursor: default; }
-  button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const Count = styled.span`

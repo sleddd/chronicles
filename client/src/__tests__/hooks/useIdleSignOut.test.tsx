@@ -54,6 +54,18 @@ describe('useIdleSignOut', () => {
     expect(endSession).toHaveBeenCalledWith(); // no note on the sign-in page
   });
 
+  it('warns a minute before, and Stay signed in puts it off', async () => {
+    const { result } = renderHook(() => useIdleSignOut());
+    await act(async () => { await vi.advanceTimersByTimeAsync(13 * MIN); });
+    expect(result.current.signOutAt).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(MIN + 10_000); });
+    expect(result.current.signOutAt).not.toBeNull();
+    act(() => { result.current.stay(); });
+    expect(result.current.signOutAt).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5 * MIN); });
+    expect(endSession).not.toHaveBeenCalled();
+  });
+
   it('someone at the page keeps it going', async () => {
     renderHook(() => useIdleSignOut());
     for (let i = 0; i < 6; i++) {

@@ -47,7 +47,7 @@ describe('MobileChrome drop-down menu', () => {
     for (const name of ['Home', 'Journal', 'Topics', 'Health', 'Planning', 'Calendar', 'Kitchen', 'Settings']) {
       expect(screen.getByRole('button', { name: new RegExp(`${name}$`), hidden: true })).toBeInTheDocument();
     }
-    expect(screen.getByRole('button', { name: /Journal/, hidden: true })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Journal', hidden: true })).toHaveAttribute('aria-current', 'page');
   });
 
   it('sections start closed; one opens at a time under its row, and a view closes the menu on the way there', () => {
@@ -89,13 +89,13 @@ describe('MobileChrome drop-down menu', () => {
     open = false;
     renderAt();
     expect(screen.queryByRole('navigation', { name: 'Main', hidden: true })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open menu', hidden: true })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: /open menu/i, hidden: true })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('opens the menu from the logo', () => {
     open = false;
     renderAt();
-    fireEvent.click(screen.getByRole('button', { name: 'Open menu', hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i, hidden: true }));
     expect(mockSetOpen).toHaveBeenCalledWith(true);
   });
 

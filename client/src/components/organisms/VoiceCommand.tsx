@@ -72,7 +72,7 @@ const Mic = styled.button<{ $on: boolean }>`
   cursor: pointer;
   ${({ $on }) => $on && css`animation: ${pulse} 1.4s ease-out infinite;`}
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
 

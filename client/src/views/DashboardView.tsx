@@ -271,7 +271,7 @@ const BarBtn = styled.button<{ $on: boolean }>`
   color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Voice: a quiet button — the mic and the word, no outline, never a darker fill
@@ -291,7 +291,7 @@ const VoiceBtn = styled.button<{ $on: boolean }>`
   color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   /* On a wallpaper: a glass pill with white text (the accent while open) */
   ${glassPill}
   html[data-wallpaper] &[aria-expanded="true"], html[data-wallpaper] &[aria-pressed="true"] { border-color: #fff; }
@@ -312,7 +312,7 @@ const ViewBtn = styled.button<{ $on: boolean }>`
   color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   ${glassPill}
   html[data-wallpaper] &[aria-expanded="true"], html[data-wallpaper] &[aria-pressed="true"] { border-color: #fff; }
 `;
@@ -352,7 +352,7 @@ const ThemeOpt = styled.button<{ $on: boolean }>`
   color: ${({ $on }) => ($on ? 'var(--text-primary)' : 'var(--text-soft)')};
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const THEME_ICON = { light: 'light_mode', dark: 'dark_mode', auto: 'contrast' } as const;
@@ -720,7 +720,7 @@ const DragHandle = styled.button`
   html[data-theme='dark'] & { color: var(--text-disabled); }
   &:hover { color: var(--text-primary); }
   &:active { cursor: grabbing; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 480px) { top: 24px; right: 46px; }
 `;
 
@@ -740,7 +740,7 @@ const FoldBtn = styled.button<{ $collapsed: boolean }>`
   cursor: pointer;
   svg { transition: transform 150ms ease; transform: rotate(${({ $collapsed }) => ($collapsed ? 0 : 180)}deg); }
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 480px) { top: 24px; right: 14px; }
 `;
 
@@ -1523,7 +1523,7 @@ const LabelPick = styled.label<{ $wrap?: boolean }>`
     font-size: 16px; /* iOS doesn't zoom into a 16px control */
     cursor: pointer;
   }
-  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+  &:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 4px; }
 `;
 
 /** The "start a new list" choice at the foot of a card's picker */
@@ -1962,7 +1962,7 @@ const RecentRow = styled(Row)`
   & > .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   & > .date { flex: none; font-size: 14px; color: var(--text-muted); }
   &:hover > .title { text-decoration: underline; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* ── Mantra: one of your mantras a day, in turn ── */
@@ -1985,7 +1985,7 @@ const MantraText = styled.button`
   white-space: pre-line;
   cursor: pointer;
   &:hover { text-decoration: underline; text-decoration-thickness: 1px; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 4px; }
   @media (max-width: 480px) { font-size: 19px; }
 `;
 
@@ -2008,7 +2008,7 @@ const MantraNav = styled.div`
     cursor: pointer;
   }
   button:hover { color: var(--text-primary); border-color: var(--control-border); }
-  button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /** Saves a new mantra to the Mantra topic (made on first use) */
@@ -2182,7 +2182,7 @@ const StatsFold = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 6px; }
   @media (max-width: 768px) { position: absolute; top: 18px; right: 16px; }
 `;
 
@@ -2306,7 +2306,7 @@ const TimerBtn = styled.button<{ $on: boolean }>`
   color: ${({ $on }) => ($on ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* A row's quiet × (shown on hover, always on touch); a second click confirms */
@@ -2327,7 +2327,7 @@ const TimeRemove = styled.button<{ $confirm?: boolean }>`
   color: ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $confirm }) => ($confirm ? 'var(--color-danger)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   &.x { opacity: 0; transition: opacity 120ms; }
   @media (hover: none) { &.x { opacity: 1; } }
 `;

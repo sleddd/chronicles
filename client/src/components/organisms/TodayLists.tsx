@@ -91,7 +91,7 @@ const RowTimer = styled.button<{ $on: boolean }>`
   color: ${({ $on }) => ($on ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $on }) => ($on ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* A schedule row's name and time: opens its routine in the journal, where
@@ -111,7 +111,7 @@ const OpenRoutine = styled.button`
   text-align: left;
   cursor: pointer;
   &:hover > span:first-child { text-decoration: underline; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 /* A routine breakdown card's title: opens the routine too (&& beats the
@@ -124,7 +124,7 @@ const OpenTitle = styled.button`
   text-align: left;
   cursor: pointer;
   &:hover { text-decoration: underline; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 /* ‹ Today › beside the Med list link — flips the schedule back a day at a time */

@@ -97,17 +97,23 @@ const Radios = styled.div`
   input { accent-color: var(--color-accent); }
 `;
 
+/* GlobalStyle strips text boxes' borders with !important, so the outline needs the
+   multi-class rules (as formKit's BoxInput does); focus sets the whole border */
 const Address = styled.textarea`
-  width: 100%;
-  min-height: 72px;
-  padding: 10px 12px;
-  border: 1px solid var(--border-card);
-  border-radius: var(--r-lg, 6px);
-  background: transparent;
-  font: inherit;
-  color: var(--text-primary);
-  resize: vertical;
-  &:focus { outline: none; border-color: var(--color-accent); }
+  && {
+    width: 100%;
+    min-height: 72px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-card) !important;
+    border-radius: var(--r-lg, 6px);
+    background: transparent !important;
+    font: inherit;
+    color: var(--text-primary);
+    resize: vertical;
+    outline: none;
+  }
+  &&&&& { border: 1px solid var(--border-card) !important; }
+  &&&&&:focus { border: 1px solid var(--color-accent) !important; }
 `;
 
 const SmallNote = styled.p`

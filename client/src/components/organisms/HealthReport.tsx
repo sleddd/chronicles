@@ -92,7 +92,7 @@ const FoldHead = styled.button<{ $open: boolean }>`
   cursor: pointer;
   svg { margin-left: auto; flex: none; color: var(--text-muted); }
   &:hover svg { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 4px; }
 `;
 
 const QUESTIONS_OPEN_KEY = 'health-report-daily-questions-open-v1';
@@ -304,7 +304,7 @@ const ReviewBtn = styled.button<{ $accent?: boolean }>`
   color: ${({ $accent }) => ($accent ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const Status = styled.span<{ $yes: boolean }>`

@@ -86,25 +86,25 @@ export function BugReportForm() {
       <FormWrap>
         <Section>
           <SectionHead><SectionLabel as="p" id="bug-kind-label">What would you like to send?</SectionLabel></SectionHead>
-          <Chips role="radiogroup" aria-labelledby="bug-kind-label">
-            <Chip type="button" role="radio" aria-checked={feedback} $active={feedback} onClick={() => { setKind('feedback'); setState('idle'); }}>Feedback</Chip>
-            <Chip type="button" role="radio" aria-checked={!feedback} $active={!feedback} onClick={() => { setKind('bug'); setState('idle'); }}>Report a bug</Chip>
+          <Chips role="group" aria-labelledby="bug-kind-label">
+            <Chip type="button" aria-pressed={feedback} $active={feedback} onClick={() => { setKind('feedback'); setState('idle'); }}>Feedback</Chip>
+            <Chip type="button" aria-pressed={!feedback} $active={!feedback} onClick={() => { setKind('bug'); setState('idle'); }}>Report a bug</Chip>
           </Chips>
           <FieldNote>Ideas, suggestions and what you’d change are as welcome as bug reports.</FieldNote>
         </Section>
         <Section>
           <SectionHead><SectionLabel as="p" id="bug-area-label">Where in the app?</SectionLabel></SectionHead>
-          <Chips role="radiogroup" aria-labelledby="bug-area-label">
+          <Chips role="group" aria-labelledby="bug-area-label">
             {BUG_AREAS.map(a => (
-              <Chip key={a} type="button" role="radio" aria-checked={area === a} $active={area === a} onClick={() => setArea(a)}>{a}</Chip>
+              <Chip key={a} type="button" aria-pressed={area === a} $active={area === a} onClick={() => setArea(a)}>{a}</Chip>
             ))}
           </Chips>
         </Section>
         <Section>
           <SectionHead><SectionLabel as="label" htmlFor="bug-happened">{feedback ? 'Your feedback' : 'What happened?'}</SectionLabel></SectionHead>
-          <BoxText id="bug-happened" rows={4} required maxLength={4000} value={happened} onChange={e => setHappened(e.target.value)}
+          <BoxText id="bug-happened" aria-describedby="bug-happened-note" rows={4} required maxLength={4000} value={happened} onChange={e => setHappened(e.target.value)}
             placeholder={feedback ? 'An idea, a suggestion, something you love or something you’d change' : 'What you expected, and what happened instead'} />
-          <FieldNote>Please leave out passwords, recovery keys and health details. Feedback and bug reports go by regular email, which isn’t encrypted.</FieldNote>
+          <FieldNote id="bug-happened-note">Please leave out passwords, recovery keys and health details. Feedback and bug reports go by regular email, which isn’t encrypted.</FieldNote>
         </Section>
         {!feedback && <Section>
           <SectionHead><SectionLabel as="label" htmlFor="bug-steps">What were you doing? (optional)</SectionLabel></SectionHead>

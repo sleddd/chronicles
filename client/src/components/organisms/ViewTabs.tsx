@@ -76,7 +76,7 @@ const ClearBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const RowActions = styled.div`
@@ -103,7 +103,7 @@ const RowPill = styled.button<{ $tone: 'danger' | 'accent' }>`
   white-space: nowrap;
   &:hover:not(:disabled) { border-color: ${({ $tone }) => ($tone === 'danger' ? 'var(--color-danger, #c0392b)' : 'var(--color-accent-line)')}; }
   &:disabled { opacity: 0.45; cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Under the row while a delete waits for its second click */
@@ -133,7 +133,7 @@ const MenuBtn = styled.button<{ $open: boolean }>`
   color: ${({ $open }) => ($open ? 'var(--color-accent-link)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const Menu = styled.div`

@@ -31,7 +31,7 @@ const More = styled.button`
   cursor: pointer;
   &:hover:not(:disabled) { border-color: var(--control-border); color: var(--text-primary); }
   &:disabled { opacity: 0.6; cursor: wait; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 interface LoadMoreProps {

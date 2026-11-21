@@ -79,7 +79,7 @@ describe('Your Agenda', () => {
     useEntriesStore.setState({ decryptedEntries: [task(2, 'Tidy desk', {})] as never });
     renderGlance();
     expect(screen.getByText('1 task with no day yet')).toBeInTheDocument();
-    const grip = screen.getByRole('button', { name: 'Drag “Tidy desk” onto the schedule' });
+    const grip = screen.getByRole('button', { name: /^Drag “Tidy desk” onto the schedule/ });
     // jsdom has no layout: give the schedule a box and drop inside it
     const hours = document.querySelector('[style*="padding-top: 7px"]') as HTMLElement;
     hours.getBoundingClientRect = () => ({ left: 0, right: 600, top: 0, bottom: 2000, width: 600, height: 2000, x: 0, y: 0, toJSON: () => ({}) });
@@ -88,6 +88,24 @@ describe('Your Agenda', () => {
     fireEvent.pointerUp(grip, { clientX: 100, clientY: 300 });
     expect(saveFields).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }),
       expect.objectContaining({ scheduledDate: today, scheduledTime: expect.stringMatching(/^\d{2}:\d{2}$/) }));
+  });
+
+  it('from the keyboard, a task with no day is planned on the schedule at once', async () => {
+    useEntriesStore.setState({ decryptedEntries: [task(2, 'Tidy desk', {})] as never });
+    renderGlance();
+    const grip = screen.getByRole('button', { name: /^Drag “Tidy desk” onto the schedule, or press Enter to plan it for/ });
+    // Enter / Space on a button: a click with no pointer behind it
+    fireEvent.click(grip, { detail: 0 });
+    await waitFor(() => expect(saveFields).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }),
+      expect.objectContaining({ scheduledDate: today, scheduledTime: expect.stringMatching(/^\d{2}:(00|15|30|45)$/) })));
+  });
+
+  it('arrow keys move a focused schedule card 15 minutes', () => {
+    useEntriesStore.setState({ decryptedEntries: [task(1, 'Write report', { scheduledDate: today, scheduledTime: '09:00' })] as never });
+    renderGlance();
+    const card = screen.getByTitle(/^Write report · /);
+    fireEvent.keyDown(card, { key: 'ArrowDown' });
+    expect(saveFields).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ scheduledTime: '09:15' }));
   });
 
   it('a long medications list stays within the screen and scrolls, so the last dose can be ticked', () => {

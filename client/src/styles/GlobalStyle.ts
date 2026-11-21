@@ -10,9 +10,18 @@ import './core.css';
 export const GlobalStyle = createGlobalStyle`
   /* Phones and tablets: the mobile top bar names the page, so the page's own big title goes */
   ${NAV_COMPACT} {
-    .view-title { display: none !important; }
-    /* A header row with nothing else showing (its button moved to the top bar) goes too… */
-    :has(> .view-title):not(:has(> :not(.view-title):not(:empty))) { display: none !important; }
+    /* Hidden from sight but kept for screen readers (display: none dropped the page's heading for them) */
+    .view-title {
+      position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important;
+      margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important; border: 0 !important;
+    }
+    /* A header row with nothing else showing (its button moved to the top bar) goes too — out of sight
+       and out of the layout, its title still read out */
+    :has(> .view-title):not(:has(> :not(.view-title):not(:empty))) {
+      position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important;
+      margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; border: 0 !important;
+    }
     /* …and one that still holds something loses the room the title needed */
     :has(> .view-title) { padding-top: 16px !important; padding-bottom: 8px !important; }
   }
@@ -162,11 +171,23 @@ export const GlobalStyle = createGlobalStyle`
     font-size: 13px;
   }
 
-  /* Global focus-visible outline — uses user's header color */
+  /* Keyboard focus: a neutral grey ring (--focus-ring — never the accent), only when moving by
+     keyboard, never on a click. Every control without its own ring gets this one */
   a:focus-visible,
   button:focus-visible,
-  [tabindex]:focus-visible {
-    outline: 2px solid rgba(var(--focus-color-rgb, 78, 110, 126), 0.5);
+  [tabindex]:focus-visible,
+  [role="button"]:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--focus-ring, #80868f);
+    outline-offset: 2px;
+  }
+  /* The main area takes focus from the skip link: no ring round the whole page */
+  main[tabindex="-1"]:focus, [id="main-content"]:focus { outline: none; }
+  /* A select keeps a ring too (text fields show their caret and border instead) */
+  select:focus-visible { outline: 2px solid var(--focus-ring, #80868f) !important; outline-offset: 2px; }
+  /* Pickers that lay a real <select> invisibly over drawn text: the ring goes on the drawn pill */
+  label:has(> select:focus-visible), div:has(> select:focus-visible) {
+    outline: 2px solid var(--focus-ring, #80868f);
     outline-offset: 2px;
   }
 

@@ -16,14 +16,14 @@ export function MealsTabBar() {
   const navigate = useNavigate();
 
   return (
-    <Bar>
+    <Bar aria-label="Kitchen sections">
       {TABS.map((t) => {
         const isActive = location.pathname === t.path;
         return (
           <TabBtn
             key={t.path}
             $active={isActive}
-            aria-selected={isActive}
+            aria-current={isActive ? 'page' : undefined}
             onClick={() => navigate(t.path)}
           >
             {t.label}

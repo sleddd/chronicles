@@ -57,7 +57,7 @@ const LogoContainer = styled.button`
   background: none;
   text-align: left;
   cursor: pointer;
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 6px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 6px; }
 `;
 
 const PageName = styled.span`
@@ -120,7 +120,7 @@ const NavRow = styled.button<{ $active: boolean; $quiet?: boolean }>`
   -webkit-tap-highlight-color: transparent;
   & > span:first-child { color: var(--text-primary); }
   @media (hover: hover) { &:hover { background: var(--bg-row-hover); } }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 /* A section and its views: it reaches past the sheet's 10px gutter so its row and views
@@ -163,7 +163,7 @@ const SectionChevron = styled.button<{ $open: boolean }>`
   & > svg { transition: transform 160ms ease; transform: rotate(${({ $open }) => ($open ? 180 : 0)}deg); }
   @media (prefers-reduced-motion: reduce) { & > svg { transition: none; } }
   @media (hover: hover) { &:hover { color: var(--text-primary); } }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 /* The section's views, lined up with the section names; the one showing on the grey fill */
@@ -201,7 +201,7 @@ const ViewRow = styled.button<{ $active: boolean }>`
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   @media (hover: hover) { &:hover { background: var(--bg-row-hover); } }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 /* The views slide open and shut (rows 0fr → 1fr); hidden from the keyboard and screen
@@ -317,7 +317,7 @@ export function MobileChrome() {
   return (
     <>
       <MobileNavBar $open={open}>
-        <LogoContainer type="button" onClick={() => setOpen(!open)} aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} aria-controls="mobile-nav">
+        <LogoContainer type="button" onClick={() => setOpen(!open)} aria-label={`${current?.label ?? (pathname === '/dashboard' ? 'Today' : 'Chronicles')}, ${open ? 'close menu' : 'open menu'}`} aria-expanded={open} aria-controls="mobile-nav">
           <BrandMark size={26} gradientId="logo-mobile" />
           <PageName>{current?.label ?? (pathname === '/dashboard' ? 'Today' : 'Chronicles')}</PageName>
         </LogoContainer>

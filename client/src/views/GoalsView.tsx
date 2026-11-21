@@ -150,7 +150,7 @@ const FiltersToggle = styled.button<{ $open: boolean }>`
   font-size: 14px;
   color: var(--text-primary);
   cursor: pointer;
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const CountBadge = styled.span`
@@ -293,7 +293,7 @@ const ViewBtn = styled.button<{ $active: boolean }>`
   background: ${({ $active }) => ($active ? 'var(--bg-active)' : 'transparent')};
   color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-tertiary)')};
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* A category's heading over its goals in the list view (MonthGroups' heading) */

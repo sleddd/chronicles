@@ -15,7 +15,7 @@ const Wrap = styled.div<{ $readOnly?: boolean }>`
   align-items: center;
   gap: 2px;
   ${({ $readOnly }) => ($readOnly ? '' : 'cursor: pointer;')}
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 4px; }
 `;
 
 const Star = styled.span<{ $size: number }>`
@@ -90,11 +90,11 @@ export function StarRating({ value, onChange, size = 22, readOnly, showValue, la
       $readOnly={!interactive}
       role={interactive ? 'slider' : 'img'}
       tabIndex={interactive ? 0 : undefined}
-      aria-label={label}
+      aria-label={interactive ? label : `${label}: ${formatRating(current)} of 5 stars`}
       aria-valuemin={interactive ? 0 : undefined}
       aria-valuemax={interactive ? 5 : undefined}
       aria-valuenow={interactive ? current : undefined}
-      aria-valuetext={`${formatRating(current)} of 5 stars`}
+      aria-valuetext={interactive ? `${formatRating(current)} of 5 stars` : undefined}
       onKeyDown={onKey}
       onMouseLeave={() => setPreview(null)}
     >

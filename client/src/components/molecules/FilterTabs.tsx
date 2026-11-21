@@ -39,7 +39,7 @@ const Btn = styled.button<{ $active?: boolean; $flush?: boolean }>`
   cursor: pointer;
   transition: color 120ms ease, background 120ms ease;
   &:hover:not([aria-selected="true"]) { color: var(--text-secondary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 interface FilterTabsProps<T extends string> {
@@ -72,8 +72,8 @@ export function FilterTabs<T extends string>({ options, active, onChange, label,
   }, [safeOptions, onChange]);
 
   return (
-    <Row role="tablist" $flush={flush} $bordered={bordered}>
-      {label && <Label>{label}</Label>}
+    <Row role="tablist" aria-label={label} $flush={flush} $bordered={bordered}>
+      {label && <Label aria-hidden="true">{label}</Label>}
       {safeOptions.map((opt, i) => (
         <Btn
           key={opt.value}

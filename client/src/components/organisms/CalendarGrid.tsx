@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import type { KeyboardEvent } from 'react';
 import { onBackdrop } from '../../styles/darkBackdrop.js';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { CalendarHeader } from './CalendarHeader.js';
@@ -320,6 +321,17 @@ export function CalendarGrid({
                   $accentColor={accentColor}
                   onClick={() => !isOutside && onDayClick(dateStr)}
                   onDoubleClick={() => !isOutside && onDayDoubleClick(dateStr)}
+                  {...(!isOutside && {
+                    role: 'button',
+                    tabIndex: 0,
+                    'aria-pressed': isSelected,
+                    'aria-label': `${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${dayHolidays.length ? `, ${dayHolidays.map(h => h.name).join(', ')}` : ''}${total ? `, ${total} item${total === 1 ? '' : 's'}` : ''}`,
+                    // Enter / Space choose the day; Shift + Enter does what a double click does
+                    onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+                      if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); onDayDoubleClick(dateStr); return; }
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDayClick(dateStr); }
+                    },
+                  })}
                 >
                   {!isOutside && (
                     <>

@@ -176,7 +176,7 @@ const IconBtn = styled.button<{ $danger?: boolean }>`
   color: ${({ $danger }) => ($danger ? 'var(--color-danger)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $danger }) => ($danger ? 'var(--color-danger)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 const RenameInput = styled.input`
@@ -346,7 +346,7 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
         ) : catsOpen && (
           <SheetBox id="budget-by-category" role="table" aria-label={`Budget for ${formatMonth(month)}`}>
             <HeadGrid role="row">
-              <span>Category</span><span>Planned</span><span>Bills</span><span>Spent</span><span>Left</span>
+              <span role="columnheader">Category</span><span role="columnheader">Planned</span><span role="columnheader">Bills</span><span role="columnheader">Spent</span><span role="columnheader">Left</span>
             </HeadGrid>
             {summary.rows.map(r => {
               const cat = sortedCats.find(c => c.id === r.categoryId);
@@ -355,24 +355,26 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
               const unpaid = r.billsCents - r.paidCents;
               return (
                 <Grid key={r.categoryId} role="row" style={cat?.archived ? { color: 'var(--text-muted)' } : undefined}>
-                  <Name>
+                  <Name role="cell">
                     <span>{r.name}</span>
                     <Bar $pct={r.plannedCents > 0 ? Math.min(100, (used / r.plannedCents) * 100) : 0} $over={over}
+                      role={r.plannedCents > 0 ? 'img' : undefined}
+                      aria-hidden={r.plannedCents > 0 ? undefined : true}
                       aria-label={r.plannedCents > 0 ? `${Math.round((used / r.plannedCents) * 100)}% of budget used` : undefined} />
                   </Name>
                   {cat && r.categoryId !== UNCATEGORIZED
-                    ? <span><PlannedInput key={`${cat.id}:${cat.monthlyPlannedCents}`} category={cat} onSave={onSave} /></span>
-                    : <Quiet>—</Quiet>}
-                  <span>
+                    ? <span role="cell"><PlannedInput key={`${cat.id}:${cat.monthlyPlannedCents}`} category={cat} onSave={onSave} /></span>
+                    : <Quiet role="cell">—</Quiet>}
+                  <span role="cell">
                     {formatCents(r.billsCents)}
                     {unpaid > 0 && <Unpaid>{formatCents(unpaid)} unpaid</Unpaid>}
                   </span>
-                  {r.spendingCents ? <span>{formatCents(r.spendingCents)}</span> : <Quiet>{formatCents(0)}</Quiet>}
+                  {r.spendingCents ? <span role="cell">{formatCents(r.spendingCents)}</span> : <Quiet role="cell">{formatCents(0)}</Quiet>}
                   {over
-                    ? <span style={{ color: 'var(--color-danger)' }}>{formatCents(-r.leftCents)} over</span>
+                    ? <span role="cell" style={{ color: 'var(--color-danger)' }}>{formatCents(-r.leftCents)} over</span>
                     : r.leftCents > 0
-                      ? <span style={{ color: 'var(--color-accent-link)' }}>{formatCents(r.leftCents)}</span>
-                      : <Quiet>{formatCents(0)}</Quiet>}
+                      ? <span role="cell" style={{ color: 'var(--color-accent-link)' }}>{formatCents(r.leftCents)}</span>
+                      : <Quiet role="cell">{formatCents(0)}</Quiet>}
                 </Grid>
               );
             })}

@@ -122,7 +122,7 @@ const PhaseTab = styled.button<{ $active: boolean }>`
   cursor: pointer;
   .now { color: var(--text-muted); }
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const Card = styled.section`
@@ -306,7 +306,7 @@ const Chip = styled.button<{ $kind: ChipKind }>`
   cursor: pointer;
   & + & { margin-top: 6px; }
   &:hover { filter: brightness(0.97); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const AddCell = styled.button`

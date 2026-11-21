@@ -64,7 +64,7 @@ const Name = styled.button<{ $done: boolean }>`
   white-space: nowrap;
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const When = styled.span<{ $met: boolean }>`

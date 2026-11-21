@@ -58,7 +58,7 @@ export const Chip = styled.button<{ $active: boolean }>`
   cursor: pointer;
   transition: border-color 120ms, color 120ms;
   &:hover { border-color: ${({ $active }) => ($active ? 'var(--color-accent-line)' : 'var(--control-border)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Segmented control: one outlined box; the chosen segment gets an accent
@@ -86,7 +86,7 @@ export const Segment = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-soft)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Outlined strip of stat cells split by rules */
@@ -407,7 +407,7 @@ export const JoinedBtn = styled.button<{ $active: boolean; $fill?: boolean }>`
     box-shadow: 0 0 0 1px var(--color-accent-line);
   ` : '')}
   &:hover { color: ${({ $active, $fill }) => ($active && !$fill ? 'var(--color-accent-soft)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; z-index: 2; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; z-index: 2; }
 `;
 
 /* Chip lists you can add to: a chip in Edit mode (tapping removes it), the

@@ -14,14 +14,14 @@ export function HealthTabBar() {
   const tabs = healthViews(ff);
 
   return (
-    <Bar>
+    <Bar aria-label="Health sections">
       {tabs.map((t) => {
         const isActive = isViewActive(t.path, location.pathname);
         return (
           <TabBtn
             key={t.path}
             $active={isActive}
-            aria-selected={isActive}
+            aria-current={isActive ? 'page' : undefined}
             onClick={() => navigate(t.path)}
           >
             {t.label}

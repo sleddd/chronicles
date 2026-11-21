@@ -12,7 +12,7 @@ export function PlanningTabBar() {
   const navigate = useNavigate();
 
   return (
-    <Bar>
+    <Bar aria-label="Planning sections">
       {TABS.map((t) => {
         // Todos is a view of the Tasks tab (its Show pill), reached at /goals/todos
         const isActive = isViewActive(t.path, location.pathname);
@@ -20,7 +20,7 @@ export function PlanningTabBar() {
           <TabBtn
             key={t.path}
             $active={isActive}
-            aria-selected={isActive}
+            aria-current={isActive ? 'page' : undefined}
             onClick={() => navigate(t.path)}
           >
             {t.label}

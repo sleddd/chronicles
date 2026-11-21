@@ -59,3 +59,13 @@ describe('SearchInput', () => {
     expect(onChange).toHaveBeenCalledWith('');
   });
 });
+
+describe('SearchInput ariaLabel', () => {
+  it('defaults to Search entries and takes another name', () => {
+    const { unmount } = renderWithTheme(<SearchInput value="" onChange={() => {}} />);
+    expect(screen.getByRole('textbox', { name: 'Search entries' })).toBeInTheDocument();
+    unmount();
+    renderWithTheme(<SearchInput value="" onChange={() => {}} ariaLabel="Search topics" />);
+    expect(screen.getByRole('textbox', { name: 'Search topics' })).toBeInTheDocument();
+  });
+});

@@ -78,7 +78,7 @@ const CoverBtn = styled.button`
   ${coverLook}
   cursor: pointer;
   &:hover { border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const CoverStill = styled.div`
@@ -91,7 +91,7 @@ const CoverLink = styled.a`
   cursor: pointer;
   text-decoration: none;
   &:hover { border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* The title on a cover-less tile */
@@ -164,7 +164,7 @@ const ShelfPill = styled.label<{ $set: boolean }>`
   color: ${({ $set }) => ($set ? 'var(--color-accent-soft)' : 'var(--text-soft)')};
   cursor: pointer;
   &:hover { border-color: ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--control-border)')}; }
-  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   & > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   & > span:last-of-type { display: inline-flex; }
   select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font-size: 16px; }

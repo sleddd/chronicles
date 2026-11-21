@@ -24,7 +24,7 @@ export const PillButton = styled.button<{ $variant?: 'accent' | 'neutral' }>`
   cursor: pointer;
   transition: background 150ms, opacity 150ms;
   &:hover:not(:disabled) { background: ${({ $variant }) => ($variant === 'neutral' ? 'var(--bg-hover)' : 'var(--color-accent-subtle)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   &:disabled { color: var(--text-disabled); border-color: var(--border-default); cursor: not-allowed; }
   /* Light: sentence case at normal spacing — small tracked capitals look faint on white */
   html[data-theme='light'] & { text-transform: none; letter-spacing: normal; font-size: 14px; font-weight: 500; }

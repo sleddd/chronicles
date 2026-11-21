@@ -469,7 +469,7 @@ const TaskDelete = styled.button`
   color: var(--color-danger);
   cursor: pointer;
   &:hover { opacity: 0.8; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 /* ── Quick entry (dashboard) ── */
@@ -769,7 +769,7 @@ const PromptLine = styled.div`
   }
   /* Hover changes nothing — the underline keeps its colour */
   & > div > button:hover { background: none; border-bottom-color: var(--border-default); }
-  & > div > button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  & > div > button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   & > div > button > span:last-child { font-size: 12px; color: inherit; }
   & > div > div { font-style: normal; font-family: var(--font-sans); font-weight: 400; text-shadow: none; }
   & input::placeholder { color: var(--text-placeholder, var(--text-muted)); opacity: 1; }

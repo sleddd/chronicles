@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
 import { Checkbox } from '../../atoms/core/Checkbox.jsx';
 import { beta } from '../../../services/api.js';
@@ -111,9 +111,10 @@ const Done = styled.div`
   padding: 20px;
   border-left: 2px solid var(--color-accent);
   background: var(--color-accent-subtle);
-  h4 { margin: 0 0 6px; font-family: var(--font-display); font-size: 20px; font-weight: 300; color: var(--text-primary); }
+  && h3 { margin: 0 0 6px; font-family: var(--font-display); font-size: 20px; font-weight: 300; color: var(--text-primary); }
   p { margin: 0; font-size: 14px; line-height: 1.6; }
   p + p { margin-top: 10px; }
+  &:focus { outline: none; }
 `;
 
 /* Off-screen, not display:none — some bots skip hidden inputs */
@@ -137,6 +138,10 @@ export function BetaSignup() {
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
+  // The thank-you replaces the form: move focus to it so keyboard and screen reader users land on it
+  const doneRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (done) doneRef.current?.focus(); }, [done]);
+
   const apply = async (e: FormEvent) => {
     e.preventDefault();
     if (!adult || !understood) { setError('Tick both boxes to apply.'); return; }
@@ -156,8 +161,8 @@ export function BetaSignup() {
       <BetaCard id="apply">
 
         {done ? (
-          <Done role="status">
-            <h4>Thank you for requesting early access to Chronicles.</h4>
+          <Done role="status" ref={doneRef} tabIndex={-1}>
+            <h3>Thank you for requesting early access to Chronicles.</h3>
             <p>
               Your request has been received and added to our beta list. Please keep an eye on your inbox, and once your
               access is ready, you will receive a welcome email containing a secure link to set up your account.

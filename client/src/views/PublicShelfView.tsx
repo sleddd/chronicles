@@ -40,7 +40,7 @@ const BackToApp = styled(Link)`
     text-decoration: none;
   }
   &&:hover { border-color: var(--color-accent-line); color: var(--color-accent-text, var(--color-accent-link)); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 
@@ -61,7 +61,7 @@ const RowLink = styled.a`
   text-decoration: none;
   &:hover { color: inherit; }
   &:hover ${EntryTitle} { color: var(--color-accent-link); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 6px; }
 `;
 
 const TitleRow = styled.div`
@@ -219,7 +219,8 @@ export function PublicShelfView() {
     <PublicTemplate headerAside={signedIn ? (
       <BackToApp to="/media"><Icon name="arrow-left" size={14} strokeWidth={2.5} />Back to Chronicles</BackToApp>
     ) : undefined}>
-      {state.status === 'error' && <Message>This shelf isn’t available.</Message>}
+      {state.status === 'error' && <Message as="h1">This shelf isn’t available.</Message>}
+      {state.status === 'loading' && !knownTitle && <h1 className="sr-only">Loading shelf</h1>}
       {state.status !== 'error' && knownTitle && (
         <TitleRow>
           <Title>{knownTitle}</Title>

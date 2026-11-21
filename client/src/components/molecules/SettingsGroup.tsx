@@ -155,7 +155,7 @@ const LinkRowA = styled.a`
   text-decoration: none;
   svg { flex: none; color: var(--text-muted); }
   &:hover svg { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 /** A whole row that opens a page (the policy links), chevron on the right */
@@ -199,7 +199,7 @@ export const RowPill = styled.button<{ $tone?: 'neutral' | 'danger' | 'accent' }
   &:hover:not(:disabled) {
     background: ${({ $tone }) => ($tone === 'danger' ? 'var(--color-danger-subtle)' : $tone === 'accent' ? 'var(--color-accent-subtle)' : 'var(--bg-hover)')};
   }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 `;
 
@@ -225,7 +225,7 @@ export const PillChoiceBtn = styled.button<{ $active: boolean }>`
   background: transparent;
   cursor: pointer;
   &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /** A muted line under a row's value ("Sent to your account email.") */
@@ -349,7 +349,7 @@ const DisclosureBtn = styled.button<{ $open: boolean }>`
   cursor: pointer;
   svg { flex: none; color: var(--text-muted); transform: rotate(${({ $open }) => ($open ? '90deg' : '0deg')}); transition: transform 150ms; }
   &:hover svg { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 /** A titled row whose chevron opens more under it (Setup guide) */
@@ -448,7 +448,7 @@ export const QuietLink = styled.button<{ $danger?: boolean }>`
   cursor: pointer;
   white-space: nowrap;
   &:hover { color: ${({ $danger }) => ($danger ? 'var(--color-danger)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /** A note under a field with something on its right (a character count) */

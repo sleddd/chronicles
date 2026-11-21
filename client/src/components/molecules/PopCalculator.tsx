@@ -24,7 +24,7 @@ const Toggle = styled.button<{ $open: boolean }>`
   color: ${({ $open }) => ($open ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $open }) => ($open ? 'var(--color-accent-soft)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* A floating overlay, the one place a shadow is allowed */
@@ -89,7 +89,7 @@ const Key = styled.button<{ $kind?: 'op' | 'eq' | 'fn'; $wide?: boolean }>`
   color: ${({ $kind }) => ($kind === 'op' || $kind === 'eq' ? 'var(--color-accent-soft)' : $kind === 'fn' ? 'var(--text-muted)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { color: ${({ $kind }) => ($kind === 'op' || $kind === 'eq' ? 'var(--color-accent-link)' : 'var(--text-primary)')}; border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const LAYOUT: { key: CalcKey; kind?: 'op' | 'eq' | 'fn'; wide?: boolean; label?: string }[] = [

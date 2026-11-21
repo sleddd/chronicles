@@ -96,7 +96,7 @@ export const FoldBtn = styled.button<{ $folded: boolean }>`
   cursor: pointer;
   svg { transition: transform 150ms ease; transform: rotate(${({ $folded }) => ($folded ? 0 : 180)}deg); }
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 480px) { top: 19px; right: 14px; }
   ${({ $folded }) => ($folded ? 'top: 21px !important; right: -6px !important;' : '')}
 `;

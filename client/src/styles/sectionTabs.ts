@@ -65,7 +65,7 @@ export const SectionTab = styled.button<{ $active?: boolean }>`
     color: var(--text-secondary);
     border-bottom-color: var(--border-strong);
   }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 480px) { font-size: 14px; }
   /* On a wallpaper: white text with a soft shadow so it reads on any photo,
      the chosen one in full white over its accent underline */

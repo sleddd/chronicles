@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -206,6 +206,8 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listId = useId();
   const accentColor = useUIStore(s => s.accentColor) || DEFAULT_ACCENT_COLOR;
 
   const journalTopic = topics.find(isJournal);
@@ -222,8 +224,20 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
         setSearch('');
       }
     };
+    // Escape closes the list and puts focus back on the trigger
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
+      setSearch('');
+      triggerRef.current?.focus();
+    };
     document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('mousedown', handle);
+      document.removeEventListener('keydown', onKey, true);
+    };
   }, [open]);
 
   // Always alphabetical (case-insensitive), whatever order the topics are kept in
@@ -236,7 +250,16 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
 
   return (
     <Wrapper ref={wrapperRef}>
-      <Trigger $filled={filled ?? selectedId !== null} onClick={() => setOpen(!open)}>
+      <Trigger
+        ref={triggerRef}
+        type="button"
+        $filled={filled ?? selectedId !== null}
+        onClick={() => setOpen(!open)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-label={`Topic: ${selected ? selected.name : 'Journal'}`}
+      >
         {selected ? (
           <>
             {!hideIcon && <TopicIcon $color={accentColor}><TopicGlyph name={selected.icon} size={17} /></TopicIcon>}
@@ -258,36 +281,44 @@ export function TopicSelector({ selectedId, onSelect, topics, filled, hideIcon =
               onChange={setSearch}
               placeholder="Type to search topics..."
               debounceMs={0}
+              ariaLabel="Search topics"
+              autoFocus
             />
           </SearchWrapper>
-          <ItemList>
+          <ItemList id={listId} role="listbox" aria-label="Topics">
             {/* After flipping through topics: one tap back to the default (no topic = Journal) */}
             {!search && onClear && (
-              <ClearItem type="button" onClick={() => { onClear(); setOpen(false); setSearch(''); }}>
+              <ClearItem type="button" role="option" aria-selected={false} onClick={() => { onClear(); setOpen(false); setSearch(''); }}>
                 <span aria-hidden="true">×</span>
                 Clear
               </ClearItem>
             )}
             {!search && !noClearRow && !onClear && !(selected && !selected.extra && isJournal(selected)) && (
-              <ResetItem type="button" onClick={() => { onSelect(journal.id); setOpen(false); setSearch(''); }}>
+              <ResetItem type="button" role="option" aria-selected={false} onClick={() => { onSelect(journal.id); setOpen(false); setSearch(''); }}>
                 <span aria-hidden="true">×</span>
                 Clear topic<small>· back to Journal</small>
               </ResetItem>
             )}
             {filtered.length === 0 ? (
-              <EmptyMessage>No topics found</EmptyMessage>
+              <EmptyMessage role="status">No topics found</EmptyMessage>
             ) : (
-              filtered.map(t => (
+              filtered.map(t => {
+                const active = t.extra ? selectedExtra === t.extra : !selectedExtra && (selectedId === t.id || (selectedId === null && isJournal(t)));
+                return (
                 <Item
                   key={t.extra ? `x:${t.extra}` : t.id ?? 'journal'}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
                   data-pinned={journalFirst && !t.extra && isJournal(t) ? '' : undefined}
-                  $active={t.extra ? selectedExtra === t.extra : !selectedExtra && (selectedId === t.id || (selectedId === null && isJournal(t)))}
+                  $active={active}
                   onClick={() => { if (t.extra) onSelectExtra?.(t.extra); else onSelect(t.id); setOpen(false); setSearch(''); }}
                 >
                   <TopicIcon $color={accentColor}><TopicGlyph name={t.icon} size={15} /></TopicIcon>
                   {t.name}
                 </Item>
-              ))
+                );
+              })
             )}
           </ItemList>
         </Dropdown>

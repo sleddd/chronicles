@@ -69,7 +69,7 @@ const Tab = styled.button<{ $active?: boolean; $accent?: string }>`
   color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const TodayBtn = styled.button`

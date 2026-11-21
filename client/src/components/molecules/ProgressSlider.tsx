@@ -55,7 +55,7 @@ const Range = styled.input`
   margin: 0;
   opacity: 0;
   cursor: pointer;
-  &:focus-visible + ${Thumb} { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible + ${Thumb} { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   &:active + ${Thumb} { transform: scale(1.25); }
 `;
 

@@ -69,7 +69,7 @@ export const TodayBtn = styled.button`
   color: var(--text-secondary);
   cursor: pointer;
   &:hover { color: var(--text-primary); border-color: var(--border-strong); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   ${glassControl}
 `;
 

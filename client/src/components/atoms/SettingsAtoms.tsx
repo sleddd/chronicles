@@ -23,7 +23,7 @@ export const ActionButton = styled.button`
     cursor: pointer;
     transition: background 150ms, opacity 150ms;
     &:hover:not(:disabled) { background: var(--bg-hover); }
-    &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+    &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
     &:disabled { opacity: 0.5; cursor: not-allowed; }
   }
 `;

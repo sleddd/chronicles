@@ -100,7 +100,7 @@ const PeriodBtn = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
   /* Phones: short labels (Day, Wk, Mo, Yr) and a calendar icon for Custom */
   .short { display: none; }
   @media (max-width: 600px) {

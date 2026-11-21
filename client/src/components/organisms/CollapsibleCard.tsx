@@ -47,7 +47,7 @@ const Toggle = styled.button`
   font-weight: 300;
   line-height: 1.2;
   color: var(--text-secondary);
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
 `;
 
 const Chevron = styled.span<{ $open: boolean }>`

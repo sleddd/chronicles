@@ -1,3 +1,4 @@
+import { SkipLink } from '../atoms/SkipLink.js';
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import type { ReactNode } from 'react';
@@ -75,13 +76,14 @@ export function ContentTemplate({ children, hideSidebar, wallpaperHeight, wallpa
   const focusMode = useUIStore(s => s.editorFocusMode);
   return (
     <>
+      <SkipLink />
       <div data-print-hide><Background /></div>
       {!hideSidebar && !focusMode && <div data-print-hide><MobileChrome /></div>}
       <Layout $focusMode={focusMode}>
         {!hideSidebar && <div data-print-hide><Sidebar /></div>}
         <MainColumn>
           <div data-print-hide><Header /></div>
-          <Main><Wallpaper height={wallpaperHeight} solid={wallpaperSolid} />{children}</Main>
+          <Main id="main-content" tabIndex={-1}><Wallpaper height={wallpaperHeight} solid={wallpaperSolid} />{children}</Main>
         </MainColumn>
       </Layout>
     </>

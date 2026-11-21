@@ -7,6 +7,7 @@ import { glassPill } from '../../styles/wallpaper.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useMediaQuery } from '../../hooks/useMediaQuery.js';
+import { usePopover } from '../../hooks/usePopover.js';
 import { useTodayDoses } from '../../hooks/useTodayDoses.js';
 import { useRoutineChecklist } from '../../hooks/useRoutineChecklist.js';
 import { NAV_COMPACT_QUERY } from '../../styles/breakpoints.js';
@@ -84,7 +85,7 @@ const TickBtn = styled.button`
   color: var(--color-accent-soft);
   cursor: pointer;
   &:disabled { opacity: 0.5; cursor: wait; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* × — hides a reminder for today without ticking it */
@@ -97,7 +98,7 @@ const DismissBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 /* "Reminders" with the close × across from it */
@@ -119,7 +120,7 @@ const CloseBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 /* A section's head ("Due now", "Later today"): ruled above and below, with
@@ -169,7 +170,7 @@ const BarBell = styled.button`
   color: var(--text-secondary);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Wide screens: the bell in the app's top-right corner, over every signed-in
@@ -320,11 +321,11 @@ function Bell({ variant, trigger }: { variant: 'rail' | 'bar' | 'corner'; trigge
       const t = e.target as Node;
       if (!panelRef.current?.contains(t) && !btnRef.current?.contains(t)) close();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { close(); btnRef.current?.focus(); } };
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+    return () => { document.removeEventListener('mousedown', onDown); };
   }, [open]);
+  // Keyboard: into the panel on open, Escape back to the bell, focus leaving closes it
+  usePopover({ open: !!open, onClose: close, triggerRef: btnRef, panelRef });
 
   const tick = async (item: Item) => {
     if (item.kind === 'event' || item.kind === 'meeting') { close(); openInJournal((item.source as ReminderEvent).id); return; }

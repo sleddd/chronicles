@@ -37,6 +37,21 @@ describe('KanbanBoard', () => {
     fireEvent.click(screen.getByText('Fix filters'));
     expect(onOpen).toHaveBeenCalledWith(2);
   });
+
+  it('Enter opens a card, Space picks it up for dnd-kit without opening it', () => {
+    const onOpen = vi.fn();
+    renderWithTheme(<KanbanBoard columns={columns} noun="task" onOpen={onOpen} onMove={() => {}} />);
+    const card = screen.getByText('Fix filters').closest('[aria-roledescription]') as HTMLElement;
+    fireEvent.keyDown(card, { key: 'Enter', code: 'Enter' });
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    card.focus();
+    fireEvent.keyDown(card, { key: ' ', code: 'Space' });
+    // The keyboard sensor took it: the card is being dragged
+    expect(card).toHaveAttribute('aria-pressed', 'true');
+    // Enter drops it and doesn't open it
+    fireEvent.keyDown(card, { key: 'Enter', code: 'Enter' });
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('task board status', () => {

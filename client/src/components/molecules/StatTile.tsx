@@ -20,7 +20,7 @@ const Tile = styled.button<{ $selected?: boolean; $static?: boolean }>`
   cursor: ${({ $static }) => ($static ? 'default' : 'pointer')};
   transition: border-color 200ms ease;
   ${({ $static, $selected }) => (!$static && !$selected ? '&:hover { border-color: var(--border-card); }' : '')}
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 480px) { padding: 18px; }
 `;
 

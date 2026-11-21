@@ -151,7 +151,7 @@ const Fold = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const FoldGap = styled.span`
@@ -174,7 +174,7 @@ const Name = styled.button<{ $child?: boolean; $done?: boolean }>`
   white-space: nowrap;
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   small { margin-left: 8px; font-size: 13px; color: var(--text-muted); text-decoration: none; display: inline-block; }
 `;
 

@@ -31,7 +31,7 @@ const Toggle = styled.button`
   small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-muted); }
   svg { color: var(--text-muted); transition: transform 150ms; }
   &[aria-expanded='true'] svg { transform: rotate(180deg); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
 `;
 
 const Body = styled.div`

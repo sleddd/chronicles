@@ -59,7 +59,7 @@ const TileBtn = styled.button<{ $on: boolean }>`
   color: ${({ $on }) => ($on ? 'var(--text-primary)' : 'var(--text-secondary)')};
   & > span:first-child { color: ${({ $on }) => ($on ? 'var(--color-accent)' : 'var(--text-muted)')}; }
   & > span:last-child { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; border-radius: 12px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 12px; }
 `;
 
 /* A playing sound's volume: a thin accent slider under its name */

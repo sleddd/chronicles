@@ -97,8 +97,9 @@ const Search = styled.label<{ $phone: boolean }>`
   padding: 0 14px;
   border-radius: 8px;
   color: var(--text-muted);
-  /* No accent ring while typing in the search (the caret shows where you are) */
+  /* No accent ring on the input itself — a neutral ring round the search shows where focus is */
   input:focus, input:focus-visible { outline: none; box-shadow: none; }
+  &:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   input {
     flex: 1;
     min-width: 0;
@@ -158,7 +159,7 @@ const Pick = styled.label<{ $set: boolean; $phone: boolean }>`
     cursor: pointer;
   }
   option { color: var(--text-primary); background: var(--bg-surface); }
-  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: -2px; border-radius: 6px; }
+  &:focus-within { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 6px; }
 `;
 
 /* What sits after the pickers (the owner's grid | list switch), ruled off;
@@ -194,7 +195,7 @@ const ViewBtn = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const TypeRow = styled(Chips)<{ $phone: boolean; $roomy?: boolean }>`

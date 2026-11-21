@@ -113,7 +113,7 @@ const BoxBtn = styled.button`
   cursor: pointer;
   &:disabled { color: var(--text-muted); cursor: default; }
   &:not(:disabled):hover { background: color-mix(in srgb, var(--text-muted) 22%, transparent); }
-  &:focus-within, &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-within, &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const LogBtn = styled(BoxBtn)`
@@ -176,7 +176,7 @@ const SwitchBtn = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 /* date | time | amount */
@@ -248,7 +248,7 @@ const MealTab = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; border-radius: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 2px; }
 `;
 
 const MealFooter = styled.div`

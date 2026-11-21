@@ -40,8 +40,8 @@
 .ch-btn--accentSoft { background: var(--color-accent-subtle); color: var(--color-accent-text); }
 .ch-btn--accentSoft:hover:not(:disabled) { background: color-mix(in oklab, var(--color-accent-subtle) 80%, var(--color-accent)); }
 
-.ch-btn--danger { background: var(--color-danger); color: #fff; }
-.ch-btn--danger:hover:not(:disabled) { background: color-mix(in oklab, var(--color-danger) 88%, black); }
+.ch-btn--danger { background: #c23b33; color: #fff; } /* a fixed red, white text 5:1 in both themes */
+.ch-btn--danger:hover:not(:disabled) { background: color-mix(in oklab, #c23b33 88%, black); }
 
 .ch-btn__icon { display: inline-flex; width: 1.05em; height: 1.05em; flex: none; }
 .ch-btn__icon svg { width: 100%; height: 100%; }

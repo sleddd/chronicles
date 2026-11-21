@@ -401,7 +401,7 @@ const Table = styled.table<{ $min: number }>`
 const ItemRow = styled.tr`
   cursor: pointer;
   &:hover td { background: var(--bg-row-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
   /* Estimate and Delete always show — not only on hover */
 `;
 
@@ -601,7 +601,7 @@ const DayRow = styled.tr<{ $sel?: boolean }>`
   cursor: pointer;
   td { background: ${({ $sel }) => ($sel ? 'var(--bg-row-hover)' : 'transparent')}; }
   &:hover td { background: var(--bg-row-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
   td.day { white-space: nowrap; }
   td.list {
     min-width: 220px;
@@ -702,7 +702,7 @@ const WindowBtn = styled.button<{ $active: boolean }>`
   cursor: pointer;
   white-space: nowrap;
   &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
   @media (max-width: 480px) { padding: 0 9px; font-size: 13px; }
 `;
 

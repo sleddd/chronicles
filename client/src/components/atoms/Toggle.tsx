@@ -31,6 +31,7 @@ const Track = styled.span<{ $checked: boolean }>`
   flex-shrink: 0;
   background: ${({ $checked }) => $checked ? 'var(--color-accent)' : 'var(--border-strong)'};
   transition: background 180ms ease;
+  ${HiddenInput}:focus-visible + & { outline: 2px solid var(--focus-ring, #80868f); outline-offset: 2px; }
 `;
 
 const Thumb = styled.span<{ $checked: boolean }>`
@@ -54,6 +55,8 @@ export function Toggle({ checked, onChange, label, ...rest }: ToggleProps) {
   return (
     <Label>
       <HiddenInput
+        role="switch"
+        aria-checked={checked}
         aria-label={(rest['aria-label'] as string | undefined) ?? label}
         checked={checked}
         onChange={e => onChange(e.target.checked)}

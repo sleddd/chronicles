@@ -85,7 +85,7 @@ const Stop = styled.button`
   color: var(--color-accent-soft);
   cursor: pointer;
   &:hover { color: var(--color-accent-link); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 export function RunningTimer() {

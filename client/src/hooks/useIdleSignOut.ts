@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { auth as authApi, lastRequestTime } from '../services/api.js';
@@ -13,6 +13,8 @@ export { ACTIVITY_STORE_KEY, IDLE_SIGN_OUT_MS, isIdle };
 const PING_AFTER_MS = 10 * 60 * 1000;
 const WRITE_EVERY_MS = 15_000;
 const CHECK_EVERY_MS = 10_000;
+/** How long before the sign-out the warning shows, with Stay signed in (WCAG 2.2.1) */
+export const IDLE_WARNING_MS = 60_000;
 
 /**
  * Ends the session after 15 minutes with nobody at any Chronicles tab.
@@ -31,8 +33,14 @@ const CHECK_EVERY_MS = 10_000;
  * Switching tabs does nothing by itself. Nothing typed is lost: saved entries
  * autosave, and unsaved writing is sealed as it's typed and offered back after
  * the next sign-in (services/drafts.ts).
+ *
+ * A minute before, it warns (returns when the sign-out will happen, else null):
+ * the warning's Stay signed in — or anything else done on the page — counts as
+ * someone being here and puts it off.
  */
-export function useIdleSignOut(): void {
+export function useIdleSignOut(): { signOutAt: number | null; stay: () => void } {
+  const [signOutAt, setSignOutAt] = useState<number | null>(null);
+  const stayRef = useRef<() => void>(() => {});
   const { isAuthenticated } = useAuth();
   const { isUnlocked } = useEncryption();
   const endSession = useEndSession();
@@ -54,9 +62,25 @@ export function useIdleSignOut(): void {
       // Anything still being typed is sealed first (it is also sealed as it's typed)
       void flushDrafts().catch(() => {}).then(() => endRef.current());  // signed out quietly: no note on the sign-in page
     };
+    let warnTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearWarning = () => {
+      if (warnTimer) { clearTimeout(warnTimer); warnTimer = null; }
+      setSignOutAt(null);
+    };
     const check = (): boolean => {
       if (ending) return true;
-      if (!isIdle(Date.now(), lastHere, lastActivity())) return false;
+      const now = Date.now();
+      if (!isIdle(now, lastHere, lastActivity())) {
+        // Within the last minute: warn, and look again right when it would end
+        const at = Math.max(lastHere, lastActivity()) + IDLE_SIGN_OUT_MS;
+        if (at - now <= IDLE_WARNING_MS) {
+          setSignOutAt(at);
+          if (!warnTimer) warnTimer = setTimeout(() => { warnTimer = null; check(); }, Math.max(0, at - now) + 50);
+        } else if (warnTimer) clearWarning();
+        else setSignOutAt(null);
+        return false;
+      }
+      clearWarning();
       end();
       return true;
     };
@@ -65,6 +89,7 @@ export function useIdleSignOut(): void {
       if (check()) return;
       const now = Date.now();
       lastHere = now;
+      if (warnTimer) clearWarning();
       if (lastWrite === 0 || now - lastWrite > WRITE_EVERY_MS) { lastWrite = now; markActivity(now); }
       if (now - lastPing > PING_AFTER_MS && now - lastRequestTime() > PING_AFTER_MS) {
         lastPing = now;
@@ -87,6 +112,8 @@ export function useIdleSignOut(): void {
     window.addEventListener('focus', back);
     window.addEventListener('pageshow', back);
     const timer = setInterval(check, CHECK_EVERY_MS);
+    // Stay signed in: someone is here, and it's written for the other tabs at once
+    stayRef.current = () => { lastWrite = 0; active(); };
 
     return () => {
       events.forEach(e => document.removeEventListener(e, active, { capture: true }));
@@ -95,6 +122,10 @@ export function useIdleSignOut(): void {
       window.removeEventListener('focus', back);
       window.removeEventListener('pageshow', back);
       clearInterval(timer);
+      if (warnTimer) clearTimeout(warnTimer);
+      setSignOutAt(null);
     };
   }, [isAuthenticated, isUnlocked]);
+
+  return { signOutAt, stay: () => stayRef.current() };
 }

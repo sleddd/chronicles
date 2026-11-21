@@ -158,8 +158,35 @@ export const DarkBand = styled.section`
   color: var(--text-secondary);
 `;
 
+/* "Skip to content": hidden until reached with Tab, then a pill at the top left */
+const SkipLink = styled.a`
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  z-index: 100;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  transform: translateY(-200%);
+  &:focus, &:focus-visible { transform: none; outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+`;
+
+/* Where the skip link lands: the start of the hero, just past the header */
+const SkipTarget = styled.span`
+  display: block;
+  height: 0;
+  &:focus { outline: none; }
+`;
+
 const Page = styled.div`
   ${LIGHT_TOKENS}
+  position: relative;
   min-height: 100vh;
   background: var(--bg-app);
   color: var(--text-secondary);
@@ -461,6 +488,15 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
   }, []);
   return (
     <Page ref={pageRef}>
+      <SkipLink
+        href="#main-content"
+        onClick={e => {
+          e.preventDefault();
+          document.getElementById('main-content')?.focus();
+        }}
+      >
+        Skip to content
+      </SkipLink>
       <HeroBand>
       <Header>
         <HeaderRow>
@@ -488,6 +524,7 @@ export function LandingTemplate({ signedIn, hero, children }: LandingTemplatePro
           )}
         </HeaderRow>
       </Header>
+      <SkipTarget id="main-content" tabIndex={-1} />
       {hero}
       </HeroBand>
       <main>{children}</main>

@@ -79,7 +79,7 @@ const DayBtn = styled.button<{ $today: boolean }>`
   color: ${p => (p.$today ? 'var(--on-accent)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { color: ${p => (p.$today ? 'var(--on-accent)' : 'var(--color-accent-text)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 768px) { margin: 0; }
 `;
 
@@ -109,7 +109,7 @@ const ItemBtn = styled.button<{ $event: boolean; $done: boolean }>`
   cursor: pointer;
   small { margin-right: 5px; font-size: 12px; color: var(--text-muted); }
   &:hover { color: var(--color-accent-text); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const More = styled.button`
@@ -122,7 +122,7 @@ const More = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--color-accent-text); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 /* Phones: one dot for a day with anything on it, like the Calendar's month */

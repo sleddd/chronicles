@@ -52,7 +52,7 @@ const Bubble = styled.button<{ $pos: Pos }>`
   cursor: pointer;
   transition: transform 150ms ease-out, background 150ms;
   &:hover { background: var(--color-accent-hover, var(--color-accent)); transform: translateY(-1px); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
   @media (max-width: 640px) { right: 16px; bottom: ${({ $pos }) => $pos.bubblePhone}; }
   @media (prefers-reduced-motion: reduce) { transition: none; &:hover { transform: none; } }
   @media print { display: none; }
@@ -382,6 +382,7 @@ export function AiChat() {
   const disclosedAtRef = useRef(Date.now());
   // The medical note shows once a session (memory only; Clear starts again)
   const medicalNotedRef = useRef(false);
+  const bubbleRef = useRef<HTMLButtonElement>(null);
   // Safety (memory only, kept through Clear, gone with the session): once a
   // risk sign appears the AI answers under the safe conversation rules; an
   // urgent sign pins the crisis card at the top for the rest of the session
@@ -434,7 +435,8 @@ export function AiChat() {
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    // Escape closes and puts focus back on the bubble, so a keyboard user isn't left nowhere
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); bubbleRef.current?.focus(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
@@ -799,6 +801,7 @@ export function AiChat() {
         </Panel>
       )}
       <Bubble
+        ref={bubbleRef}
         $pos={pos}
         type="button"
         onClick={() => setOpen(o => !o)}

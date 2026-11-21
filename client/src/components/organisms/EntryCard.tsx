@@ -77,7 +77,7 @@ const TopicButton = styled.button<{ $active?: boolean }>`
   /* Accent on the open / hovered row (--row-topic, set by styles/entryRow) */
   color: var(--row-topic, var(--text-meta));
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* The same label when it isn't a button: accent and bold on the open entry */
@@ -93,13 +93,16 @@ const EndCol = styled.div`
   color: var(--text-tertiary);
 `;
 
-const BookmarkIcon = styled.span`
+const BookmarkIcon = styled.button`
+  all: unset;
+  display: inline-flex;
   color: var(--color-accent);
   font-size: 11px;
   line-height: 1;
   flex-shrink: 0;
   cursor: pointer;
   &:hover { opacity: 0.7; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 export function EntryCard({
@@ -112,8 +115,24 @@ export function EntryCard({
   const d = new Date(date);
   const title = extractTitle(content, previewText);
 
+  const open = () => { clearRowHover(); onClick(); };
   const inner = (
-    <Row $active={active} $hint={hint} $noTopic={!topicName} onClick={() => { clearRowHover(); onClick(); }} {...rowHoverHandlers}>
+    <Row
+      $active={active}
+      $hint={hint}
+      $noTopic={!topicName}
+      role="button"
+      tabIndex={0}
+      aria-label={title}
+      aria-current={active ? 'true' : undefined}
+      onClick={open}
+      onKeyDown={e => {
+        // Only the row itself: Enter / Space on the topic or bookmark button stays theirs
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+      }}
+      {...rowHoverHandlers}
+    >
       {topicName && <span style={{ minWidth: 0, display: 'flex' }}>
         {topicName && onTopicClick && topicId != null ? (
           <TopicButton
@@ -139,8 +158,11 @@ export function EntryCard({
         )}
         {isFavorite && (
           <BookmarkIcon
+            type="button"
             onClick={e => { e.stopPropagation(); onToggleBookmark?.(id, false); }}
             title="Remove bookmark"
+            aria-label="Remove bookmark"
+            aria-pressed={true}
           >
             <Icon name="bookmark" size={14} strokeWidth={2} />
           </BookmarkIcon>

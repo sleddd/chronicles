@@ -95,4 +95,33 @@ describe('EntryCard', () => {
     renderWithTheme(<EntryCard {...defaultProps} isCompleted />);
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
+
+  it('opens the entry from the keyboard with Enter or Space', () => {
+    const onClick = vi.fn();
+    renderWithTheme(<EntryCard {...defaultProps} onClick={onClick} />);
+    const row = screen.getByRole('button', { name: 'This is a journal entry' });
+    expect(row).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(row, { key: 'Enter' });
+    fireEvent.keyDown(row, { key: ' ' });
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
+  it('Enter on the topic button filters without opening the entry', () => {
+    const onClick = vi.fn();
+    const onTopicClick = vi.fn();
+    renderWithTheme(<EntryCard {...defaultProps} topicName="Work" topicId={3} onClick={onClick} onTopicClick={onTopicClick} />);
+    fireEvent.keyDown(screen.getByTitle('Show only Work'), { key: 'Enter' });
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('the bookmark is a real button', () => {
+    const onToggle = vi.fn();
+    const onClick = vi.fn();
+    renderWithTheme(<EntryCard {...defaultProps} isFavorite onToggleBookmark={onToggle} onClick={onClick} />);
+    const b = screen.getByRole('button', { name: 'Remove bookmark' });
+    expect(b).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(b);
+    expect(onToggle).toHaveBeenCalledWith(1, false);
+    expect(onClick).not.toHaveBeenCalled();
+  });
 });

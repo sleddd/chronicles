@@ -36,7 +36,7 @@ const Trigger = styled.button<{ $open: boolean }>`
   color: ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--text-secondary)')};
   cursor: pointer;
   &:hover { border-color: ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--border-strong)')}; color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   ${glassControl}
 `;
 

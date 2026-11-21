@@ -114,7 +114,7 @@ const MealRow = styled.button<{ $link: boolean }>`
   cursor: ${({ $link }) => ($link ? 'pointer' : 'default')};
   transition: background 120ms ease;
   &:hover { background: var(--bg-row-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
   @media (max-width: 480px) { grid-template-columns: 110px minmax(0, 1fr); }
 `;
 
@@ -230,7 +230,7 @@ const ItemBtn = styled.button<{ $done: boolean }>`
   font-size: 16px;
   color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'var(--text-secondary)')};
   text-decoration: ${({ $done }) => ($done ? 'line-through' : 'none')};
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 4px; }
 `;
 
 const Tick = styled.span<{ $done: boolean }>`

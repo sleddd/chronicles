@@ -1,3 +1,4 @@
+import { SkipLink } from '../atoms/SkipLink.js';
 import styled from 'styled-components';
 import { Wallpaper } from '../organisms/Wallpaper.js';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
@@ -38,7 +39,7 @@ const MainColumn = styled.div`
   }
 `;
 
-const Body = styled.div`
+const Body = styled.main`
   flex: 1;
   overflow-y: auto;
   background: var(--paper);
@@ -79,13 +80,14 @@ interface SettingsTemplateProps {
 export function SettingsTemplate({ title, children }: SettingsTemplateProps) {
   return (
     <>
+      <SkipLink />
       <Background />
       <div data-print-hide><MobileChrome /></div>
       <Layout>
         <div data-print-hide><Sidebar /></div>
         <MainColumn>
           <Header />
-          <Body>
+          <Body id="main-content" tabIndex={-1}>
             <Wallpaper />
             <Content>
               {title && (

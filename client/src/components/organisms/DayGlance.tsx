@@ -12,6 +12,7 @@ import { cardLabel } from '../../styles/cardLabel.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { usePlanData } from '../../hooks/usePlanData.js';
 import { useEncryptedSetting } from '../../hooks/useEncryptedSetting.js';
+import { usePopover } from '../../hooks/usePopover.js';
 import { useSaveFields } from '../../hooks/useSaveFields.js';
 import { useCreateEntry } from '../../hooks/useCreateEntry.js';
 import { useOpenInJournal } from '../../hooks/useOpenInJournal.js';
@@ -177,7 +178,7 @@ const HeadStat = styled.button<{ $due?: boolean }>`
   /* "· 5 PM due": quiet grey */
   strong { font-weight: 400; color: var(--text-muted); }
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 /* Opens the day in the Planner: just the icon */
@@ -192,7 +193,7 @@ const ExpandBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 const RoundBtn = styled.button`
@@ -207,7 +208,7 @@ const RoundBtn = styled.button`
   color: var(--text-secondary);
   cursor: pointer;
   &:hover { color: var(--text-primary); border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* The week's month in full, the first cell of the week row (left of the days) */
@@ -281,7 +282,7 @@ const StripBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const WeekDay = styled.button<{ $on: boolean; $today: boolean }>`
@@ -306,7 +307,7 @@ const WeekDay = styled.button<{ $on: boolean; $today: boolean }>`
   .today-day { display: none; }
   ${NAV_COMPACT} { .today-word { display: none; } .today-day { display: inline; } }
   &:hover .day > span { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   /* Nothing ever spills out of a day's box into the next one's */
   overflow: hidden;
   /* Phones / tablets: the weekday over the date, centred, with less padding — side by side they
@@ -442,7 +443,7 @@ const AllDayTile = styled.button`
   &:hover { color: var(--text-primary); }
   /* A holiday: not an entry, so nothing to open */
   &[data-holiday] { cursor: default; &:hover { color: var(--text-secondary); } }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const Hours = styled.div`
@@ -506,7 +507,7 @@ const BlockBtn = styled.button<{ $kind: Kind }>`
   /* The time and place (an address can run to two or three lines) */
   small { margin-top: 4px; font-size: 13px; font-weight: 400; font-style: italic; line-height: 1.55; color: var(--text-muted); }
   &:hover { border-color: var(--border-default); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   /* A task card: room on the left for its tick; struck through once done */
   &[data-task='true'] { padding-left: 44px; }
   &[data-done='true'] .title { text-decoration: line-through; color: var(--text-tertiary); }
@@ -529,7 +530,7 @@ const CardTick = styled.button`
   cursor: pointer;
   touch-action: manipulation;
   &:hover { background: var(--bg-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 /* Schedule's +: just the plus in the accent (no circle), across from the heading */
@@ -548,7 +549,7 @@ const AddBtn = styled.button`
   color: var(--color-accent-soft, var(--color-accent));
   cursor: pointer;
   &:hover { color: var(--color-accent); background: var(--bg-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* The + opens this under the heading: one outlined box (what | time), then Add / Cancel */
@@ -689,7 +690,7 @@ const Marker = styled.button<{ $due: boolean; $ahead?: boolean }>`
   transform: translateY(-50%);
   cursor: pointer;
   z-index: 2;
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Now, on today: a coral line with a dot */
@@ -835,7 +836,7 @@ const PopClose = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); background: var(--bg-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const PopRow = styled.div`
@@ -872,15 +873,20 @@ const PopLink = styled.button`
 
 /* ── The list a marker opens ── */
 
-function MarkerList({ anchor, title, onClose, children }: { anchor: DOMRect; title: string; onClose: () => void; children: ReactNode }) {
+function MarkerList({ anchor, title, onClose, triggerRef, children }: {
+  anchor: DOMRect; title: string; onClose: () => void;
+  /** The marker that opened it (focus goes back to it) */
+  triggerRef: React.RefObject<HTMLElement | null>;
+  children: ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const away = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) onClose(); };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     const t = setTimeout(() => document.addEventListener('mousedown', away));
-    document.addEventListener('keydown', esc);
-    return () => { clearTimeout(t); document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', away); };
   }, [onClose]);
+  // Keyboard: into the list, Escape back to the marker, focus leaving closes it
+  usePopover({ open: true, onClose, triggerRef, panelRef: ref });
   // Placed again when the window changes size (a phone turning, a keyboard opening)
   const [, setSize] = useState(0);
   useEffect(() => {
@@ -1004,21 +1010,33 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     setDrag(null);
     if (!d) return;
     if (!d.moved) { if (d.mode === 'move') openInJournal(d.b.id); return; }
-    if (d.start === d.b.start && d.end === d.b.end) return;
+    saveCardTimes(d.b, d.mode, d.start, d.end);
+  };
+  // Where a moved or stretched card is saved (a drag, or the arrow keys)
+  const saveCardTimes = (b: Block, mode: 'move' | 'end', start: number, end: number) => {
+    if (start === b.start && end === b.end) return;
     const failed = () => showFlash('Couldn’t save that time, so it’s back where it was. Try again.');
-    if (d.b.kind === 'task') {
-      const t = dayTasks.find(x => x.id === d.b.id);
+    if (b.kind === 'task') {
+      const t = dayTasks.find(x => x.id === b.id);
       if (!t) return;
-      const fields = d.mode === 'move'
-        ? startPatch(t.fields, d.start) // a same-day end time moves with it
-        : lengthPatch(t.fields, (d.end - d.start) / 60);
+      const fields = mode === 'move'
+        ? startPatch(t.fields, start) // a same-day end time moves with it
+        : lengthPatch(t.fields, (end - start) / 60);
       void saveFields(t.entry, fields).then(ok => { if (!ok) failed(); });
       return;
     }
-    const entry = entries.find(x => x.id === d.b.id);
+    const entry = entries.find(x => x.id === b.id);
     if (!entry) return;
     const cf = ((entry.metadata as Record<string, unknown> | undefined)?._customFields as Record<string, unknown>) ?? {};
-    void saveFields(entry, { ...cf, startTime: hhmm(d.start), endTime: hhmm(Math.min(d.end, 24 * 60 - 1)) }).then(ok => { if (!ok) failed(); });
+    void saveFields(entry, { ...cf, startTime: hhmm(start), endTime: hhmm(Math.min(end, 24 * 60 - 1)) }).then(ok => { if (!ok) failed(); });
+  };
+  // A focused card: ArrowUp / ArrowDown move it 15 minutes earlier / later
+  const onCardKey = (b: Block, e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+    const len = b.end - b.start;
+    const start = Math.max(0, Math.min(24 * 60 - len, b.start + (e.key === 'ArrowUp' ? -15 : 15)));
+    saveCardTimes(b, 'move', start, start + len);
   };
   const toggleEvening = () => setEveningOpen(v => {
     try { localStorage.setItem(EVENING_KEY, v ? '0' : '1'); } catch { /* per browser only */ }
@@ -1299,7 +1317,11 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   ].slice(0, 5);
 
   const [open, setOpen] = useState<{ kind: 'dose' | 'bill' | 'meds'; key?: string; rect: DOMRect } | null>(null);
-  const openFrom = (kind: 'dose' | 'bill' | 'meds', e: React.MouseEvent<HTMLElement>, key?: string) => setOpen({ kind, key, rect: e.currentTarget.getBoundingClientRect() });
+  const markerRef = useRef<HTMLElement | null>(null);
+  const openFrom = (kind: 'dose' | 'bill' | 'meds', e: React.MouseEvent<HTMLElement>, key?: string) => {
+    markerRef.current = e.currentTarget;
+    setOpen({ kind, key, rect: e.currentTarget.getBoundingClientRect() });
+  };
 
   /* Schedule's +: a task planned for the chosen day, at a time (blank = it follows the day's order) */
   const [adding, setAdding] = useState(false);
@@ -1359,17 +1381,32 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     if (!c) return;
     const at = e.type === 'pointercancel' ? null : timeAtPoint(e.clientX, e.clientY);
     if (at === null) return;
-    const t = tasks.find(x => x.id === c.id);
-    if (!t) return;
+    void planAt(c.id, at);
+  };
+  // Put a task on this day's schedule at a time (the drop, or the keyboard's next quarter hour)
+  const planAt = async (id: number, at: number) => {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return false;
     const fields: Record<string, unknown> = { ...t.fields, scheduledDate: day, scheduledTime: hhmm(at) };
     // An idea from the backlog becomes a planned task once it's on the schedule
     if (t.fields.isBacklog) Object.assign(fields, taskFieldsForStatus('todo'));
-    void saveFields(t.entry, fields).then(ok => { if (!ok) showFlash('Couldn’t put that task on the schedule. Try again.'); });
+    const ok = await saveFields(t.entry, fields);
+    if (!ok) showFlash('Couldn’t put that task on the schedule. Try again.');
+    return ok;
+  };
+  // The keyboard's stand-in for a drag: today the next quarter hour, another day 9 AM (as Schedule's + does)
+  const keyAt = isToday ? Math.min(23 * 60 + 45, Math.ceil((nowMins + 1) / 15) * 15) : 9 * 60;
+  const planFromKeys = async (t: { id: number; title: string }) => {
+    if (keyAt < MORNING && !morningOpen) toggleMorning();
+    if (keyAt >= EVENING && !eveningOpen) toggleEvening();
+    if (await planAt(t.id, keyAt)) showFlash(`Planned “${t.title}” for ${clock(keyAt)} ${dayWord}.`);
   };
   const carryProps = (t: { id: number; title: string }) => ({
     type: 'button' as const,
-    'aria-label': `Drag “${t.title}” onto the schedule`,
+    'aria-label': `Drag “${t.title}” onto the schedule, or press Enter to plan it for ${clock(keyAt)}`,
     title: 'Drag onto the schedule',
+    // A click with no pointer behind it (Enter, Space, a screen reader) plans it at once
+    onClick: (e: React.MouseEvent) => { if (e.detail === 0) void planFromKeys(t); },
     onPointerDown: (e: React.PointerEvent) => onCarryDown(t, e),
     onPointerMove: onCarryMove,
     onPointerUp: onCarryUp,
@@ -1576,6 +1613,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                       onPointerDown={e => onCardDown(b, 'move', e)} onPointerMove={onCardMove} onPointerUp={onCardUp} onPointerCancel={onCardUp}
                       // The keyboard's Enter / Space (no pointer) opens it
                       onClick={e => { if (e.detail === 0) openInJournal(b.id); }}
+                      onKeyDown={e => onCardKey(b, e)}
+                      aria-keyshortcuts="ArrowUp ArrowDown"
                       title={`${b.title} · ${KIND_NAME[b.kind]} — drag to move, drag its foot to stretch`}>
                       {/* The card's words, measured so the schedule makes room for all of them */}
                       <span className="body" ref={el => { if (el) cardBodies.current.set(b.key, el); else cardBodies.current.delete(b.key); }}>
@@ -1651,7 +1690,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
         document.body,
       )}
       {open?.kind === 'bill' && (
-        <MarkerList anchor={open.rect} title={`Bills due ${dayWord}`} onClose={() => setOpen(null)}>
+        <MarkerList anchor={open.rect} triggerRef={markerRef} title={`Bills due ${dayWord}`} onClose={() => setOpen(null)}>
           {dayBills.map(b => (
             <PopRow key={b.id}><span>{b.name}<small>{formatCents(b.amountCents)}</small></span></PopRow>
           ))}
@@ -1659,13 +1698,13 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
         </MarkerList>
       )}
       {open?.kind === 'dose' && (
-        <MarkerList anchor={open.rect} title={`Medications · ${clock(minutesOf(open.key) ?? 0)}`} onClose={() => setOpen(null)}>
+        <MarkerList anchor={open.rect} triggerRef={markerRef} title={`Medications · ${clock(minutesOf(open.key) ?? 0)}`} onClose={() => setOpen(null)}>
           {(doses.groups.find(g => g.time === open.key)?.doses ?? []).map(doseRow)}
           <PopLink type="button" onClick={() => navigate('/health/meds')}>Med list</PopLink>
         </MarkerList>
       )}
       {open?.kind === 'meds' && (
-        <MarkerList anchor={open.rect} title={`Medications ${dayWord}`} onClose={() => setOpen(null)}>
+        <MarkerList anchor={open.rect} triggerRef={markerRef} title={`Medications ${dayWord}`} onClose={() => setOpen(null)}>
           {doses.groups.flatMap(g => g.doses).map(doseRow)}
           {asNeededShown && (
             <>

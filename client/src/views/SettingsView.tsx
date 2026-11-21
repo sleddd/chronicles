@@ -1446,7 +1446,7 @@ export function SettingsView() {
             <SettingsRow
               title={feat.title}
               description={feat.description}
-              action={<Toggle checked={features[feat.key] ?? false} onChange={v => handleFeatureToggle(feat.key, v)} activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'} />}
+              action={<Toggle aria-label={feat.title} checked={features[feat.key] ?? false} onChange={v => handleFeatureToggle(feat.key, v)} activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'} />}
             />
             {feat.key === 'financeEnabled' && (
               <FinanceDisclaimer role="note">
@@ -1464,6 +1464,7 @@ export function SettingsView() {
                 description="Add period and flow tracking to the daily wellness check-in"
                 action={
                   <Toggle
+                    aria-label="Cycle tracking"
                     checked={cycleTrackingEnabled}
                     onChange={handleCycleTrackingToggle}
                     activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'}

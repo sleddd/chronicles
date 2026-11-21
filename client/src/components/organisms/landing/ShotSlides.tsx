@@ -112,7 +112,7 @@ export function ShotSlides({ slides }: { slides: Slide[] }) {
 
   const [w, h] = slides[index].size;
   return (
-    <div aria-roledescription="carousel" aria-label={slides.map(s => s.alt).join(' and ')}
+    <div role="group" aria-roledescription="carousel" aria-label={slides.map(s => s.alt).join(' and ')}
       onKeyDown={e => { if (e.key === 'ArrowRight') go(index + 1); if (e.key === 'ArrowLeft') go(index - 1); }}>
       <Stage {...swipe}>
         <Device>

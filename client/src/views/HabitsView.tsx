@@ -87,7 +87,7 @@ const NameBtn = styled.button`
   b { font-family: var(--font-display); font-size: 20px; font-weight: 300; line-height: 1.25; color: var(--text-primary); overflow-wrap: anywhere; }
   small { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
   &:hover b { color: var(--color-accent-link); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 `;
 
 /* The week: a letter over a tick for each day */
@@ -125,7 +125,7 @@ const TickBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:disabled { cursor: default; opacity: 0.35; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const Off = styled.span`

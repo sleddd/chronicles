@@ -61,9 +61,13 @@ interface SearchInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   debounceMs?: number;
+  /** The box's accessible name. */
+  ariaLabel?: string;
+  /** Focus the box as soon as it shows. */
+  autoFocus?: boolean;
 }
 
-export function SearchInput({ value, onChange, placeholder = 'Search...', debounceMs = 200 }: SearchInputProps) {
+export function SearchInput({ value, onChange, placeholder = 'Search...', debounceMs = 200, ariaLabel = 'Search entries', autoFocus = false }: SearchInputProps) {
   const [local, setLocal] = useState(value);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -83,10 +87,11 @@ export function SearchInput({ value, onChange, placeholder = 'Search...', deboun
         value={local}
         onChange={e => handleChange(e.target.value)}
         placeholder={placeholder}
-        aria-label="Search entries"
+        aria-label={ariaLabel}
+        autoFocus={autoFocus}
       />
       {local && (
-        <ClearButton onClick={() => { setLocal(''); onChange(''); }} aria-label="Clear search">
+        <ClearButton type="button" onClick={() => { setLocal(''); onChange(''); }} aria-label="Clear search">
           <Icon name="x" size={12} strokeWidth={2} />
         </ClearButton>
       )}

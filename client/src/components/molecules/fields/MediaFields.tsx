@@ -98,7 +98,7 @@ const Candidate = styled.button<{ $chosen: boolean }>`
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  &:focus-visible img { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible img { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const ProgressWord = styled.span`
@@ -223,7 +223,7 @@ const OpenLink = styled.a`
   border-radius: 6px;
   color: var(--color-accent-link);
   &:hover { color: var(--color-accent); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 export function MediaFields({ values, onChange, onAiDetails, allTags, onRenameTag, onRemoveTag }: MediaFieldsProps) {

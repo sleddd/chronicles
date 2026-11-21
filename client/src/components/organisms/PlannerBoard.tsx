@@ -12,6 +12,9 @@ import { usePagePan } from '../../hooks/usePagePan.js';
 import { Kicker, CardTitle, Chip } from './KanbanBoard.js';
 import { clampHours, hoursLabel, layoutDay } from '../../utils/planner.js';
 
+/* Keyboard drag: Space starts and ends it, so Enter is free to open a card */
+const BOARD_KEYS = { start: ['Space'], cancel: ['Escape'], end: ['Space', 'Enter'] };
+
 /* The week / day planner: an Unscheduled list beside the days. Each day is ONE
    lane, with the hours marked down the left. Its tasks sit one after another
    in the day's order (new ones land by priority), each as tall as its length in
@@ -137,7 +140,7 @@ const FoldBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 /* Folded: a narrow strip — the button to open it over its name read sideways (still somewhere to drop a card) */
@@ -298,7 +301,7 @@ const DayName = styled.button<{ $today: boolean }>`
   color: ${({ $today }) => ($today ? 'var(--color-accent-soft)' : 'var(--text-primary)')};
   cursor: ${({ disabled }) => (disabled ? 'default' : 'pointer')};
   &:hover:not(:disabled) { color: var(--color-accent-link); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* An all-day event under the day's name */
@@ -314,7 +317,7 @@ const AllDay = styled.button`
   overflow-wrap: anywhere;
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* The hours down the left: each hour's name at its line */
@@ -380,7 +383,7 @@ const EventBlock = styled.button`
   cursor: pointer;
   small { font-size: 12px; color: var(--text-muted); }
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* An empty day says so, faintly */
@@ -440,7 +443,7 @@ const TaskCard = styled.article<{ $dragging?: boolean }>`
   user-select: none;
   transition: border-color 120ms;
   &:hover { border-color: var(--border-strong); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   /* Dark: frosted glass, a shade lighter than the page — a light veil with a blur */
   html[data-theme='dark'] & {
     background: rgba(255, 255, 255, 0.07);
@@ -481,7 +484,7 @@ const Grip = styled.button`
     transition: background 120ms, width 120ms;
   }
   &:hover::before, &:focus-visible::before, &[data-active='true']::before { background: var(--color-accent-line, var(--color-accent)); width: 40px; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: 4px; }
 `;
 
 /* The title and, on a short card, its length — which drops under the title when a word won't fit beside it */
@@ -527,7 +530,7 @@ const CardTick = styled.button`
   cursor: pointer;
   touch-action: manipulation;
   &:hover { background: var(--bg-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 const Title = styled(CardTitle)`
@@ -563,7 +566,7 @@ const DayBtn = styled.label`
   color: var(--text-tertiary);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
   input {
     position: absolute;
     inset: 0;
@@ -694,7 +697,11 @@ function SortableCard({ card, at, resize, measure, ...actions }: { card: Planner
     <TaskCard ref={el => { setNodeRef(el); measure?.(el); }} style={{ ...placed, transform: CSS.Transform.toString(transform), transition }} $dragging={isDragging}
       {...attributes} {...listeners}
       onClick={() => actions.onOpen(card.id)}
-      onKeyDown={e => { if (e.key === 'Enter') actions.onOpen(card.id); }}>
+      onKeyDown={e => {
+        // dnd-kit's own handler first (Space picks the card up), then Enter opens it
+        listeners?.onKeyDown?.(e);
+        if (e.key === 'Enter' && !isDragging && e.target === e.currentTarget) actions.onOpen(card.id);
+      }}>
       <CardBody card={card} compact={!!at && card.hours < 1.5} {...actions} />
       {at && resize && <GripFoot><ResizeGrip card={card} resize={resize} /></GripFoot>}
     </TaskCard>
@@ -771,7 +778,8 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    // Space picks a card up and drops it (Enter drops it too); Enter on a resting card opens it
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, keyboardCodes: BOARD_KEYS }),
   );
   // Resizing a card: while the grip is held, the card (and the day after it) shows the length it would get
   const [resizing, setResizing] = useState<{ id: number; hours: number } | null>(null);

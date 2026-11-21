@@ -52,7 +52,7 @@ const Go = styled.button`
   color: var(--text-secondary);
   cursor: pointer;
   &:hover { color: var(--color-accent-soft); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   [data-editing] & { padding-right: 4px; }
 `;
 
@@ -85,7 +85,7 @@ const Remove = styled.button`
   line-height: 1;
   cursor: pointer;
   &:hover { color: var(--color-danger, var(--text-primary)); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 /* "+ Add a shortcut": a dashed pill with the real <select> invisible over it */

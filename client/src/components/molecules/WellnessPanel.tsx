@@ -100,7 +100,7 @@ const Badge = styled.button<{ $color: string }>`
   &:hover:not(:disabled) { border-color: var(--border-strong); }
   &:active:not(:disabled) { transform: scale(0.94); }
   &:disabled { cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { transition: none; &:active:not(:disabled) { transform: none; } }
   display: inline-flex;
   align-items: center;
@@ -184,7 +184,7 @@ const Range = styled.input`
   margin: 0;
   opacity: 0;
   cursor: pointer;
-  &:focus-visible + ${Thumb} { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible + ${Thumb} { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   &:active + ${Thumb} { transform: scale(1.25); }
 `;
 
@@ -230,7 +230,7 @@ const FaceBtn = styled.button<{ $active: boolean; $color: string }>`
   background: transparent;
   transition: color 120ms;
   &:hover { color: ${({ $color }) => $color}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 480px) { width: 50px; height: 50px; & > span { font-size: 60px; } }
   /* The faces are drawn outlines (atoms/MoodFace), never font glyphs: the variable icon
      font came out thick on iPhone / iPad whatever weight was asked for */
@@ -255,7 +255,7 @@ const Chip = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-tertiary)')};
   transition: border-color 120ms, color 120ms, background 120ms;
   &:hover { border-color: var(--border-strong); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Cycle as icons (the home dashboard's strip), all one size, no words (the name is
@@ -295,7 +295,7 @@ const FlowBtn = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? 'var(--color-accent)' : 'var(--text-disabled)')};
   transition: color 120ms;
   &:hover { color: var(--color-accent); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   .drops { display: inline-flex; align-items: center; height: 22px; gap: 0; }
   .drops > span { font-weight: 300; font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
   small { font-family: var(--font-sans); font-size: 12px; color: ${({ $active }) => ($active ? 'var(--color-accent-soft)' : 'var(--text-muted)')}; }
@@ -420,7 +420,7 @@ const Minus = styled.button`
   cursor: pointer;
   &:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-hover); }
   &:disabled { opacity: 0.5; cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* − / + beside the figure (the home dashboard's strip, in place of the slider):
@@ -446,7 +446,7 @@ const StepBtn = styled.button`
   transition: border-color 120ms, color 120ms;
   &:hover:not(:disabled) { border-color: var(--color-accent-line, var(--color-accent)); color: var(--text-primary); }
   &:disabled { opacity: 0.4; cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const Quad = styled.div`

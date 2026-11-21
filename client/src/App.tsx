@@ -58,6 +58,8 @@ import { AiChat } from './components/organisms/AiChat.js';
 import { useAiChatEnabled } from './hooks/useAiReady.js';
 import { FlashNotice } from './components/organisms/FlashNotice.js';
 import { UpdatePrompt } from './components/organisms/UpdatePrompt.js';
+import { pageTitleFor } from './utils/pageTitle.js';
+import { IdleWarning } from './components/organisms/IdleWarning.js';
 import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.js';
 import { HealthReportingView } from './views/HealthReportingView.js';
 import { MenuView } from './views/MenuView.js';
@@ -88,6 +90,16 @@ function KeylessPageWatch() {
   const { pathname } = useLocation();
   const { notePage } = useEncryption();
   useEffect(() => { notePage(pathname); }, [pathname, notePage]);
+  return null;
+}
+
+/** Each page names itself in the browser tab ("Health · Chronicles") */
+function PageTitle() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const title = pageTitleFor(pathname);
+    if (title) document.title = title;
+  }, [pathname]);
   return null;
 }
 
@@ -146,12 +158,13 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--bg-today-col':      '#fbfbfc',  /* today's column band */
   '--border-pop':        '#cdd1d8',  /* floating menus' outline */
   '--border-dashed':     '#bfc4cc',  /* dashed outline of an empty slot on hover */
-  '--text-hint':         '#7a808a',  /* placeholders in big borderless fields */
+  '--text-hint':         '#6a7079',  /* placeholders in big borderless fields (4.8:1) */
   '--text-inverse':      '#ffffff',
   /* DS borders — hairlines only */
   '--border-subtle':     '#d3d7dd',
   '--border-faint':      '#e6e8ec', /* the lightest hairline (topic picker) */
   '--border-pill':       '#80868f',  /* pills, ± buttons, round controls (light only) */
+  '--focus-ring':        '#80868f',  /* keyboard focus: a neutral grey ring, never the accent (3.4:1) */
   '--progress-track':    '#d3d7dd',  /* empty part of a progress rule */
   '--bg-control':        'transparent',  /* pills, chips, the topic picker, ± buttons: outlines only — never a fill */
   '--bg-tracker':        '#fbfbfc',  /* the wellness four-square card (light only) */
@@ -173,7 +186,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   /* Status */
   '--color-success':     '#2f9e6b',  '--color-success-subtle': '#e2f4eb',
   '--color-warning':     '#d8941f',  '--color-warning-subtle': '#fbefd7',
-  '--color-danger':      '#d8483f',  '--color-danger-subtle':  '#fae4e2',
+  '--color-danger':      '#c23b33',  '--color-danger-subtle':  '#fae4e2',
   '--color-info':        '#2f7fd8',  '--color-info-subtle':    '#e1eefb',
 
   /* DS neutral grays for light theme */
@@ -227,9 +240,9 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--text-disabled':     '#a3a9b5',
   '--text-tab':          '#aeb4bf',  /* inactive section tabs — a step under tertiary */
   '--text-meta':         '#a9b0c8',  /* list-row topic + date: recede behind the entry */
-  '--text-muted':        '#7c7f88',  /* card subtitles, chevrons, + icons */
-  '--text-placeholder':  '#6c6f78',
-  '--control-border':    '#5b5f69',  /* unticked round checks */
+  '--text-muted':        '#8a8d96',  /* card subtitles, chevrons, + icons (5.2:1 on cards) */
+  '--text-placeholder':  '#84878f',  /* 4.7:1 on cards, a touch dimmer than muted text */
+  '--control-border':    '#6b6f79',  /* unticked round checks (3.5:1) */
   '--border-card':       '#2f323d',  /* card outlines + their inner rules/boxes */
   '--bg-row-hover':      '#1d1f28',  /* a row lifting inside a card on hover */
   '--text-soft':         '#a5a8b0',  /* toolbar text buttons, chevrons */
@@ -241,13 +254,14 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--bg-today-col':      '#14161c',  /* today's column band */
   '--border-pop':        '#2a2d37',  /* floating menus' outline */
   '--border-dashed':     '#3b3f49',  /* dashed outline of an empty slot on hover */
-  '--text-hint':         '#60636c',  /* placeholders in big borderless fields */
+  '--text-hint':         '#84878f',  /* placeholders in big borderless fields (4.7:1) */
   '--text-inverse':      '#14161b',
   '--border-subtle':     '#1f222b',
   '--border-faint':      '#1f222b', /* same as --border-subtle in dark */
   '--border-default':    '#292c36',
   /* Light-only tokens: empty = unset, so components use their own dark values */
   '--border-pill':       '',
+  '--focus-ring':        '#8a8d96',  /* keyboard focus: a neutral grey ring, never the accent (5.2:1) */
   '--progress-track':    '',
   '--bg-control':        '',
   '--bg-tracker':        '',
@@ -267,7 +281,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--mood-1': '#ea8a83', '--mood-2': '#eba584', '--mood-3': '#e0b468', '--mood-4': '#7cc49a', '--mood-5': '#6cc4b4',
   '--color-success':     '#2f9e6b',  '--color-success-subtle': '#1c3a2c',
   '--color-warning':     '#d8941f',  '--color-warning-subtle': '#3a2f14',
-  '--color-danger':      '#d8483f',  '--color-danger-subtle':  '#3a1e1c',
+  '--color-danger':      '#e86058',  '--color-danger-subtle':  '#3a1e1c',
   '--color-info':        '#2f7fd8',  '--color-info-subtle':    '#16283a',
 
   /* DS neutral grays for dark theme */
@@ -357,7 +371,7 @@ const STATIC_CSS_VARS: Record<string, string> = {
 
   /* Design system shadow tokens */
   '--shadow-sm':    '0 1px 2px rgba(20, 20, 30, 0.04)',
-  '--shadow-ring':  '0 0 0 3px var(--color-accent, #34a5a2), 0 1px 2px rgba(20, 20, 30, 0.08)',
+  '--shadow-ring':  '0 0 0 2px var(--focus-ring, #80868f)',
 
   /* Design system tracking (letter-spacing) */
   '--tracking-tight': '-0.01em',
@@ -463,8 +477,9 @@ function PublicShelfSync() {
 
 /** Ends the session after 15 minutes with nobody at any Chronicles tab (hooks/useIdleSignOut.ts) */
 function IdleGate() {
-  useIdleSignOut();
-  return null;
+  const { signOutAt, stay } = useIdleSignOut();
+  // A minute before the idle sign-out: a warning with Stay signed in
+  return signOutAt ? <IdleWarning signOutAt={signOutAt} onStay={stay} /> : null;
 }
 
 /** The server ended this browser's session (revoked, expired): retrying can't
@@ -723,6 +738,7 @@ export function App() {
         <EncryptionProvider>
           <BrowserRouter>
             <KeylessPageWatch />
+            <PageTitle />
             <Routes>
               {/* Public */}
               <Route path="/login" element={<LoginView />} />

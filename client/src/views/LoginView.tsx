@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useFreshSignIn } from '../hooks/useFreshSignIn.js';
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { AuthTemplate } from '../components/templates/AuthTemplate.js';
@@ -19,7 +19,7 @@ const OtpWrap = styled.div`
   gap: ${({ theme }) => theme.spacing.md}px;
 `;
 
-const OtpHeading = styled.h2`
+const OtpHeading = styled.h1`
   font-family: ${({ theme }) => theme.fontFamily.serif};
   font-size: 25px;
   font-weight: 400;
@@ -33,34 +33,39 @@ const OtpSubtext = styled.p`
   margin: 0;
 `;
 
+/* The code boxes are outlined like the sign-in fields (authFields): GlobalStyle strips
+   every input's border with !important, so the outline needs the multi-class rules
+   (as formKit's BoxInput does), and focus sets the whole border, not just its colour */
+const codeBox = css`
+  && {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 56px;
+    padding: 10px 14px;
+    font-family: monospace;
+    border: 1px solid var(--border-default) !important;
+    border-radius: 12px;
+    background: transparent !important;
+    color: var(--text-primary);
+    outline: none;
+  }
+  &&&&& { border: 1px solid var(--border-default) !important; }
+  &&&&&:focus { border: 1px solid var(--color-accent) !important; }
+  &::placeholder { color: var(--text-secondary); opacity: 0.85; }
+`;
+
 const OtpInput = styled.input`
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 14px;
-  font-size: 27px;
-  letter-spacing: 6px;
-  text-align: center;
-  font-family: monospace;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.md}px;
-  background: ${({ theme }) => theme.colors.surface};
-  color: ${({ theme }) => theme.colors.text};
-  outline: none;
-  &:focus { border-color: ${({ theme }) => theme.colors.accent}; }
+  ${codeBox}
+  && {
+    font-size: 27px;
+    letter-spacing: 6px;
+    text-align: center;
+  }
 `;
 
 const BackupInput = styled.input`
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 14px;
-  font-size: 17px;
-  font-family: monospace;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.md}px;
-  background: ${({ theme }) => theme.colors.surface};
-  color: ${({ theme }) => theme.colors.text};
-  outline: none;
-  &:focus { border-color: ${({ theme }) => theme.colors.accent}; }
+  ${codeBox}
+  && { font-size: 17px; }
 `;
 
 const ToggleLink = styled.button`
@@ -284,6 +289,8 @@ export function LoginView() {
           {useBackup ? (
             <BackupInput
               autoFocus
+              aria-label="Backup code"
+              autoComplete="off"
               placeholder="xxxxxx-xxxxxx"
               value={otpCode}
               onChange={e => setOtpCode(e.target.value)}
@@ -292,6 +299,8 @@ export function LoginView() {
           ) : (
             <OtpInput
               autoFocus
+              aria-label="Authentication code"
+              autoComplete="one-time-code"
               type="text"
               inputMode="numeric"
               maxLength={6}
@@ -332,6 +341,7 @@ export function LoginView() {
     <AuthTemplate
       title="Welcome back"
       brand
+      srTitle="Sign in to Chronicles"
       footer={<>New here? <Link to="/sign-up">Create an account</Link></>}
     >
       {signInNote && <ErrorBanner role="status">{signInNote}</ErrorBanner>}

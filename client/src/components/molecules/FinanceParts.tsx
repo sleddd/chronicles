@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ComponentProps, type ReactNode, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import styled, { css } from 'styled-components';
 import { glassControl } from '../../styles/wallpaper.js';
@@ -350,7 +350,7 @@ export const CellInput = styled.input`
   background-color: var(--bg-sunken) !important;
   border: none;
   border-radius: var(--r-md, 1px);
-  &:focus { outline: 1px solid var(--color-accent) !important; outline-offset: -1px; }
+  &:focus { outline: 1px solid var(--focus-ring) !important; outline-offset: -1px; }
 `;
 
 /** Compact pill for a section/card title row (Add bill, New goal). */
@@ -378,7 +378,7 @@ export const SmallBtn = styled.button<{ $danger?: boolean; $on?: boolean }>`
   cursor: pointer;
   &:hover:not(:disabled) { background: ${({ $on }) => ($on ? 'var(--color-accent-hover)' : 'var(--bg-hover)')}; }
   &:disabled { color: var(--text-disabled); border-color: var(--border-subtle); cursor: not-allowed; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 export const Chips = styled.div`
@@ -429,7 +429,7 @@ export const ClearBox = styled.input.attrs({ type: 'checkbox' })`
   }
   &:checked { background: var(--color-accent); border-color: var(--color-accent); }
   &:checked::after { opacity: 1; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   &:disabled { cursor: not-allowed; opacity: 0.6; }
 `;
 
@@ -479,6 +479,7 @@ const MenuItem = styled.button<{ $danger?: boolean }>`
   border: none;
   cursor: pointer;
   &:hover, &:focus-visible { background: var(--bg-row-hover); outline: none; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 export interface RowMenuItem {
@@ -497,7 +498,24 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
   const wrap = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const close = () => { setOpen(false); setConfirming(null); };
+  const close = (returnFocus = false) => {
+    setOpen(false);
+    setConfirming(null);
+    if (returnFocus) button.current?.focus();
+  };
+  const menuItems = () => Array.from(list.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+
+  // Arrow keys move between the items; Escape and Tab close it and go back to the ⋯
+  const onMenuKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const all = menuItems();
+    const at = all.indexOf(document.activeElement as HTMLElement);
+    const go = (i: number) => { e.preventDefault(); all[(i + all.length) % all.length]?.focus({ preventScroll: true }); };
+    if (e.key === 'ArrowDown') go(at + 1);
+    else if (e.key === 'ArrowUp') go(at < 0 ? all.length - 1 : at - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(all.length - 1);
+    else if (e.key === 'Tab') { e.preventDefault(); close(true); }
+  };
 
   // Place the menu under the button's right edge, or above it near the screen's foot
   const place = () => {
@@ -515,24 +533,37 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
     if (!open) return;
     place();
     const raf = requestAnimationFrame(place); // again once its real height is known
+    // Into the menu for the keyboard (no scroll, which would close it)
+    menuItems()[0]?.focus({ preventScroll: true });
     const onDown = (e: MouseEvent | TouchEvent) => {
       const t = e.target as Node;
       if (!wrap.current?.contains(t) && !list.current?.contains(t)) close();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
-    const onMove = (e: Event) => { if (!list.current?.contains(e.target as Node)) close(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // Back to the ⋯ when the menu or the ⋯ had focus
+      const inside = !!list.current?.contains(document.activeElement) || document.activeElement === button.current;
+      close(inside);
+    };
+    const onMove = (e: Event) => {
+      if (e.target instanceof Node && list.current?.contains(e.target)) return;
+      // While a keyboard user is in the menu, follow the button instead of closing
+      if (list.current?.contains(document.activeElement)) { place(); return; }
+      close();
+    };
+    const onResize = () => close();
     document.addEventListener('mousedown', onDown);
     document.addEventListener('touchstart', onDown);
     document.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onMove, true);
-    window.addEventListener('resize', close);
+    window.addEventListener('resize', onResize);
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('touchstart', onDown);
       document.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onMove, true);
-      window.removeEventListener('resize', close);
+      window.removeEventListener('resize', onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -544,7 +575,7 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
         ⋯
       </MenuButton>
       {open && createPortal(
-        <MenuList ref={list} role="menu" style={pos}>
+        <MenuList ref={list} role="menu" aria-label={label} style={pos} onKeyDown={onMenuKey}>
           {items.map(item => (
             <MenuItem
               key={item.label}
@@ -553,7 +584,7 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
               $danger={item.danger}
               onClick={() => {
                 if (item.confirmLabel && confirming !== item.label) { setConfirming(item.label); return; }
-                close();
+                close(true);
                 item.onSelect();
               }}
             >
@@ -635,7 +666,7 @@ export const SegBtn = styled.button<{ $active: boolean }>`
   color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-secondary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 /** Quiet outlined button in a sheet row ("Mark paid") */
@@ -652,7 +683,7 @@ export const RowBtn = styled.button`
   cursor: pointer;
   &:hover:not(:disabled) { border-color: var(--control-border); color: var(--text-primary); }
   &:disabled { opacity: 0.5; cursor: not-allowed; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /** Status pill on a bill: overdue (rose) or due today / tomorrow (amber) */
@@ -711,7 +742,7 @@ const MonthCaret = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 export function MonthPill({ label, onPrev, onNext }: { label: string; onPrev: () => void; onNext: () => void }) {
@@ -792,7 +823,7 @@ export const OutlineBtn = styled.button<{ $tone?: 'accent' | 'neutral' }>`
   cursor: pointer;
   &:hover:not(:disabled) { border-color: ${({ $tone }) => ($tone === 'neutral' ? 'var(--control-border)' : 'var(--color-accent-hover)')}; color: ${({ $tone }) => ($tone === 'neutral' ? 'var(--text-primary)' : 'var(--color-accent-soft)')}; }
   &:disabled { opacity: 0.45; cursor: not-allowed; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /** A --bg-panel card (Savings funds, Goals) */
@@ -880,7 +911,7 @@ export const FoldHeading = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover h2 { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 4px; }
   small { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
 `;
 

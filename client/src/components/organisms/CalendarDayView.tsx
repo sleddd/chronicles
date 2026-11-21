@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import type { KeyboardEvent } from 'react';
 import { onBackdrop } from '../../styles/darkBackdrop.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { useNavigate } from 'react-router-dom';
@@ -78,6 +79,19 @@ const EmptyMsg = styled.div`
 `;
 
 /* time | kind over title */
+/* A row that opens something: a button for the keyboard too (Enter / Space) */
+function pressable(onPress: () => void) {
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: onPress,
+    onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+      if (e.target !== e.currentTarget) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPress(); }
+    },
+  };
+}
+
 const EntryRow = styled.div`
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);
@@ -230,7 +244,7 @@ export function CalendarDayView({
             const isTask = taskTopicIds.has(meta?._taxonomyId as number);
             const done = isTask && !!cf?.isCompleted;
             return (
-              <EntryRow key={entry.id} onClick={() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); }}>
+              <EntryRow key={entry.id} {...pressable(() => { setSelectedEntryId(entry.id); navigate('/journal', { state: { from: '/calendar' } }); })}>
                 <TimeLabel>{isTask ? (done ? 'Done' : 'To do') : timeLabel}</TimeLabel>
                 <div style={{ minWidth: 0 }}>
                   {isTask ? <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot />Task</TopicLabel>
@@ -241,7 +255,7 @@ export function CalendarDayView({
             );
           })}
         {bills.map(b => (
-          <EntryRow key={b.key} onClick={() => onBillClick?.(b)}>
+          <EntryRow key={b.key} {...pressable(() => onBillClick?.(b))}>
             <TimeLabel>Due</TimeLabel>
             <div>
               <TopicLabel style={{ color: 'var(--text-muted)' }}><BillDot />Bill</TopicLabel>

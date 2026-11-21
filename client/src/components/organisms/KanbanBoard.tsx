@@ -12,6 +12,9 @@ import { focusPosition } from './EntryImageGallery.js';
 import { useTimeTracking } from '../../hooks/useTimeTracking.js';
 import { formatClock, formatSpent, sessionMs } from '../../utils/timeTracking.js';
 
+/* Keyboard drag: Space starts and ends it, so Enter is free to open a card */
+const BOARD_KEYS = { start: ['Space'], cancel: ['Escape'], end: ['Space', 'Enter'] };
+
 /* Planning boards (goals, milestones, tasks, todos): one column per status —
    a toned panel with its name, "N cards" and a full-width + to start a new entry
    in that column — holding bordered cards (a tone pill, the title, a short
@@ -126,7 +129,7 @@ const AddBtn = styled.button`
   cursor: pointer;
   transition: border-color 120ms, color 120ms;
   &:hover { border-color: var(--border-strong); color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 export const Cards = styled.div`
@@ -160,7 +163,7 @@ export const Card = styled.article<{ $dragging?: boolean }>`
   user-select: none;
   transition: border-color 120ms;
   &:hover { border-color: var(--border-strong); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Pill + title on the left, the picture avatar on the right */
@@ -264,7 +267,7 @@ const TimerChip = styled.button<{ $running: boolean }>`
   white-space: nowrap;
   cursor: pointer;
   &:hover { color: ${({ $running }) => ($running ? 'var(--color-accent-link)' : 'var(--text-primary)')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 export const Chip = styled.span`
@@ -308,7 +311,11 @@ function BoardCard({ item, onOpen, timeTracking }: { item: BoardItem; onOpen: (i
       {...attributes}
       {...listeners}
       onClick={() => onOpen(item.id)}
-      onKeyDown={e => { if (e.key === 'Enter') onOpen(item.id); }}
+      onKeyDown={e => {
+        // dnd-kit's own handler first (Space picks the card up), then Enter opens it
+        listeners?.onKeyDown?.(e);
+        if (e.key === 'Enter' && !isDragging && e.target === e.currentTarget) onOpen(item.id);
+      }}
     >
       <Top>
         <TopText>
@@ -375,7 +382,8 @@ export function KanbanBoard<K extends string>({ columns, noun, onOpen, onMove, o
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    // Space picks a card up and drops it (Enter drops it too); Enter on a resting card opens it
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates, keyboardCodes: BOARD_KEYS }),
   );
 
   const columnOf = (id: number) => columns.find(c => c.items.some(i => i.id === id))?.key;

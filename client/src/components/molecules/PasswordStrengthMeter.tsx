@@ -58,12 +58,12 @@ export function PasswordStrengthMeter({ password, email, username }: { password:
   const s = passwordStrength(password, { email, username });
   const filled = Math.max(1, s.score);
   return (
-    <Wrap role="status" aria-label={`Password strength: ${s.label}`}>
+    <Wrap role="status">
       <Top>
         <Bars aria-hidden="true">
           {[1, 2, 3, 4].map(n => <Bar key={n} $on={n <= filled} $tone={TONES[s.score]} />)}
         </Bars>
-        <Word $tone={WORD_TONES[s.score]}>{s.label}</Word>
+        <Word $tone={WORD_TONES[s.score]}><span className="sr-only">Password strength: </span>{s.label}</Word>
       </Top>
       {s.tip && s.score < 4 && <Tip>{s.tip}</Tip>}
     </Wrap>

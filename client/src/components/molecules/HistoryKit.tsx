@@ -59,7 +59,7 @@ const CsvButton = styled.button`
   cursor: pointer;
   &:hover:not(:disabled) { color: var(--text-primary); }
   &:disabled { color: var(--text-placeholder); cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
 `;
 
 /** "↓ Download CSV" as a plain link */
@@ -203,7 +203,7 @@ export const Table = styled.table`
 export const Row = styled.tr`
   cursor: pointer;
   &:hover td { background: var(--bg-row-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 export const Name = styled.div`

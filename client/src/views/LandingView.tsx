@@ -449,7 +449,7 @@ const Facts = styled.dl`
   dt {
     padding-top: 3px;
     font-family: var(--font-sans);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.16em;
     text-transform: uppercase;
@@ -708,8 +708,9 @@ export function LandingView() {
           </Container>
         </HowBand>
 
-        <Band $tone="white" id="features" aria-label="Features" $flush>
+        <Band $tone="white" id="features" aria-labelledby="features-heading" $flush>
           <Container>
+            <h2 id="features-heading" className="sr-only">Features</h2>
             <FeatureRows>
               {FEATURES.map((f, i) => (
                 <FeatureRow key={f.label}>

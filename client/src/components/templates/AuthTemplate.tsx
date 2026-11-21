@@ -19,7 +19,7 @@ const Wrapper = styled.div`
   background: var(--bg-app);
 `;
 
-const Card = styled.div<{ $wide: boolean }>`
+const Card = styled.main<{ $wide: boolean }>`
   position: relative;
   z-index: 1;
   width: 100%;
@@ -107,9 +107,11 @@ interface AuthTemplateProps {
   brand?: boolean;
   /** The wide two-column card (create account): the form brings its own foot */
   wide?: boolean;
+  /** With `brand`: a heading for screen readers only, since nothing visible names the page */
+  srTitle?: string;
 }
 
-export function AuthTemplate({ title, children, footer, brand, wide = false }: AuthTemplateProps) {
+export function AuthTemplate({ title, children, footer, brand, wide = false, srTitle }: AuthTemplateProps) {
   const legal = (
     <Legal aria-label="Legal">
       <a href="/health-privacy" target="_blank" rel="noopener noreferrer">Health Data Privacy</a>
@@ -137,6 +139,7 @@ export function AuthTemplate({ title, children, footer, brand, wide = false }: A
           <LogoText>Chronicles</LogoText>
         </LogoMark>
         {!brand && <PageTitle>{title}</PageTitle>}
+        {brand && srTitle && <h1 className="sr-only">{srTitle}</h1>}
         {children}
         {footer && <Footer>{footer}</Footer>}
         {legal}

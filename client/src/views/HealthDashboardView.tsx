@@ -120,7 +120,7 @@ const Grip = styled.button<{ $bare: boolean }>`
   touch-action: none;
   &:hover { color: var(--text-primary); }
   &:active { cursor: grabbing; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 480px) { top: ${({ $bare }) => ($bare ? '8px' : '19px')}; right: ${({ $bare }) => ($bare ? '8px' : '46px')}; }
 `;
 

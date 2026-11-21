@@ -115,7 +115,7 @@ const Table = styled.table`
 const MedRow = styled.tr`
   cursor: pointer;
   &:hover td { background: var(--bg-row-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 const Name = styled.div`

@@ -31,13 +31,14 @@ describe('GoalFields', () => {
     targetDate: '2024-12-31',
   };
 
-  it('renders the title and a box of Type and When rows (Status is in the text box\'s foot, GoalStatusPick)', () => {
+  it('renders the title and a box of Status, Category, Type and When rows (Status first)', () => {
     renderWithTheme(<GoalFields values={defaultValues} onChange={() => {}} />);
     expect(screen.getByPlaceholderText('What do you want to achieve?')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Short-term' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByLabelText('Start date')).toBeInTheDocument();
     expect(screen.getByLabelText('Target date')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Status')).toBeNull();
+    // Status is the first row (Category moves to the text box's foot in the entry editor)
+    expect(screen.getByLabelText('Status')).toBeInTheDocument();
   });
 
   it('edits the goal notes', () => {
@@ -447,7 +448,7 @@ describe('MilestoneFields', () => {
     { id: 2, title: 'Run Marathon' },
   ];
 
-  it('renders the goal and When (Status is in the text box\'s foot, MilestoneStatusPick)', () => {
+  it('renders Status, the goal and When (Status first)', () => {
     renderWithTheme(
       <MilestoneFields values={defaultValues} onChange={() => {}} goalOptions={goalOptions} />,
     );
@@ -455,7 +456,7 @@ describe('MilestoneFields', () => {
     expect(screen.getByLabelText('Goal')).toBeInTheDocument();
     expect(screen.getByLabelText('Start date')).toBeInTheDocument();
     expect(screen.getByLabelText('Target date')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Status')).toBeNull();
+    expect(screen.getByLabelText('Status')).toBeInTheDocument();
     expect(screen.getByText('No tasks attached yet.')).toBeInTheDocument();
   });
 
@@ -508,8 +509,7 @@ describe('MilestoneFields', () => {
     renderWithTheme(
       <MilestoneFields values={defaultValues} onChange={onChange} goalOptions={goalOptions} />,
     );
-    const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Goal'), { target: { value: '1' } });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ parentGoalId: 1 }));
   });
 

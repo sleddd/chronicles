@@ -60,7 +60,7 @@ const Primary = styled.button`
   /* Hover: no fill, the outline and text a brighter accent */
   &:hover:not(:disabled) { border-color: color-mix(in srgb, var(--color-accent) 65%, #fff); color: color-mix(in srgb, var(--color-accent) 65%, #fff); }
   &:disabled { opacity: 0.55; cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 `;
 
 /* The other way in: an outlined pill */

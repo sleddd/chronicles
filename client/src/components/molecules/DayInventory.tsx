@@ -58,7 +58,7 @@ const Bar = styled.button`
   }
   &[aria-expanded='true'] .hint::after { transform: translateY(1px) rotate(-135deg); }
   &:hover .hint { color: var(--text-secondary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Two columns of labelled rows, hairlines between; one column when narrow */

@@ -6,7 +6,7 @@ import { renderWithTheme } from '../testUtils';
 describe('Toggle', () => {
   it('renders without crashing', () => {
     renderWithTheme(<Toggle checked={false} onChange={() => {}} />);
-    expect(screen.getByRole('checkbox')).toBeInTheDocument();
+    expect(screen.getByRole('switch')).toBeInTheDocument();
   });
 
   it('renders with a label', () => {
@@ -22,25 +22,25 @@ describe('Toggle', () => {
 
   it('reflects checked state', () => {
     renderWithTheme(<Toggle checked={true} onChange={() => {}} />);
-    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(screen.getByRole('switch')).toBeChecked();
   });
 
   it('reflects unchecked state', () => {
     renderWithTheme(<Toggle checked={false} onChange={() => {}} />);
-    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(screen.getByRole('switch')).not.toBeChecked();
   });
 
   it('calls onChange with new value when toggled', () => {
     const onChange = vi.fn();
     renderWithTheme(<Toggle checked={false} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('switch'));
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
   it('calls onChange with false when unchecking', () => {
     const onChange = vi.fn();
     renderWithTheme(<Toggle checked={true} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('switch'));
     expect(onChange).toHaveBeenCalledWith(false);
   });
 });

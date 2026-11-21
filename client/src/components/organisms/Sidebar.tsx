@@ -6,6 +6,7 @@ import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { useNavItems, type NavItem } from '../../hooks/useNavItems.js';
 import { useNavSections } from '../../hooks/useNavSections.js';
 import { useSignOut } from '../../hooks/useSignOut.js';
+import { usePopover } from '../../hooks/usePopover.js';
 import { BrandMark } from '../atoms/BrandMark.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 
@@ -139,7 +140,7 @@ const NavIconBtn = styled.button<{ $active?: boolean; $tab?: boolean; $fullTab?:
   /* Dark: hovering brightens the icon only (no block behind it) */
   html[data-theme='dark'] &:hover { background: transparent; }
   /* No lines between items, in either theme */
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 
   /* The accent tab: on a section with views, while it's open (clicked or its arrow); else the page you're on */
   ${({ $active, $tab }) => (($tab ?? $active) ? activeTab : '')}
@@ -216,7 +217,7 @@ const SectionChevron = styled.button<{ $open: boolean; $active?: boolean }>`
   & > svg { transition: transform 160ms ease; transform: rotate(${({ $open }) => ($open ? 180 : 0)}deg); }
   @media (prefers-reduced-motion: reduce) { & > svg { transition: none; } }
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 /* A section's views, under its row: on a band a shade darker than the rail, with barely-there
@@ -255,7 +256,7 @@ const ViewBtn = styled.button<{ $active: boolean }>`
   text-overflow: ellipsis;
   cursor: pointer;
   &:hover { color: var(--text-primary); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
   & > span:first-child { overflow: hidden; text-overflow: ellipsis; }
 `;
 
@@ -323,7 +324,7 @@ const FlyoutItem = styled.button<{ $active?: boolean }>`
   color: ${({ $active }) => ($active ? 'var(--text-primary)' : 'var(--text-primary)')};
   cursor: pointer;
   &:hover { background: var(--bg-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 const STORAGE_KEY = 'nav-expanded-v1';
@@ -391,11 +392,11 @@ export const Sidebar = memo(function Sidebar() {
       const t = e.target as Node;
       if (!menuRef.current?.contains(t) && !moreRef.current?.contains(t)) closeMenu();
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { closeMenu(); moreRef.current?.focus(); } };
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+    return () => { document.removeEventListener('mousedown', onDown); };
   }, [menuAt]);
+  // Keyboard: into the menu on open, Escape back to ⋯, focus leaving closes it
+  usePopover({ open: !!menuAt, onClose: closeMenu, triggerRef: moreRef, panelRef: menuRef });
   // …and when the rail changes width, so it never floats over the wrong spot
   useEffect(() => { closeMenu(); }, [open]);
   const toggle = () => setOpen(v => { saveOpen(!v); return !v; });

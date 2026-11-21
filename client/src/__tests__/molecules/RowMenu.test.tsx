@@ -33,4 +33,31 @@ describe('RowMenu', () => {
     fireEvent.mouseDown(screen.getByText('outside'));
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
+
+  it('focuses the first item, moves with the arrows and Escape returns to the ⋯', () => {
+    renderWithTheme(<RowMenu label="More" items={[{ label: 'Edit', onSelect: () => {} }, { label: 'Pause', onSelect: () => {} }]} />);
+    const trigger = screen.getByRole('button', { name: 'More' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('menuitem', { name: 'Edit' })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitem', { name: 'Pause' })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitem', { name: 'Edit' })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'End' });
+    expect(screen.getByRole('menuitem', { name: 'Pause' })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('Tab closes and returns focus, a scroll while focused inside keeps it open', () => {
+    renderWithTheme(<RowMenu label="More" items={[{ label: 'Edit', onSelect: () => {} }]} />);
+    const trigger = screen.getByRole('button', { name: 'More' });
+    fireEvent.click(trigger);
+    fireEvent.scroll(window);
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Tab' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
 });

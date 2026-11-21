@@ -160,7 +160,7 @@ const Submit = styled.button`
   &:hover:not(:disabled) { border-color: color-mix(in srgb, var(--color-accent) 65%, #fff); color: color-mix(in srgb, var(--color-accent) 65%, #fff); }
   /* Not ready yet: a quiet grey outline */
   &:disabled { border-color: var(--border-default); background: transparent; color: var(--text-muted); cursor: default; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
 `;
 
 function generateUsernameSuggestions(base: string): string[] {
@@ -273,15 +273,17 @@ export function RegisterForm({ onSubmit, extra, canSubmit = true, initialEmail =
           <Field>
             <HiddenLabel htmlFor="reg-email">Email</HiddenLabel>
             <input id="reg-email" type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="Email" required autoComplete="email" aria-invalid={!!fieldErrors.email || undefined} />
-            {fieldErrors.email && <FieldError role="alert">{fieldErrors.email}</FieldError>}
+              placeholder="Email" required autoComplete="email" aria-invalid={!!fieldErrors.email || undefined}
+              aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined} />
+            {fieldErrors.email && <FieldError id="reg-email-error" role="alert">{fieldErrors.email}</FieldError>}
           </Field>
 
           <Field>
             <HiddenLabel htmlFor="reg-username">Username</HiddenLabel>
             <input id="reg-username" value={username} onChange={e => { setUsername(e.target.value); setUsernameSuggestions([]); }}
-              placeholder="Username" required autoComplete="username" aria-invalid={!!fieldErrors.username || undefined} />
-            {fieldErrors.username && <FieldError role="alert">{fieldErrors.username}</FieldError>}
+              placeholder="Username" required autoComplete="username" aria-invalid={!!fieldErrors.username || undefined}
+              aria-describedby={fieldErrors.username ? 'reg-username-error' : undefined} />
+            {fieldErrors.username && <FieldError id="reg-username-error" role="alert">{fieldErrors.username}</FieldError>}
             {usernameSuggestions.length > 0 && (
               <SuggestionsRow>
                 <SuggestionLabel>Try:</SuggestionLabel>
@@ -298,19 +300,27 @@ export function RegisterForm({ onSubmit, extra, canSubmit = true, initialEmail =
           <Field>
             <HiddenLabel htmlFor="reg-password">Password</HiddenLabel>
             <PasswordInput id="reg-password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="Password" required autoComplete="new-password" />
-            <Rules aria-label="Password rules">
-              {rules.map(r => <li key={r.label} data-met={r.met ? '' : undefined}>{r.label}</li>)}
+              placeholder="Password" required autoComplete="new-password"
+              aria-invalid={!!fieldErrors.password || undefined}
+              aria-describedby={['reg-password-rules', fieldErrors.password ? 'reg-password-error' : ''].filter(Boolean).join(' ')} />
+            <Rules id="reg-password-rules" aria-label="Password rules">
+              {rules.map(r => (
+                <li key={r.label} data-met={r.met ? '' : undefined}>
+                  {r.label}<span className="sr-only">{r.met ? ', met' : ', not met'}</span>
+                </li>
+              ))}
             </Rules>
             <PasswordStrengthMeter password={password} email={email} username={username} />
-            {fieldErrors.password && <FieldError role="alert">{fieldErrors.password}</FieldError>}
+            {fieldErrors.password && <FieldError id="reg-password-error" role="alert">{fieldErrors.password}</FieldError>}
           </Field>
 
           <Field>
             <HiddenLabel htmlFor="reg-confirm">Confirm password</HiddenLabel>
             <PasswordInput id="reg-confirm" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-              placeholder="Confirm password" required autoComplete="new-password" />
-            {fieldErrors.confirmPassword && <FieldError role="alert">{fieldErrors.confirmPassword}</FieldError>}
+              placeholder="Confirm password" required autoComplete="new-password"
+              aria-invalid={!!fieldErrors.confirmPassword || undefined}
+              aria-describedby={fieldErrors.confirmPassword ? 'reg-confirm-error' : undefined} />
+            {fieldErrors.confirmPassword && <FieldError id="reg-confirm-error" role="alert">{fieldErrors.confirmPassword}</FieldError>}
           </Field>
         </Col>
 
@@ -324,8 +334,8 @@ export function RegisterForm({ onSubmit, extra, canSubmit = true, initialEmail =
 
       <Foot>
         {/* What's still needed on the left, Create account on the right */}
-        <Needed>{needed.length > 0 && <>Still needed: {listWords(needed)}</>}</Needed>
-        <Submit type="submit" disabled={loading || !canSubmit}>
+        <Needed id="reg-still-needed">{needed.length > 0 && <>Still needed: {listWords(needed)}</>}</Needed>
+        <Submit type="submit" disabled={loading || !canSubmit} aria-describedby={needed.length > 0 ? 'reg-still-needed' : undefined}>
           {loading ? <Spinner size={18} /> : 'Create account'}
         </Submit>
       </Foot>

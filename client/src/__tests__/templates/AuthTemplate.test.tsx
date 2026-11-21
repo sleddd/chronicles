@@ -80,4 +80,10 @@ describe('AuthTemplate', () => {
     expect(styles.alignItems).toBe('center');
     expect(styles.justifyContent).toBe('center');
   });
+
+  it('is the page\'s main landmark, and with brand gives screen readers a hidden h1', () => {
+    renderWithTheme(<AuthTemplate title="Welcome back" brand srTitle="Sign in to Chronicles"><div>form</div></AuthTemplate>);
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in to Chronicles' })).toBeInTheDocument();
+  });
 });

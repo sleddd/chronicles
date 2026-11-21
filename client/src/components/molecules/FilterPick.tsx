@@ -24,7 +24,7 @@ export const PickPill = styled.label<{ $set: boolean; $grow?: boolean }>`
   color: var(--text-secondary);
   cursor: pointer;
   &:hover { border-color: ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-strong)')}; }
-  &:focus-within { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   b {
     max-width: 200px;
     overflow: hidden;

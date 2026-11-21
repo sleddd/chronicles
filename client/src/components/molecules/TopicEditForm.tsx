@@ -47,7 +47,7 @@ const IconTile = styled.button<{ $open: boolean }>`
   color: var(--text-primary);
   cursor: pointer;
   &:hover { border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const NameInput = styled.input`

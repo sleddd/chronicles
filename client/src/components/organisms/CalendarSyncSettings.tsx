@@ -256,7 +256,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
       <SettingsRow
         title="Sync events & meetings"
         description="Keep Event and Meeting entries in sync with an external calendar. Synced events leave end-to-end encryption: Google stores them, and the Apple feed keeps an unencrypted copy on the Chronicles server so your calendar app can read it. Turning sync off also turns the Apple feed off and deletes that copy, so its link stops working."
-        action={<Toggle checked={calendarSyncEnabled} onChange={handleSyncToggle} activeColor={toggleColor} />}
+        action={<Toggle aria-label="Sync events & meetings" checked={calendarSyncEnabled} onChange={handleSyncToggle} activeColor={toggleColor} />}
       />
       {statusError && calendarSyncEnabled && <div style={msgStyle(true)}>{statusError}</div>}
 
@@ -318,7 +318,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
             <SettingsRow
               title="Import Google events"
               description="Also create Chronicles entries for events added directly in the synced Google calendar — from today onward only, never past history"
-              action={<Toggle checked={calendarImportMode === 'all'} onChange={handleImportModeToggle} activeColor={toggleColor} />}
+              action={<Toggle aria-label="Import Google events" checked={calendarImportMode === 'all'} onChange={handleImportModeToggle} activeColor={toggleColor} />}
             >
               {importCleanupCount !== null && (
                 <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -343,7 +343,7 @@ export function CalendarSyncSettings({ themeMode }: { themeMode: 'light' | 'dark
             description="Subscribe to your events from Apple Calendar (one-way: changes made in Apple Calendar don't sync back). Turning this on stores your events unencrypted on the Chronicles server so Apple Calendar can fetch them; turning it off deletes that copy."
             action={icsBusy
               ? <Spinner size={14} />
-              : <Toggle checked={!!status?.icsEnabled && icsFeedEnabled} onChange={handleIcsToggle} activeColor={toggleColor} />}
+              : <Toggle aria-label="Apple Calendar feed" checked={!!status?.icsEnabled && icsFeedEnabled} onChange={handleIcsToggle} activeColor={toggleColor} />}
           >
             {status?.icsEnabled && httpsUrl && (
               <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>

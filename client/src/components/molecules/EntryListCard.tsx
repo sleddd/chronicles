@@ -81,13 +81,20 @@ export function EntryListCard({ content, createdAt, topicName, completed, onClic
     );
   }
 
+  const open = () => { clearRowHover(); onClick?.(); };
   return (
     <Row
       $hasTopic={!!topicName}
       $hint={hint}
       $flush={flush}
       $roomy={roomy}
-      onClick={() => { clearRowHover(); onClick?.(); }}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={open}
+      onKeyDown={onClick ? e => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+      } : undefined}
       {...rowHoverHandlers}
     >
       {topicName && <TopicCell title={topicName}>{topicName}</TopicCell>}

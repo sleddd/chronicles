@@ -11,6 +11,7 @@ import { BoxText } from './formKit.js';
 import { cardLabel } from '../../../styles/cardLabel.js';
 import { sameTaskType } from '../../../utils/taskTypes.js';
 import { checklistOf } from '../../../utils/taskLists.js';
+import { usePopover } from '../../../hooks/usePopover.js';
 import { ChecklistSection } from './ChecklistSection.js';
 import { taskStatusOf, taskFieldsForStatus, type TaskStatus } from '../../../types/goals.js';
 import { toDateStr } from '../../../utils/dateUtils.js';
@@ -175,9 +176,10 @@ const Pick = styled.label`
     cursor: pointer;
     font-size: 16px; /* iOS: no zoom on focus */
   }
-  /* No focus outline; a keyboard user sees the words brighten instead */
+  /* Keyboard focus: the neutral ring round the drawn picker (the select itself is invisible) */
   &:focus-within .value, &:focus-within svg { color: var(--text-primary); }
-  select:focus, select:focus-visible { outline: none; }
+  &:has(select:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 3px; border-radius: 999px; }
+  select:focus, select:focus-visible { outline: none !important; }
 `;
 
 const Picks = styled.div`
@@ -205,7 +207,7 @@ const TimerBtn = styled.button<{ $running: boolean }>`
   ${({ $running }) => ($running ? 'animation: taskTimerPulse 1.6s ease-in-out infinite;' : '')}
   @keyframes taskTimerPulse { 50% { opacity: 0.55; } }
   &:hover { background: var(--bg-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const TimerPop = styled.div`
@@ -362,7 +364,7 @@ const FormatPair = styled.div`
   }
   button[aria-checked='true'] { background: var(--bg-tab-active); color: var(--text-primary); }
   button:hover:not([aria-checked='true']) { color: var(--text-primary); }
-  button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+  button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 `;
 
 export function TaskFormatToggle({ values, onChange }: { values: TaskFieldValues; onChange: (v: TaskFieldValues) => void }) {
@@ -598,11 +600,11 @@ export function TimerPopButton({ timer, running = false }: { timer: ReactNode; r
       const t = e.target as Node;
       if (!pop.current?.contains(t) && !btn.current?.contains(t)) setOpen(false);
     };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); btn.current?.focus(); } };
     document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+    return () => { document.removeEventListener('mousedown', away); };
   }, [open]);
+  // Keyboard: into the panel, Escape back to the stopwatch, focus leaving closes it
+  usePopover({ open, onClose: () => setOpen(false), triggerRef: btn, panelRef: pop });
   return (
     <>
       <TimerBtn ref={btn} type="button" $running={running} aria-expanded={open} aria-haspopup="dialog"

@@ -99,12 +99,39 @@ const Arrow = styled.button<{ $side: 'left' | 'right' }>`
   @media (max-width: 768px) { width: 32px; height: 32px; ${({ $side }) => $side}: -16px; span { font-size: 20px !important; } }
 `;
 
+/* Under the image: the pause / play button, then the dots */
+const Controls = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 40px;
+`;
+
+/* Pause / play: the arrows' round dark button, smaller, beside the dots */
+const PauseButton = styled.button`
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #2b2e36;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 150ms;
+  &:hover { background: #383c46; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+`;
+
 const Dots = styled.div`
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
   gap: 2px;
-  margin-top: 40px;
   button {
     width: 22px;
     height: 22px;
@@ -136,16 +163,18 @@ const VisuallyHidden = styled.p`
 export function ScreenSlideshow() {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  const count = AVAILABLE.length;
   const reduced = useRef(typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  // Stopped by the pause button (or from the start for reduced motion, until Play is pressed)
+  const [stopped, setStopped] = useState(reduced.current);
+  const count = AVAILABLE.length;
 
   const go = useCallback((n: number) => setIndex(((n % count) + count) % count), [count]);
 
   useEffect(() => {
-    if (paused || reduced.current || count < 2) return;
+    if (paused || stopped || count < 2) return;
     const id = setTimeout(() => go(index + 1), INTERVAL_MS);
     return () => clearTimeout(id);
-  }, [index, paused, count, go]);
+  }, [index, paused, stopped, count, go]);
 
   const swipe = useSwipe(() => go(index + 1), () => go(index - 1));
   if (count === 0) return null;
@@ -191,13 +220,22 @@ export function ScreenSlideshow() {
           </>
         )}
       </Stage>
-      <VisuallyHidden aria-live={paused ? 'polite' : 'off'}>{slide.name}: {slide.caption}</VisuallyHidden>
+      <VisuallyHidden aria-live={paused || stopped ? 'polite' : 'off'}>{slide.name}: {slide.caption}</VisuallyHidden>
       {count > 1 && (
-        <Dots>
-          {AVAILABLE.map((s, i) => (
-            <button key={s.key} type="button" aria-label={`Show ${s.name} (${i + 1} of ${count})`} aria-current={i === index} onClick={() => go(i)} />
-          ))}
-        </Dots>
+        <Controls>
+          <PauseButton
+            type="button"
+            aria-label={stopped ? 'Play slideshow' : 'Pause slideshow'}
+            onClick={() => setStopped(v => !v)}
+          >
+            <MaterialIcon aria-hidden $size={20}>{stopped ? 'play_arrow' : 'pause'}</MaterialIcon>
+          </PauseButton>
+          <Dots>
+            {AVAILABLE.map((s, i) => (
+              <button key={s.key} type="button" aria-label={`Show ${s.name} (${i + 1} of ${count})`} aria-current={i === index} onClick={() => go(i)} />
+            ))}
+          </Dots>
+        </Controls>
       )}
     </Carousel>
   );

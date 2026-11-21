@@ -45,7 +45,7 @@ describe('AI task planning and AI insights switches', () => {
 
   it('switching one on opens its notice and saves nothing until both boxes are ticked and Turn on is pressed', async () => {
     renderWithTheme(<AiSettings />);
-    fireEvent.click(screen.getByRole('checkbox', { name: 'AI task planning' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'AI task planning' }));
     expect(screen.getByText('Read this before you turn it on')).toBeTruthy();
     expect(settingsApi.upsert).not.toHaveBeenCalled();
     expect(isAiFeatureEnabled('aiPlan')).toBe(false);
@@ -65,7 +65,7 @@ describe('AI task planning and AI insights switches', () => {
 
   it('AI kitchen has its own switch and notice, warning that allergens can be wrong', async () => {
     renderWithTheme(<AiSettings />);
-    fireEvent.click(screen.getByRole('checkbox', { name: 'AI kitchen' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'AI kitchen' }));
     expect(screen.getByText(/only on a run where you tick “Include my allergies”/)).toBeTruthy();
     expect(screen.getByText(/The AI can get allergens wrong/)).toBeTruthy();
     for (const label of AI_SHARING_CHECKS) fireEvent.click(screen.getByLabelText(label));
@@ -77,7 +77,7 @@ describe('AI task planning and AI insights switches', () => {
 
   it('Not now leaves it off', () => {
     renderWithTheme(<AiSettings />);
-    fireEvent.click(screen.getByRole('checkbox', { name: 'AI insights' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'AI insights' }));
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByText('Read this before you turn it on')).toBeNull();
     expect(settingsApi.upsert).not.toHaveBeenCalled();
@@ -99,17 +99,17 @@ describe('AI task planning and AI insights switches', () => {
     renderWithTheme(<AiSettings />);
     fireEvent.click(screen.getByRole('button', { name: 'Turn off' }));
     await waitFor(() => expect(settingsApi.upsert).toHaveBeenCalled());
-    expect(screen.getByRole('checkbox', { name: 'AI task planning' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'AI task planning' })).not.toBeChecked();
     expect(isAiFeatureEnabled('aiPlan')).toBe(false);
   });
 
   it('switching it off saves at once and ends this browser’s agreement', async () => {
     renderWithTheme(<AiSettings />);
-    fireEvent.click(screen.getByRole('checkbox', { name: 'AI insights' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'AI insights' }));
     for (const label of AI_SHARING_CHECKS) fireEvent.click(screen.getByLabelText(label));
     fireEvent.click(screen.getByRole('button', { name: 'Turn on' }));
     await waitFor(() => expect(isAiFeatureEnabled('aiInsights')).toBe(true));
-    fireEvent.click(screen.getByRole('checkbox', { name: 'AI insights' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'AI insights' }));
     await waitFor(() => expect(getAiConfigValue()?.insightsEnabled).toBe(false));
     expect(aiFeatureChosenHere('aiInsights')).toBe(false);
   });

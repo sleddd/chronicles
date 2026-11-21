@@ -44,7 +44,7 @@ export const Pick = styled.button`
   color: var(--text-secondary);
   cursor: pointer;
   img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 `;
 
 const Credit = styled.p`

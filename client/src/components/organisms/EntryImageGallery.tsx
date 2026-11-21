@@ -28,7 +28,7 @@ const BannerWrap = styled.div<{ $adjusting?: boolean }>`
   cursor: ${({ $adjusting }) => ($adjusting ? 'grab' : 'default')};
   touch-action: ${({ $adjusting }) => ($adjusting ? 'none' : 'auto')};
   &:active { cursor: ${({ $adjusting }) => ($adjusting ? 'grabbing' : 'default')}; }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const BannerImg = styled.img`
@@ -242,7 +242,7 @@ function Photo({ image, one, onRemove, onOpen }: { image: EntryImage; one: boole
   const w = !one && image.width && image.height ? Math.round((110 * image.width) / image.height) : undefined;
   return (
     <PhotoTile $one={one} $w={w} style={one && !url ? { width: 240, height: 160 } : undefined}>
-      {url ? <img src={url} alt="" onClick={onOpen} />
+      {url ? <img src={url} alt="Photo" role="button" tabIndex={0} aria-label="Open photo" onClick={onOpen} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }} />
         : loading ? <Spinner size={16} />
         : error ? <Icon name="image" size={20} strokeWidth={2} style={{ color: 'var(--text-disabled)' }} /> : null}
       <PhotoRemove type="button" $armed={armed}

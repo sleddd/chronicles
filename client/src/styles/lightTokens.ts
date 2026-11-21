@@ -34,7 +34,8 @@ export const LIGHT_TOKENS = `
   --color-accent-hover: #2c8c8a;
   --color-accent-subtle: rgba(52, 165, 162, 0.10);
   --on-accent: #ffffff;
-  --shadow-ring: 0 0 0 3px rgba(52, 165, 162, 0.35);
+  --shadow-ring: 0 0 0 2px #80868f;
+  --focus-ring: #80868f;
   --logo-top: rgb(23, 73, 71);
   --logo-mid: rgb(34, 107, 105);
   --logo-low: rgb(44, 140, 138);

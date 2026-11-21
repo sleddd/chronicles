@@ -86,7 +86,7 @@ const Tick = styled.button<{ $done: boolean }>`
   border: none;
   background: transparent;
   cursor: pointer;
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 50%; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 50%; }
 `;
 
 /* The item's name, edited in place — no box */

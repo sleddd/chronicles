@@ -87,7 +87,7 @@ const AddTimePill = styled.button<{ $compact?: boolean }>`
   color: var(--color-accent-link);
   cursor: pointer;
   &:hover { border-color: var(--control-border); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 interface ReminderTimesProps {

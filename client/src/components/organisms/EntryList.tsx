@@ -3,7 +3,8 @@ import { memo, useMemo, useCallback, useEffect, useState } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { EntryCard } from './EntryCard.js';
-import { Checkbox } from '../atoms/Checkbox.js';
+import { Checkbox } from '../atoms/core/Checkbox.jsx';
+import { entryTitleText } from '../../utils/entryTitle.js';
 import { LoadMore } from '../molecules/LoadMore.js';
 import { entrySearchText } from '../../utils/entrySearchText.js';
 import { useJournalSelect } from '../../stores/journalSelectStore.js';
@@ -351,7 +352,11 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
               if (!selectMode) return card;
               return (
                 <SelectRow key={entry.id}>
-                  <Checkbox checked={selectedIds.has(entry.id)} onChange={() => toggleSelected(entry.id)} />
+                  <Checkbox
+                    checked={selectedIds.has(entry.id)}
+                    onChange={() => toggleSelected(entry.id)}
+                    aria-label={`Select ${entryTitleText(entry.content) || previewText || 'entry'}`}
+                  />
                   {card}
                 </SelectRow>
               );

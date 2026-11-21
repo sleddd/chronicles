@@ -34,7 +34,7 @@ const Lines = styled.ul`
   li + li { border-top: 1px solid var(--border-subtle); }
   li { padding: 12px 16px; }
   summary { cursor: pointer; color: var(--text-primary); }
-  summary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 4px; }
+  summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
   ol {
     margin: 10px 0 2px;
     padding-left: 22px;

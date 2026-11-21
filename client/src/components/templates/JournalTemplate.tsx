@@ -79,7 +79,7 @@ const BackBtn = styled.button`
   position: relative;
   top: 3px;
   &:hover { color: var(--color-accent); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 6px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 6px; }
   ${NAV_COMPACT} { display: flex; }
   /* The title's weight (200), in both themes */
   & > span { font-weight: 200; font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 48; }

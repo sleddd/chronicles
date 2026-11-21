@@ -93,4 +93,16 @@ describe('CalendarGrid', () => {
     expect(screen.queryByText('Bill 2')).not.toBeInTheDocument();
     expect(container.textContent).not.toMatch(/\+\d/);
   });
+
+  it('desktop day cells work from the keyboard', () => {
+    const onDayClick = vi.fn();
+    const onDayDoubleClick = vi.fn();
+    renderWithTheme(<CalendarGrid {...defaultProps} onDayClick={onDayClick} onDayDoubleClick={onDayDoubleClick} />);
+    const cell = screen.getAllByRole('button', { name: /^Saturday, June 15/ }).find(el => el.tagName === 'DIV')!;
+    expect(cell).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(cell, { key: 'Enter' });
+    expect(onDayClick).toHaveBeenCalledWith('2024-06-15');
+    fireEvent.keyDown(cell, { key: 'Enter', shiftKey: true });
+    expect(onDayDoubleClick).toHaveBeenCalledWith('2024-06-15');
+  });
 });

@@ -109,7 +109,7 @@ const EditIconBtn = styled.button`
   color: var(--color-accent);
   cursor: pointer;
   &:hover { background: var(--bg-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 const Description = styled.p`
@@ -180,6 +180,9 @@ const StepBtn = styled.button`
   cursor: pointer;
   color: var(--text-tertiary);
   border-radius: var(--r-md, 1px);
+  /* A 28px target round the 18px glyph, without moving anything */
+  position: relative;
+  &::after { content: ''; position: absolute; inset: -5px; }
   &:hover { color: var(--text-primary); background: var(--bg-hover); }
 `;
 
@@ -200,7 +203,7 @@ const PrintIconBtn = styled.button`
   color: var(--text-muted);
   cursor: pointer;
   &:hover { color: var(--text-primary); background: var(--bg-hover); }
-  &:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /* Featured-image slot — sits 20px under the stats bar, 20px above the columns.

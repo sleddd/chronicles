@@ -50,7 +50,9 @@ export function PasswordInput({ error, label, hint, ...props }: PasswordInputPro
         error={errorMessage}
         {...props}
       />
-      <ToggleButton type="button" onClick={() => setVisible(!visible)}>
+      {/* The name changes with the state (and keeps the visible word in it), so it
+          carries no aria-pressed as well — "Hide password, pressed" would say it twice */}
+      <ToggleButton type="button" onClick={() => setVisible(!visible)} aria-label={visible ? 'Hide password' : 'Show password'}>
         {visible ? 'Hide' : 'Show'}
       </ToggleButton>
     </Wrapper>
