@@ -18,43 +18,106 @@ export interface PlanColumn {
   width: string;
   /** Right-aligned (counts, estimates) */
   end?: boolean;
+  /** Stacked on a narrow screen, its value shows with no name before it (a progress ring says what it is) */
+  unnamedWhenStacked?: boolean;
 }
+
+/* The title needs this much room beside the columns; with less, the table stacks */
+const TITLE_ROOM = 320;
+const COLUMN_GAP = 24;
+
+/**
+ * How wide the table must be to keep its columns side by side: the fixed
+ * columns, their gaps and room for the title. Under it every row stacks.
+ */
+export function stackWidth(columns: PlanColumn[]): number {
+  const fixed = columns.slice(1).reduce((n, c) => n + (/^\d+(\.\d+)?px$/.test(c.width) ? parseFloat(c.width) : 120), 0);
+  return Math.round(fixed + COLUMN_GAP * Math.max(0, columns.length - 1) + TITLE_ROOM);
+}
+
+/* A label before each value once the row is stacked ("Deadline Nov 9"), from the column names */
+const cellLabels = (columns: PlanColumn[]) => columns.slice(1).map((c, i) => (c.unnamedWhenStacked ? '' :
+  `[data-plan-cells] > [data-plan-cell]:nth-child(${i + 1}):not(:empty)::before { content: ${JSON.stringify(c.label)}; margin-right: 6px; color: var(--text-soft); font-weight: 500; }`),
+).join('\n');
+
+/*
+ * The table measures itself (a container query), not the window: it stacks
+ * wherever it is too narrow for its columns — a phone, a tablet, a narrow
+ * window — so a title is never squeezed to a sliver beside them. Stacked,
+ * each row is its title on a line of its own (wrapping, never cut off) over
+ * its columns as a muted line, each named; the column names are hidden from
+ * view (still read out).
+ */
+const Frame = styled.div<{ $stackAt: number; $labels: string }>`
+  container: plantable / inline-size;
+  margin-top: 8px;
+  @container plantable (max-width: ${({ $stackAt }) => $stackAt}px) {
+    [data-plan-head] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    /* Two columns: the tick / chevron, then the title with its values under
+       it, so the values line up with the title's text, never under the tick */
+    [data-plan-row] {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      column-gap: 12px;
+      row-gap: 14px;
+      align-items: start;
+      padding: 14px 0 20px calc(var(--plan-indent, 0) * 28px);
+    }
+    [data-plan-row][data-plan-bare] { grid-template-columns: minmax(0, 1fr); }
+    [data-plan-lead] { display: contents; }
+    [data-plan-mark] { display: flex; align-items: center; gap: 12px; min-height: 22px; }
+    [data-plan-lead] button[data-plan-title] { white-space: normal; }
+    /* The muted note after the title (a task's milestone or type) on a line of
+       its own, lined up with the title's text, with room above it */
+    [data-plan-lead] button[data-plan-title] small { display: block; margin: 12px 0 0; }
+    [data-plan-cells] {
+      grid-column: -2 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      /* Centred, not on the baseline: a progress ring would sit above the line */
+      align-items: center;
+      column-gap: 18px;
+      row-gap: 8px;
+    }
+    [data-plan-cell] {
+      text-align: left;
+      font-size: 13px;
+      font-style: italic;
+      color: var(--text-muted);
+    }
+    [data-plan-cell]:empty { display: none; }
+    /* The progress ring level with its percentage and the values beside it */
+    [data-plan-cell] svg { display: block; }
+    [data-plan-cell] > div { gap: 8px; }
+    ${({ $labels }) => $labels}
+  }
+`;
 
 const Table = styled.div`
   /* The first column is the title; the rest come from the columns given */
   --plan-cols: minmax(0, 1fr);
-  margin-top: 8px;
 `;
 
 const RowGrid = styled.div`
   display: grid;
   grid-template-columns: var(--plan-cols);
-  column-gap: 24px;
+  column-gap: ${COLUMN_GAP}px;
   align-items: center;
-  @media (max-width: 768px) {
-    /* Phones: the title on its line, the columns as a muted line under it */
-    display: flex;
-    flex-wrap: wrap;
-    column-gap: 16px;
-    row-gap: 4px;
-  }
 `;
 
 const HeadRow = styled(RowGrid)`
   padding: 0 0 14px;
   border-bottom: 1px solid var(--border-default);
-  /* Phones: hidden from view (each row's columns sit as a muted line), still read out */
-  @media (max-width: 768px) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
 `;
 
 const ColName = styled.span<{ $end?: boolean }>`
@@ -66,12 +129,14 @@ const ColName = styled.span<{ $end?: boolean }>`
 export function PlanTable({ label, columns, children }: { label: string; columns: PlanColumn[]; children: ReactNode }) {
   const cols = ['minmax(0, 1fr)', ...columns.slice(1).map(c => c.width)].join(' ');
   return (
-    <Table role="table" aria-label={label} style={{ '--plan-cols': cols } as CSSProperties}>
-      <HeadRow role="row">
-        {columns.map(c => <ColName key={c.label} role="columnheader" $end={c.end}>{c.label}</ColName>)}
-      </HeadRow>
-      {children}
-    </Table>
+    <Frame $stackAt={stackWidth(columns)} $labels={cellLabels(columns)}>
+      <Table role="table" aria-label={label} style={{ '--plan-cols': cols } as CSSProperties}>
+        <HeadRow role="row" data-plan-head="">
+          {columns.map(c => <ColName key={c.label} role="columnheader" $end={c.end}>{c.label}</ColName>)}
+        </HeadRow>
+        {children}
+      </Table>
+    </Frame>
   );
 }
 
@@ -194,13 +259,17 @@ const Row = styled(RowGrid)<{ $child: boolean }>`
   ${({ $child }) => ($child ? 'min-height: 56px;' : '')}
 `;
 
+/* Outside the stacked layout these wrappers step aside: their children are the row's own */
+const Contents = styled.div`
+  display: contents;
+`;
+
 const Lead = styled.div<{ $indent: number }>`
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
   padding-left: ${({ $indent }) => $indent * 56}px;
-  @media (max-width: 768px) { flex-basis: 100%; padding-left: ${({ $indent }) => $indent * 28}px; }
 `;
 
 const TitleBtn = styled.button<{ $done: boolean; $oneLine?: boolean }>`
@@ -229,12 +298,6 @@ const Cell = styled.div<{ $end?: boolean; $done?: boolean }>`
   min-width: 0;
   text-align: ${({ $end }) => ($end ? 'right' : 'left')};
   color: ${({ $done }) => ($done ? 'var(--text-muted)' : 'inherit')};
-  @media (max-width: 768px) {
-    text-align: left;
-    font-size: 13px;
-    color: var(--text-muted);
-    &:empty { display: none; }
-  }
 `;
 
 export interface PlanRowProps {
@@ -260,15 +323,17 @@ export interface PlanRowProps {
 
 export function PlanRow({ lead, title, note, titleCode, noteCode, oneLine, done = false, indent = 0, onOpen, cells, endCells = [] }: PlanRowProps) {
   return (
-    <Row role="row" $child={indent > 0}>
-      <Lead role="cell" $indent={indent}>
-        {lead}
-        <TitleBtn type="button" $done={done} $oneLine={oneLine} onClick={onOpen} title={oneLine ? [title, note].filter(Boolean).join(' · ') : undefined}>
+    <Row role="row" $child={indent > 0} data-plan-row="" data-plan-bare={lead ? undefined : ''} style={indent ? { '--plan-indent': indent } as CSSProperties : undefined}>
+      <Lead role="cell" $indent={indent} data-plan-lead="">
+        {lead && <Contents role="presentation" data-plan-mark="">{lead}</Contents>}
+        <TitleBtn type="button" data-plan-title="" $done={done} $oneLine={oneLine} onClick={onOpen} title={oneLine ? [title, note].filter(Boolean).join(' · ') : undefined}>
           <span className={titleCode ? 'code' : undefined}>{title}</span>
           {note && <small className={noteCode ? 'code' : undefined}>{note}</small>}
         </TitleBtn>
       </Lead>
-      {cells.map((c, i) => <Cell key={i} role="cell" $end={endCells[i]} $done={done}>{c}</Cell>)}
+      <Contents role="presentation" data-plan-cells="">
+        {cells.map((c, i) => <Cell key={i} role="cell" data-plan-cell="" $end={endCells[i]} $done={done}>{c}</Cell>)}
+      </Contents>
     </Row>
   );
 }

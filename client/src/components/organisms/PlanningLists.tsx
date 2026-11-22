@@ -118,7 +118,7 @@ function useFoldedGroups(scope: string) {
 /* ── Goals ── */
 
 const GOAL_COLUMNS: PlanColumn[] = [
-  { label: 'Goal', width: '' }, { label: 'Progress', width: '140px' }, { label: 'Start', width: '120px' },
+  { label: 'Goal', width: '' }, { label: 'Progress', width: '140px', unnamedWhenStacked: true }, { label: 'Start', width: '120px' },
   { label: 'Deadline', width: '220px' }, { label: 'Tasks', width: '72px', end: true },
 ];
 
@@ -197,7 +197,7 @@ export function GoalTable({ goals, milestones, tasks, categories, group, ...shar
 /* ── Milestones ── */
 
 const MILESTONE_COLUMNS: PlanColumn[] = [
-  { label: 'Milestone', width: '' }, { label: 'Progress', width: '140px' }, { label: 'Start', width: '120px' },
+  { label: 'Milestone', width: '' }, { label: 'Progress', width: '140px', unnamedWhenStacked: true }, { label: 'Start', width: '120px' },
   { label: 'Deadline', width: '220px' }, { label: 'Tasks', width: '72px', end: true },
 ];
 
