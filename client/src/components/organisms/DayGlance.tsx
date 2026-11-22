@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import styled from 'styled-components';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
@@ -950,7 +950,22 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const id = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(id); }, []);
   const today = toDateStr(now);
-  const [picked, setPicked] = useState<string | null>(null);
+  // The day picked lives in the address (?day=), so opening a task in the
+  // journal and coming back — Save, Close, Back — lands on that day, not today
+  const [params, setParams] = useSearchParams();
+  const [picked, setPicked] = useState<string | null>(() => {
+    const d = params.get('day');
+    return d && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(d)) ? d : null;
+  });
+  useEffect(() => {
+    const inUrl = params.get('day');
+    if ((inUrl ?? null) === picked) return;
+    setParams(p => {
+      const next = new URLSearchParams(p);
+      if (picked) next.set('day', picked); else next.delete('day');
+      return next;
+    }, { replace: true, state: null });
+  }, [picked]); // eslint-disable-line react-hooks/exhaustive-deps
   const [eveningOpen, setEveningOpen] = useState(readEveningOpen);
   const [morningOpen, setMorningOpen] = useState(readMorningOpen);
   const toggleMorning = () => setMorningOpen(v => {
