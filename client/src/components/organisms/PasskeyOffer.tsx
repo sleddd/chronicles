@@ -2,6 +2,7 @@ import { useState } from 'react';
 import styled from 'styled-components';
 import { useAddPasskey, usePasskeyAddConfirmation } from '../../hooks/useAddPasskey.js';
 import { PasskeyCancelled, suggestedPasskeyName } from '../../services/passkeys.js';
+import { PASSKEY_LASTPASS_NOTE } from '../../utils/passkeyProblem.js';
 import { Button } from '../atoms/Button.js';
 import { Spinner } from '../atoms/Spinner.js';
 import { ErrorBanner } from '../atoms/ErrorBanner.js';
@@ -75,7 +76,8 @@ export function PasskeyOffer({ email, password, onDone }: PasskeyOfferProps) {
         Add a passkey and you can sign in with your fingerprint, face or device PIN. There is no password to type, and it opens your journal in one touch.
       </Text>
       <Quiet>Your device will ask to confirm it’s you, sometimes twice. Your password and recovery key keep working.</Quiet>
-      <Quiet>Save it to this device (Touch ID, Windows Hello) or your phone. If a password manager offers to save it, decline: some, such as LastPass, can’t hold a passkey that opens your journal.</Quiet>
+      <Quiet>Save it to this device (Touch ID, Windows Hello) or your phone.</Quiet>
+      <Quiet><strong>{PASSKEY_LASTPASS_NOTE}</strong></Quiet>
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {secondTouch && <Quiet role="status">One more touch to finish. Choose the same passkey again, in the same place you just saved it.</Quiet>}
       <Button type="button" fullWidth variant="secondary" disabled={busy} onClick={() => void add()}>

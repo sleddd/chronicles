@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { withAuthSecret } from '../../utils/passwordForms.js';
 import type { KeySource } from '../../contexts/EncryptionContext.js';
 import { auth as authApi, ApiError, type PasskeyInfo } from '../../services/api.js';
+import { PASSKEY_LASTPASS_NOTE } from '../../utils/passkeyProblem.js';
 import { PasskeyCancelled, confirmWithPasskey, forgetPasskeysHere, keepOnlyPasskeys, passkeysAvailable, suggestedPasskeyName } from '../../services/passkeys.js';
 import { useAddPasskey, usePasskeyAddConfirmation } from '../../hooks/useAddPasskey.js';
 import { TextInput } from '../atoms/TextInput.js';
@@ -225,11 +226,12 @@ export function PasskeySettings({ email, totpEnabled, onUsable }: PasskeySetting
       {open?.kind === 'add' && (
         <>
           <RowNote style={{ marginTop: 0 }}>
-            Name it, then confirm it’s you. Your device will ask for your fingerprint, face or PIN, sometimes twice. Save it to this device (Touch ID, Windows Hello) or your phone. If a password manager offers to save it, decline: some, such as LastPass, can’t hold a passkey that opens your journal.
+            Name it, then confirm it’s you. Your device will ask for your fingerprint, face or PIN, sometimes twice. Save it to this device (Touch ID, Windows Hello) or your phone.
           </RowNote>
+          <RowNote style={{ marginTop: 0 }}><strong>{PASSKEY_LASTPASS_NOTE}</strong></RowNote>
           {error && <RowNote $error style={{ marginTop: 0 }} role="alert">{error}</RowNote>}
           {secondTouch && <RowNote style={{ marginTop: 0 }} role="status">One more touch to finish. Choose the same passkey again, in the same place you just saved it.</RowNote>}
-          <TextInput value={name} onChange={e => setName(e.target.value.slice(0, 60))} placeholder="Name, such as MacBook or Phone" aria-label="Passkey name" />
+          <TextInput value={name} onChange={e => setName(e.target.value.slice(0, 60))} placeholder="Name, such as MacBook or Phone" aria-label="Passkey name" autoComplete="off" data-lpignore="true" />
           {confirmFields(() => { if (!cantGo) void add('password'); }, count > 0)}
           <FormActions>
             <RowPill type="button" onClick={close} disabled={busy}>Cancel</RowPill>

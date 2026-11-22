@@ -4,6 +4,8 @@
    entries when this first runs is marked done quietly — existing people only
    see the tour if they replay it from Settings. Pure. */
 
+import { PASSKEY_LASTPASS_NOTE } from './passkeyProblem.js';
+
 export interface OnboardingState {
   /** The tour was finished or skipped */
   tourDone?: boolean;
@@ -18,6 +20,7 @@ export function firstRun(state: OnboardingState | null, entryCount: number): 'to
   if (state !== null) return null;
   return entryCount > 0 ? 'existing' : 'tour';
 }
+
 
 export type ChecklistKey = 'name' | 'city' | 'entry' | 'health' | 'planning' | 'kitchen' | 'media' | 'ai' | 'voice' | 'passkey' | 'homescreen' | 'recovery';
 
@@ -58,7 +61,7 @@ export function gettingStarted(opts: {
   add('city', 'Add your city for the weather and world clocks', 'Tap the sliders at the top right, then Customize view, and add a city.');
   add('entry', 'Write your first entry', 'Pick a topic in Quick entry, write your entry, then press Save entry.');
   add('recovery', 'Keep your recovery key somewhere safe', 'It was shown when you signed up. Lost it? Make a new one in Settings → Security.');
-  if (opts.passkeySupported) add('passkey', 'Set up a passkey', 'Settings → Security → Passkeys. Sign in with your fingerprint, face or device PIN, with no password to type.');
+  if (opts.passkeySupported) add('passkey', 'Set up a passkey', `Settings → Security → Passkeys. Sign in with your fingerprint, face or device PIN, with no password to type. ${PASSKEY_LASTPASS_NOTE}`);
   add('ai', 'Set up your AI (optional)', 'Settings → In-App AI. Use your own Claude, OpenAI or Amazon Bedrock account for meal and exercise estimates, then turn on the chat, AI planning or AI kitchen if you want them. It stays off until you set it up.');
   add('health', 'Explore your Health dashboard', 'Health is where you set up medications and your exercise routine, log meals and symptoms, and see your reports.');
   add('planning', 'Start planning with your vision', 'In Planning, write your vision first. Then add goals that work toward it, break them into milestones, and plan the tasks onto your week.');

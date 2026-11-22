@@ -7,6 +7,14 @@
  * those, and the note sent people off to make another one.
  */
 
+/**
+ * Said wherever a passkey is offered (sign-up, Settings, onboarding). LastPass
+ * puts itself in front of the browser's passkey prompt and answers with a
+ * passkey that can't produce the secret that opens the journal, and a page
+ * can't turn an extension off, so people are told before they try.
+ */
+export const PASSKEY_LASTPASS_NOTE = 'Passkeys do not work with LastPass. If you use the LastPass extension, you will not be able to use a passkey with Chronicles.';
+
 interface Problem { status?: unknown; retryAfterSec?: unknown; name?: unknown; message?: unknown }
 
 const wait = (sec: unknown): string => {

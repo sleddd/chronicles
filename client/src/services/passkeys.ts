@@ -44,6 +44,10 @@ const prfBytes = (r: PrfResults): Uint8Array | null => {
   return u8.byteLength === 32 ? new Uint8Array(u8) : null;
 };
 
+// Ask the browser for this device's own passkey store first (Touch ID, Windows
+// Hello). A hint only: a phone or a security key can still be chosen
+const DEVICE_FIRST = { hints: ['client-device'] };
+
 /** The person closed the passkey sheet (or it timed out): not an error to show */
 export class PasskeyCancelled extends Error {
   constructor() { super('Passkey cancelled'); this.name = 'PasskeyCancelled'; }
@@ -135,7 +139,8 @@ async function assert(options: PasskeyRequestOptions): Promise<{ response: Recor
       userVerification: options.userVerification ?? 'required',
       allowCredentials: options.allowCredentials?.map(c => ({ id: fromB64u(c.id), type: 'public-key' as const, transports: c.transports as AuthenticatorTransport[] | undefined })),
       extensions: { prf: { eval: { first } } } as AuthenticationExtensionsClientInputs,
-    },
+      ...DEVICE_FIRST,
+    } as PublicKeyCredentialRequestOptions,
   }).catch(rethrow) as PublicKeyCredential | null;
   if (!cred) throw new PasskeyCancelled();
   const r = cred.response as AuthenticatorAssertionResponse;
@@ -273,7 +278,8 @@ export async function createPasskey(options: PasskeyCreationOptions, onSecondTou
       authenticatorSelection: options.authenticatorSelection,
       excludeCredentials: options.excludeCredentials?.map(c => ({ id: fromB64u(c.id), type: 'public-key' as const, transports: c.transports as AuthenticatorTransport[] | undefined })),
       extensions: { prf: { eval: { first } } } as AuthenticationExtensionsClientInputs,
-    },
+      ...DEVICE_FIRST,
+    } as PublicKeyCredentialCreationOptions,
   }).catch(rethrow) as PublicKeyCredential | null;
   if (!cred) throw new PasskeyCancelled();
 
@@ -298,7 +304,8 @@ export async function createPasskey(options: PasskeyCreationOptions, onSecondTou
         userVerification: 'required',
         allowCredentials: [{ id: new Uint8Array(cred.rawId), type: 'public-key' }],
         extensions: { prf: { eval: { first } } } as AuthenticationExtensionsClientInputs,
-      },
+        ...DEVICE_FIRST,
+      } as PublicKeyCredentialRequestOptions,
     }).catch(rethrow) as PublicKeyCredential | null;
     prf = used ? prfBytes(prfOf(used)) : null;
     if (!prf) { forgetOnDevice(options.rp.id, cred.id); throw new PasskeyCannotUnlock('add'); }

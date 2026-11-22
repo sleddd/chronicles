@@ -1,3 +1,4 @@
+import { PASSKEY_LASTPASS_NOTE } from '../../utils/passkeyProblem.js';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import styled from 'styled-components';
@@ -177,7 +178,7 @@ export function OnboardingTour({ onClose, themePreference, onTheme, isOn, onFeat
       body: (<>
         <p>Everything you write is encrypted on this device before it’s saved. Only you can read it. We can’t.</p>
         <p>That’s also why your recovery key matters. It’s the only way back in if you forget your password, so keep it somewhere safe.</p>
-        <p>To sign in with a fingerprint or face, add a passkey in Settings → Security.</p>
+        <p>To sign in with a fingerprint or face, add a passkey in Settings → Security. {PASSKEY_LASTPASS_NOTE}</p>
       </>),
     },
     {
