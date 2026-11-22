@@ -22,7 +22,7 @@ import { announceLocalReset, onRemoteReset } from '../services/signOutBroadcast.
 import { claimBrowserFor, retagBrowser, noteRetagPending, clearRetagPending, rekeyFinishedHere, markRekeyFinished, ownerMark, ownedByAnotherKey } from '../services/browserData.js';
 import { runRekey, resealLocalDrafts, RekeyError } from '../services/rekey.js';
 import { useRekeyStore, rekeyActive } from '../stores/rekeyStore.js';
-import { forgetPasskeysHere } from '../services/passkeys.js';
+import { forgetPasskeysHere, keepOnlyPasskeys, knownPasskeys } from '../services/passkeys.js';
 import { setImageStorageConfig } from '../services/imageStorage.js';
 import { showFlash } from '../services/flashNotice.js';
 import type { RekeyCommit } from '../services/api.js';
@@ -373,6 +373,15 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
       // tab kept, so image display / cleanup and estimates work at once
       void rederiveImageStorageConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
       void rederiveAiConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
+      // Passkeys this browser remembers but the account no longer has (removed
+      // on another device, or by a re-encryption made elsewhere) stop being
+      // asked for at sign-in: asking for one that is gone makes the browser
+      // offer only a phone or a security key, never this device's own passkey
+      if (knownPasskeys().length) {
+        void authApi.passkeys().then(list => {
+          if (list.every(p => typeof p.credentialId === 'string')) keepOnlyPasskeys(list.map(p => p.credentialId as string));
+        }).catch(() => {});
+      }
       setIsUnlocked(true);
       // A check that failed first left the app waiting (above): it opens now
       setIsRestoring(false);
