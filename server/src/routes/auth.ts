@@ -21,7 +21,7 @@ import { logSecurityEvent } from '../utils/securityLogger.js';
 import { previewField } from '../services/previews.js';
 import { networkKey } from '../services/networkKey.js';
 import { findAccountPasskey } from '../db/passkeyQueries.js';
-import { insertRekey, getRekey, getFinishedRekey, dropFinishedRekey, finishRekey, claimRekey } from '../db/rekeyQueries.js';
+import { insertRekey, getRekey, dropFinishedRekey, finishRekey, claimRekey } from '../db/rekeyQueries.js';
 
 // Sign-in state every instance shares (services/sharedState.ts: Postgres by
 // default): pending 2FA sign-ins (kept by the token's hash), the last TOTP
@@ -1242,7 +1242,7 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       ...(rekey ? [
         // A plain insert: a second re-key racing this one fails here, and the
         // whole transaction with it
-        // (a finished one's row, kept a few days for drafts, makes way first)
+        // (a leftover finished row, should there be one, makes way first)
         dropFinishedRekey(account.id),
         insertRekey(account.id, rekey.rekeyId, b64(rekey.oldKey), b64(rekey.oldKeyIv)),
         prisma.$executeRaw`DELETE FROM public.passkeys WHERE account_id = ${account.id}`,
@@ -1295,10 +1295,7 @@ router.get('/rekey', authMiddleware, apiLimiter, async (req, res) => {
       res.json({ pending: true, rekeyId: pending.rekeyId, oldKey: pending.oldKey, oldKeyIv: pending.oldKeyIv });
       return;
     }
-    // One that finished in the last few days: its old key, for this browser's
-    // unsaved drafts only (never for records, which have all moved)
-    const finished = await getFinishedRekey(req.auth!.accountId);
-    res.json(finished ? { pending: false, drafts: finished } : { pending: false });
+    res.json({ pending: false });
   } catch (err) {
     console.error('Re-key status error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Couldn’t check the re-encryption' });

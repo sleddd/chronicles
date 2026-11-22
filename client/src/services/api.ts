@@ -309,6 +309,8 @@ export const auth = {
       | { requires2FA: true; pendingToken: string }
     >('/auth/passkey/verify', { method: 'POST', body: { response } }),
   passkeys: () => request<PasskeyInfo[]>('/auth/passkeys'),
+  /** The account's passkeys as a device's passkey store wants them (services/passkeys.ts `syncPasskeysWithDevice`) */
+  passkeysAccepted: () => request<{ rpId: string; userId: string; credentialIds: string[] }>('/auth/passkeys/accepted'),
   passkeyRegisterOptions: () => request<{ options: PasskeyCreationOptions }>('/auth/passkeys/register/options', { method: 'POST' }),
   passkeyRegister: (data: { response: unknown; wrappedMK: string; wrapIv: string; name: string; code?: string } & PasswordOrToken<'currentAuthSecret'>) =>
     request<{ passkeys: PasskeyInfo[] }>('/auth/passkeys/register/verify', { method: 'POST', body: data }),
@@ -342,7 +344,7 @@ export const auth = {
 
   /** A re-encryption still under way: the old key, sealed under the new one */
   rekeyStatus: () =>
-    request<{ pending: false; drafts?: { rekeyId: string; oldKey: string; oldKeyIv: string } } | { pending: true; rekeyId: string; oldKey: string; oldKeyIv: string }>('/auth/rekey'),
+    request<{ pending: false } | { pending: true; rekeyId: string; oldKey: string; oldKeyIv: string }>('/auth/rekey'),
 
   /** Take (or keep) the re-encryption job for this browser: one runs it at a time */
   rekeyClaim: (rekeyId: string, runner: string) =>

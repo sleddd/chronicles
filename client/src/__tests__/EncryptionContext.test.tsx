@@ -127,24 +127,6 @@ describe('EncryptionProvider – unlock', () => {
     expect(mockUnwrapMasterKey).toHaveBeenCalledWith('password', 'salt', 'emk', 'iv', 600000);
   });
 
-  it('uses a finished re-key’s old key for this browser’s drafts only, and opens the journal', async () => {
-    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
-    const oldKey = { type: 'secret' } as CryptoKey;
-    mockOpenOldKey.mockResolvedValue(oldKey);
-    mockRunRekey.mockClear();
-    mockResealLocalDrafts.mockClear();
-    mockRekeyStatus.mockResolvedValue({ pending: false, drafts: { rekeyId: 'e'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV' } });
-
-    const { result } = renderHook(() => useEncryption(), { wrapper });
-    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
-    await waitFor(() => expect(result.current.isUnlocked).toBe(true));
-    expect(mockOpenOldKey).toHaveBeenCalledWith(fakeCryptoKey, 'OLD', 'IV', 'e'.repeat(32));
-    expect(mockResealLocalDrafts).toHaveBeenCalledWith(fakeCryptoKey, oldKey);
-    // No record is ever read with it: the job doesn't run
-    expect(mockRunRekey).not.toHaveBeenCalled();
-    mockRekeyStatus.mockResolvedValue({ pending: false });
-  });
-
   it('keeps the journal shut while a re-encryption is under way, and opens it once that is done', async () => {
     mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
     const oldKey = { type: 'secret' } as CryptoKey;

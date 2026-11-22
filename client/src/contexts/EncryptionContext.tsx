@@ -22,7 +22,7 @@ import { announceLocalReset, onRemoteReset } from '../services/signOutBroadcast.
 import { claimBrowserFor, retagBrowser, noteRetagPending, clearRetagPending, rekeyFinishedHere, markRekeyFinished, ownerMark, ownedByAnotherKey } from '../services/browserData.js';
 import { runRekey, resealLocalDrafts, RekeyError } from '../services/rekey.js';
 import { useRekeyStore, rekeyActive } from '../stores/rekeyStore.js';
-import { forgetPasskeysHere, keepOnlyPasskeys, knownPasskeys } from '../services/passkeys.js';
+import { forgetPasskeysHere, syncPasskeysWithDevice } from '../services/passkeys.js';
 import { setImageStorageConfig } from '../services/imageStorage.js';
 import { showFlash } from '../services/flashNotice.js';
 import type { RekeyCommit } from '../services/api.js';
@@ -358,30 +358,14 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     // taken up again, whatever the server says is pending (browserData.ts)
     if (!status.pending || rekeyFinishedHere(status.rekeyId)) {
       if (status.pending) console.warn('Ignored a re-encryption that was already finished here');
-      // A re-key that finished elsewhere while this browser was away: the server
-      // keeps its old key (sealed under the new one) a few days more, for one
-      // thing only: unsaved writing this browser sealed under it. Nothing
-      // else is ever opened with it, and it is done once per browser
-      if (!status.pending && status.drafts && !rekeyFinishedHere(status.drafts.rekeyId)) {
-        try {
-          const old = await encryptionService.openOldKey(key, status.drafts.oldKey, status.drafts.oldKeyIv, status.drafts.rekeyId);
-          await resealLocalDrafts(key, old);
-          markRekeyFinished(status.drafts.rekeyId);
-        } catch { /* not this key's: the drafts stay as they are */ }
-      }
       // Restore the in-memory R2 and AI credentials from the sealed copies this
       // tab kept, so image display / cleanup and estimates work at once
       void rederiveImageStorageConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
       void rederiveAiConfig((ct, iv, aad) => encryptionService.decryptFile(key, ct, iv, aad));
-      // Passkeys this browser remembers but the account no longer has (removed
-      // on another device, or by a re-encryption made elsewhere) stop being
-      // asked for at sign-in: asking for one that is gone makes the browser
-      // offer only a phone or a security key, never this device's own passkey
-      if (knownPasskeys().length) {
-        void authApi.passkeys().then(list => {
-          if (list.every(p => typeof p.credentialId === 'string')) keepOnlyPasskeys(list.map(p => p.credentialId as string));
-        }).catch(() => {});
-      }
+      // Passkeys the account no longer has (removed on another device, or by a
+      // re-encryption made elsewhere) stop being asked for here, and the
+      // device stops offering them where the browser can tell it to
+      void syncPasskeysWithDevice();
       setIsUnlocked(true);
       // A check that failed first left the app waiting (above): it opens now
       setIsRestoring(false);
@@ -634,6 +618,9 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
     clearRetagPending();
     // The server removed the passkeys (each held the old key)
     forgetPasskeysHere();
+    // And this device stops offering them, where the browser can tell it to:
+    // an old passkey left beside the one added afterwards can only fail
+    void syncPasskeysWithDevice();
     // Other tabs here still hold the old key and share the new session cookie:
     // they drop everything and show sign-in (they would otherwise go on
     // writing under the old key while records move)

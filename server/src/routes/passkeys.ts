@@ -173,7 +173,7 @@ router.post('/passkey/verify', authLimiter, async (req, res) => {
       const unknown = !candidate;
       logSecurityEvent('passkey_login_failed', { ip: req.ip, details: { reason: unknown ? 'unknown_credential' : 'verification' } });
       if (unknown) {
-        res.status(401).json({ error: 'That passkey didn’t work because it isn’t on your account. Sign in with your password, then add it again in Settings.', unknownCredential: true });
+        res.status(401).json({ error: 'That passkey didn’t work because it is no longer on your account. Try again and choose your newest passkey, or sign in with your password.', unknownCredential: true });
         return;
       }
       await refuse();
@@ -237,6 +237,28 @@ router.get('/passkeys', authMiddleware, apiLimiter, async (req, res) => {
     res.json((await listPasskeys(req.auth!.accountId)).map(publicView));
   } catch (err) {
     console.error('List passkeys error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed to list passkeys' });
+  }
+});
+
+// =============================================================================
+// GET /api/auth/passkeys/accepted — what a device needs to drop passkeys the
+// account no longer has
+// =============================================================================
+// The browser hands this to the device's passkey store (WebAuthn's
+// signalAllAcceptedCredentials), which then stops offering a passkey that was
+// removed — by a re-encryption, or in Settings on another device. Without it
+// the old passkey sits beside the new one at sign-in and can only fail.
+// (The user handle is the one the device was given when its passkey was made)
+router.get('/passkeys/accepted', authMiddleware, apiLimiter, async (req, res) => {
+  try {
+    const { rpID } = webauthnConfig();
+    res.json({
+      rpId: rpID,
+      userId: passkeyUserHandle(req.auth!.accountId).toString('base64url'),
+      credentialIds: (await listPasskeys(req.auth!.accountId)).map(p => p.credentialId),
+    });
+  } catch {
     res.status(500).json({ error: 'Failed to list passkeys' });
   }
 });

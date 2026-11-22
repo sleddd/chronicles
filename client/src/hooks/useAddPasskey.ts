@@ -27,7 +27,11 @@ export function useAddPasskey(): (source: KeySource, confirmToken: string, name:
       rememberPasskey(made.credentialId);
       return passkeys;
     } catch (err) {
-      made.forget();
+      // Dropped from the device only when the server said no (a 4xx). With no
+      // answer, or a server error, it may have been stored all the same, and
+      // deleting it here would leave a passkey on the account that no device holds
+      const status = (err as { status?: unknown } | null)?.status;
+      if (typeof status === 'number' && status >= 400 && status < 500) made.forget();
       throw err;
     } finally {
       made.prf.fill(0);

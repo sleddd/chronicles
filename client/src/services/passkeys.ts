@@ -187,9 +187,18 @@ export interface PasskeyPending2FA {
 export async function signInWithPasskey({ any = false }: { any?: boolean } = {}): Promise<PasskeySignIn | PasskeyPending2FA> {
   const { options } = await authApi.passkeyLoginOptions();
   const known = any ? [] : knownPasskeys();
-  const { response, prf, credentialId } = await assert(known.length
-    ? { ...options, allowCredentials: known.map(id => ({ id, type: 'public-key' as const })) }
-    : options);
+  const { response, prf, credentialId } = await (known.length
+    ? assert({ ...options, allowCredentials: known.map(id => ({ id, type: 'public-key' as const })) }).catch(err => {
+      // The browser turned the request away itself, before any passkey answered
+      // (seen as OperationError, straight after a passkey was added: no prompt
+      // ever opened). Asking for the remembered passkeys by name is the only
+      // thing that differs from a plain request, so it is asked once more
+      // without the list, and the device offers whatever it holds. Closing the
+      // prompt is the person's own choice and is never retried
+      if (err instanceof PasskeyCancelled) throw err;
+      return assert(options);
+    })
+    : assert(options));
   if (!prf) throw new PasskeyCannotUnlock();
   try {
     const answer = await authApi.passkeyLogin(response);
@@ -198,11 +207,14 @@ export async function signInWithPasskey({ any = false }: { any?: boolean } = {})
     return { user: answer.user, wrap: answer.passkey, prf };
   } catch (err) {
     prf.fill(0);
-    // The server has never stored this passkey (its adding never finished):
-    // ask the device to drop it, so it stops being offered at sign-in
+    // The server doesn't have this passkey: this browser stops asking for it.
+    // The device is NOT told to delete it here. A sign-in that failed is no
+    // place to destroy a passkey: one wrong answer would leave the person with
+    // nothing to sign in with and no sign of where it went. Passkeys the
+    // account really no longer has are cleared after a sign-in that worked,
+    // from the account's own list (syncPasskeysWithDevice)
     if ((err as { body?: { unknownCredential?: unknown } } | null)?.body?.unknownCredential === true) {
       forgetPasskey(credentialId);
-      forgetOnDevice(options.rpId, credentialId);
     }
     throw err;
   }
@@ -315,6 +327,27 @@ function forgetOnDevice(rpId: string | undefined, credentialId: string): void {
   const signal = (PublicKeyCredential as unknown as { signalUnknownCredential?: (o: { rpId: string; credentialId: string }) => Promise<void> }).signalUnknownCredential;
   if (!signal || !rpId) return;
   void signal.call(PublicKeyCredential, { rpId, credentialId }).catch(() => { /* best effort */ });
+}
+
+/**
+ * The account's passkeys, told to this browser and this device. Passkeys the
+ * account no longer has (removed by a re-encryption, or in Settings on another
+ * device) stop being asked for at sign-in here, and — where the browser can
+ * tell the device's passkey store — stop being offered at all. Left alone, a
+ * removed passkey sits beside the new one at sign-in and can only fail.
+ * Called after a sign-in and after a re-encryption. Best effort.
+ */
+export async function syncPasskeysWithDevice(): Promise<void> {
+  if (typeof PublicKeyCredential === 'undefined') return;
+  type Signal = (o: { rpId: string; userId: string; allAcceptedCredentialIds: string[] }) => Promise<void>;
+  const signal = (PublicKeyCredential as unknown as { signalAllAcceptedCredentials?: Signal }).signalAllAcceptedCredentials;
+  if (!signal && !knownPasskeys().length) return;
+  try {
+    const { rpId, userId, credentialIds } = await authApi.passkeysAccepted();
+    if (!Array.isArray(credentialIds) || !credentialIds.every(id => typeof id === 'string')) return;
+    keepOnlyPasskeys(credentialIds);
+    if (signal && rpId && userId) await signal.call(PublicKeyCredential, { rpId, userId, allAcceptedCredentialIds: credentialIds });
+  } catch { /* best effort: sign-in still says when a passkey is no longer on the account */ }
 }
 
 /** A name to suggest for a new passkey: "Safari on macOS" */

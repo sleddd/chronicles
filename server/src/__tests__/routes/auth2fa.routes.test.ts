@@ -37,7 +37,6 @@ vi.mock('../../db/rekeyQueries.js', () => ({
   insertRekey: vi.fn(),
   claimRekey: vi.fn(),
   getRekey: vi.fn(),
-  getFinishedRekey: vi.fn().mockResolvedValue(null),
   dropFinishedRekey: vi.fn(),
   finishRekey: vi.fn(),
 }));
@@ -85,7 +84,7 @@ import bcryptMock from '../../services/passwordHasher.js';
 import { prisma } from '../../db/prisma.js';
 import { decryptToken, encryptToken } from '../../services/tokenCrypto.js';
 import { deleteAccountById } from '../../db/schemaManager.js';
-import { insertRekey, getRekey, getFinishedRekey, dropFinishedRekey, finishRekey, claimRekey } from '../../db/rekeyQueries.js';
+import { insertRekey, getRekey, dropFinishedRekey, finishRekey, claimRekey } from '../../db/rekeyQueries.js';
 import { revokeGoogleAccess } from '../../services/googleRevoke.js';
 import bcrypt from '../../services/passwordHasher.js';
 
@@ -994,7 +993,7 @@ describe('2FA hardening', () => {
       const [steps] = (prisma.$transaction as any).mock.calls[0];
       expect(steps).toContain('UPSERT_REKEY');
       expect(steps).toHaveLength(5);
-      // A finished re-key's row (kept a few days for drafts) makes way just before the insert
+      // A leftover finished row makes way just before the insert
       expect(steps.indexOf('DROP_FINISHED')).toBe(steps.indexOf('UPSERT_REKEY') - 1);
       expect(dropFinishedRekey).toHaveBeenCalledWith(account.id);
       const [id, rekeyId, oldKey, oldKeyIv] = (insertRekey as any).mock.calls[0];
@@ -1035,9 +1034,6 @@ describe('2FA hardening', () => {
       expect((await request(app).get('/api/auth/rekey')).body).toEqual({ pending: true, rekeyId: 'a'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV' });
       (getRekey as any).mockResolvedValue(null);
       expect((await request(app).get('/api/auth/rekey')).body).toEqual({ pending: false });
-      // Finished a few days ago: the old key again, marked for drafts only
-      (getFinishedRekey as any).mockResolvedValueOnce({ rekeyId: 'a'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV' });
-      expect((await request(app).get('/api/auth/rekey')).body).toEqual({ pending: false, drafts: { rekeyId: 'a'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV' } });
     });
 
     it('POST /rekey/claim gives the job to one runner, and checks the ids', async () => {

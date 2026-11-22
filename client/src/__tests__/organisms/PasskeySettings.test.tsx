@@ -122,7 +122,7 @@ describe('PasskeySettings', () => {
   });
 
   it('asks the device to drop a passkey the server refused to store', async () => {
-    api.passkeyRegister.mockRejectedValue(new Error('Invalid code'));
+    api.passkeyRegister.mockRejectedValue(Object.assign(new Error('Invalid code'), { status: 401 }));
     renderWithTheme(<PasskeySettings email="o@example.com" totpEnabled={false} />);
     const password = await openAdd();
     fireEvent.change(password, { target: { value: 'hunter2' } });
