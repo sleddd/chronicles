@@ -77,12 +77,32 @@ export function PlanTable({ label, columns, children }: { label: string; columns
 
 /* ── Group headings ── */
 
-const GroupRow = styled.div`
+const GroupRow = styled.div<{ $shaded?: boolean; $open?: boolean }>`
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 30px 0 14px;
   border-bottom: 1px solid var(--border-subtle);
+  /* The Tasks list's goal / milestone rows: rows like any other — the same
+     width and left edge as the task rows, flush one under the next with a
+     hairline between — with more room and a smaller name */
+  ${({ $shaded, $open }) => ($shaded ? `
+    padding: 18px 0;
+    /* The name smaller than a plain group heading's 22px */
+    h2 { font-size: 20px; }
+    /* Open, much more room above it and a firmer hairline under it mark where
+       its tasks begin; folded, the plain row */
+    ${$open ? `
+    padding-top: 44px;
+    border-bottom-color: color-mix(in srgb, var(--border-strong) 70%, var(--border-default));
+    ` : ''}
+    /* A little room before an open group's first task (none when folded:
+       there's nothing after it then, so the rows stay flush) */
+    & + * { margin-top: 10px; }
+    /* And the last task is a little taller at its foot, with room under its
+       line before the next group */
+    & ~ *:last-child { padding-bottom: 20px; margin-bottom: 16px; }
+  ` : '')}
 `;
 
 const GroupTitle = styled.h2`
@@ -127,8 +147,10 @@ const FoldBtn = styled.button<{ $open: boolean }>`
 `;
 
 /** A group's heading: its name, a muted note ("Career", "3 tasks"), and on the right its progress and/or a fold chevron */
-export function PlanGroup({ title, aside, progress, open, onToggle, children }: {
+export function PlanGroup({ title, aside, progress, open, onToggle, shaded, children }: {
   title: string;
+  /** The heading on a darker band (the Tasks list's goal / milestone groups) */
+  shaded?: boolean;
   aside?: string;
   /** Done of total: "16 of 20" */
   progress?: { done: number; total: number };
@@ -140,7 +162,7 @@ export function PlanGroup({ title, aside, progress, open, onToggle, children }: 
   const shown = open ?? true;
   return (
     <section aria-label={title}>
-      <GroupRow>
+      <GroupRow $shaded={shaded} $open={shown}>
         <GroupTitle>{title}</GroupTitle>
         {aside && <Aside>{aside}</Aside>}
         <GroupEnd>

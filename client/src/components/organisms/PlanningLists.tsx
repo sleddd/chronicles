@@ -68,7 +68,7 @@ function orderedBuckets<T>(by: Map<number | null, T[]>, order: number[]): { id: 
 /** Done of total */
 const tally = (list: { isCompleted: boolean }[]) => ({ done: list.filter(x => x.isCompleted).length, total: list.length });
 
-/** Which ids are open (goals, milestones) or folded (groups) — kept while the page shows */
+/** Which goals / milestones are opened to show what's under them — kept while the page shows */
 function useIdSet<T>() {
   const [set, setSet] = useState<Set<T>>(() => new Set());
   const toggle = (id: T) => setSet(prev => {
@@ -77,6 +77,42 @@ function useIdSet<T>() {
     return next;
   });
   return [set, toggle] as const;
+}
+
+/*
+ * Folded groups, remembered per browser (`planning-folded-v1`), so a group
+ * folded once stays folded on every visit. Each list and grouping keeps its
+ * own (goal 5 and milestone 5 are different groups). A group named by an id
+ * or "none" is kept as it is; one named by its text (a goal category) is kept
+ * only as a short hash, so the names stay out of the browser's storage.
+ */
+const FOLDED_KEY = 'planning-folded-v1';
+const MAX_FOLDED = 300;
+const foldId = (scope: string, key: string): string => {
+  if (/^(\d+|none)$/.test(key)) return `${scope}:${key}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return `${scope}:#${(h >>> 0).toString(36)}`;
+};
+function readFolded(): Set<string> {
+  try {
+    const list: unknown = JSON.parse(localStorage.getItem(FOLDED_KEY) ?? '[]');
+    return new Set(Array.isArray(list) ? list.filter((v): v is string => typeof v === 'string') : []);
+  } catch { return new Set(); }
+}
+
+/** The groups folded in one list under one grouping, and a toggle that remembers it */
+function useFoldedGroups(scope: string) {
+  const [all, setAll] = useState(readFolded);
+  const folded = useMemo(() => ({ has: (key: string) => all.has(foldId(scope, key)) }), [all, scope]);
+  const toggle = (key: string) => setAll(prev => {
+    const id = foldId(scope, key);
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    try { localStorage.setItem(FOLDED_KEY, JSON.stringify([...next].slice(-MAX_FOLDED))); } catch { /* storage unavailable */ }
+    return next;
+  });
+  return [folded, toggle] as const;
 }
 
 /* ── Goals ── */
@@ -92,7 +128,7 @@ export function GoalTable({ goals, milestones, tasks, categories, group, ...shar
   const { today, onOpen } = shared;
   const goalOfTask = useTaskGoal(milestones);
   const [open, toggleOpen] = useIdSet<number>();
-  const [folded, toggleFold] = useIdSet<string>();
+  const [folded, toggleFold] = useFoldedGroups(`goals:${group}`);
   // Built once per change, not filtered again for every row
   const milestonesByGoal = useMemo(() => groupBy(milestones, m => m.parentGoalId), [milestones]);
   const tasksByGoal = useMemo(() => groupBy(tasks, goalOfTask), [tasks, goalOfTask]);
@@ -174,7 +210,7 @@ export function MilestoneTable({ milestones, allMilestones = milestones, goals, 
 }) {
   const { today, onOpen, onToggleTask } = shared;
   const [open, toggleOpen] = useIdSet<number>();
-  const [folded, toggleFold] = useIdSet<string>();
+  const [folded, toggleFold] = useFoldedGroups(`milestones:${group}`);
   const goalById = useMemo(() => new Map(goals.map(g => [g.id, g])), [goals]);
   const tasksByMilestone = useMemo(() => groupBy(tasks, t => t.parentMilestoneId), [tasks]);
   const allByGoal = useMemo(() => groupBy(allMilestones, m => m.parentGoalId), [allMilestones]);
@@ -260,7 +296,7 @@ export function TaskTable({ tasks, allTasks, goals, milestones, group, titleOf, 
 }) {
   const { today, onOpen, onToggleTask } = shared;
   const goalOfTask = useTaskGoal(milestones);
-  const [folded, toggleFold] = useIdSet<string>();
+  const [folded, toggleFold] = useFoldedGroups(`tasks:${group}`);
   const milestoneById = useMemo(() => new Map(milestones.map(m => [m.id, m])), [milestones]);
   const goalById = useMemo(() => new Map(goals.map(g => [g.id, g])), [goals]);
 
@@ -317,7 +353,7 @@ export function TaskTable({ tasks, allTasks, goals, milestones, group, titleOf, 
       {group === 'none'
         ? tasks.map(row)
         : groups.map(gr => (
-            <PlanGroup key={gr.key} title={gr.title} aside={gr.aside} progress={gr.progress} open={!folded.has(gr.key)} onToggle={() => toggleFold(gr.key)}>
+            <PlanGroup key={gr.key} shaded title={gr.title} aside={gr.aside} progress={gr.progress} open={!folded.has(gr.key)} onToggle={() => toggleFold(gr.key)}>
               {gr.items.map(row)}
             </PlanGroup>
           ))}

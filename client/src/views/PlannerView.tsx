@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import styled from 'styled-components';
 import { PlanningShell, TodayBtn } from '../components/organisms/PlanningShell.js';
 import { PlannerMonth, type PlannerMonthDay } from '../components/molecules/PlannerMonth.js';
@@ -96,8 +96,24 @@ export function PlannerView() {
   };
   // Opened on a day from elsewhere (the dashboard's Day at a glance): that day, in Day view
   const handedDay = (useLocation().state as { plannerDay?: string } | null)?.plannerDay;
-  const [anchor, setAnchor] = useState(() => (handedDay && /^\d{4}-\d{2}-\d{2}$/.test(handedDay) ? handedDay : today));
+  // The day shown lives in the address (?day=), so opening a task in the
+  // journal and coming back — Save, Close, the breadcrumb, Back — lands on the
+  // same week, not this one. Without it the Planner opens on today
+  const [params, setParams] = useSearchParams();
+  const isDay = (d: string | null | undefined): d is string => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(d));
+  const [anchor, setAnchor] = useState(() => {
+    const inUrl = params.get('day');
+    return isDay(inUrl) ? inUrl : isDay(handedDay) ? handedDay : today;
+  });
   useEffect(() => { if (handedDay) setChosen('day'); }, [handedDay]);
+  useEffect(() => {
+    if ((params.get('day') ?? today) === anchor) return;
+    setParams(p => {
+      const next = new URLSearchParams(p);
+      if (anchor === today) next.delete('day'); else next.set('day', anchor);
+      return next;
+    }, { replace: true, state: null });
+  }, [anchor]); // eslint-disable-line react-hooks/exhaustive-deps
   // Unscheduled folds down to a narrow strip, to give the days the whole width (remembered per browser)
   const [folded, setFoldedState] = useState(() => { try { return localStorage.getItem(FOLD_KEY) === '1'; } catch { return false; } });
   const setFolded = (f: boolean) => {
