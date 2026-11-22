@@ -129,3 +129,53 @@ export function guardImportedFields(fields: Record<string, unknown>, { calendarT
   if (calendarTopic) out.noCalendarSync = true;
   return out;
 }
+
+/*
+ * A custom field's value as the text of one export cell. Fields that hold a
+ * list or an object (a recipe's ingredients and steps, a shopping list's
+ * items, a to-do list, wins, priorities, a training plan's categories and
+ * phases, a meal's nutrient sources, a media cover) are written out in words:
+ * `String()` on them gave "[object Object]". Pure.
+ *
+ * `row` is the entry's whole fields record: an object keyed by another item's
+ * id (a phase's hours per category) is written with that item's name.
+ */
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const words = (v: unknown): string => (typeof v === 'string' ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : '');
+// Never the picture itself: a cover is a data URL of many kilobytes
+const isData = (v: unknown): boolean => typeof v === 'string' && v.startsWith('data:');
+const LEAD_KEYS = new Set(['id', 'key', 'checked', 'done', 'amount', 'name', 'title', 'label', 'text']);
+
+function namesIn(row: Record<string, unknown> | undefined): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const v of Object.values(row ?? {})) {
+    if (!Array.isArray(v)) continue;
+    for (const item of v) if (isObj(item) && typeof item.id === 'string' && words(item.name)) out.set(item.id, words(item.name));
+  }
+  return out;
+}
+
+function fieldText(v: unknown, names: Map<string, string>, depth: number): string {
+  if (v == null || isData(v) || depth > 6) return '';
+  if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+  if (typeof v !== 'object') return String(v);
+  if (Array.isArray(v)) return v.map(i => fieldText(i, names, depth + 1)).filter(Boolean).join(depth === 0 ? ' | ' : ', ');
+  const o = v as Record<string, unknown>;
+  // What the item is: "2 cups rice", "Title: text", "[x] Milk"
+  const main = words(o.name) || words(o.title) || words(o.label);
+  const text = words(o.text);
+  let lead = [words(o.amount), main && text ? `${main}: ${text}` : main || text].filter(Boolean).join(' ');
+  if (lead && ('checked' in o || 'done' in o)) lead = `${o.checked === true || o.done === true ? '[x]' : '[ ]'} ${lead}`;
+  const rest: string[] = [];
+  for (const [k, val] of Object.entries(o)) {
+    if (k.startsWith('_') || (lead && LEAD_KEYS.has(k))) continue;
+    const t = fieldText(val, names, depth + 1);
+    if (t) rest.push(`${names.get(k) ?? k}: ${t}`);
+  }
+  if (!lead) return rest.join(', ');
+  return rest.length ? `${lead} (${rest.join(', ')})` : lead;
+}
+
+export function csvFieldText(value: unknown, row?: Record<string, unknown>): string {
+  return fieldText(value, namesIn(row), 0);
+}

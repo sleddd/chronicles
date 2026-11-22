@@ -4,6 +4,8 @@ import {
   ensureFinanceTables,
   getFinancePage,
   upsertFinanceRecord,
+  resealFinanceRecords,
+  financeRecordBytes,
   financeStorageBytes,
   deleteFinanceRecord,
   withTenantLock,
@@ -11,7 +13,7 @@ import {
   type FinanceTableKind,
   type FinanceRecordRow,
 } from '../db/tenantQueries.js';
-import { financeRecordIdSchema, putFinanceRecordSchema } from '@chronicles/shared';
+import { financeRecordIdSchema, putFinanceRecordSchema, resealFinanceRecordsSchema } from '@chronicles/shared';
 import { FINANCE_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
 
 // Finance records are opaque to the server: each row is one AES-GCM payload
@@ -61,6 +63,45 @@ router.get('/:kind', listGate, async (req, res) => {
   } catch (err) {
     console.error('Get finance records error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch records' });
+  }
+});
+
+// PUT /api/finance/:kind — re-encrypted records (a new master key), up to 200
+// at once, each replacing the one stored under its id (none is created)
+router.put('/:kind', async (req, res) => {
+  const kind = parseKind(String(req.params.kind));
+  if (!kind) {
+    res.status(404).json({ error: 'Unknown finance kind' });
+    return;
+  }
+  const body = resealFinanceRecordsSchema.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.issues[0].message });
+    return;
+  }
+  const ids = body.data.records.map(r => r.id);
+  if (new Set(ids).size !== ids.length) {
+    res.status(400).json({ error: 'Each record once' });
+    return;
+  }
+  try {
+    const schema = req.auth!.tenantSchemaName;
+    await ensureFinanceTables(schema);
+    const records = body.data.records.map(r => ({ id: r.id, payload: Buffer.from(r.payload, 'base64'), iv: Buffer.from(r.iv, 'base64') }));
+    const size = records.reduce((n, r) => n + r.payload.length + ROW_OVERHEAD_BYTES, 0);
+    const resealed = await withTenantLock(schema, async (tx) => {
+      const others = await financeStorageBytes(schema, undefined, tx) - await financeRecordBytes(schema, kind, ids, tx);
+      if (others + size > FINANCE_STORAGE_LIMIT_BYTES) return null;
+      return resealFinanceRecords(schema, kind, records, tx);
+    });
+    if (resealed === null) {
+      res.status(413).json({ error: 'Finance storage is full — delete some old records to make room' });
+      return;
+    }
+    res.json({ resealed });
+  } catch (err) {
+    console.error('Reseal finance records error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed to re-save records' });
   }
 });
 

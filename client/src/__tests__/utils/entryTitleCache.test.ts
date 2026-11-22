@@ -10,7 +10,10 @@ describe('entry title cache', () => {
     expect(entryTitleText('<h2>Private</h2><p>body</p>')).toBe('Private');
     const ctx = readFileSync(resolve(__dirname, '../../contexts/EncryptionContext.tsx'), 'utf8');
     const clearKey = ctx.split('const clearKey = useCallback')[1]?.split('}, [])')[0] ?? '';
-    expect(clearKey).toContain('clearEntryTitleCache()');
+    // clearKey drops every decrypted thing through one helper (shared with a re-encryption)
+    expect(clearKey).toContain('dropDecryptedState()');
+    const drop = ctx.split('function dropDecryptedState(): void {')[1]?.split('\n}\n')[0] ?? '';
+    expect(drop).toContain('clearEntryTitleCache()');
   });
 });
 

@@ -75,7 +75,33 @@ export const changePasswordSchema = z.object({
   newKekWrapIv: saltOrIvSchema,
   // Authenticator or backup code — required with the password when the account has 2FA on
   code: codeSchema.optional(),
+  // Re-encrypt the journal under a new master key. The new key's wraps replace
+  // the old key's (password above, recovery here), and the OLD key is kept,
+  // sealed under the new one, until every record has been re-encrypted
+  // (POST /api/auth/rekey/finish). It is the 32-byte key encrypted (48 bytes,
+  // the wrap's shape), bound to `rekeyId`
+  rekey: z.object({
+    rekeyId: z.string().regex(/^[a-f0-9]{32}$/, 'Invalid re-key id'),
+    oldKey: wrappedKeySchema,
+    oldKeyIv: saltOrIvSchema,
+    recoveryWrappedMK: wrappedKeySchema,
+    recoveryWrapIv: saltOrIvSchema,
+    recoveryKeyHash: recoveryProofSchema,
+    recoveryKeySalt: recoverySaltSchema,
+  }).strict().optional(),
 }).refine(...oneConfirmation('currentAuthSecret'));
+
+/** The re-key every record has been moved to: the old key goes. `runner` is the browser holding the job */
+export const rekeyFinishSchema = z.object({
+  rekeyId: z.string().regex(/^[a-f0-9]{32}$/, 'Invalid re-key id'),
+  runner: z.string().regex(/^[a-f0-9]{32}$/, 'Invalid runner id'),
+}).strict();
+
+/** A browser taking (or keeping) the re-encryption job: `runner` is a random id it made for itself */
+export const rekeyClaimSchema = z.object({
+  rekeyId: z.string().regex(/^[a-f0-9]{32}$/, 'Invalid re-key id'),
+  runner: z.string().regex(/^[a-f0-9]{32}$/, 'Invalid runner id'),
+}).strict();
 
 export const recoverSchema = z.object({
   email: emailSchema,
@@ -405,6 +431,12 @@ export const putFinanceRecordSchema = z.object({
   payload: ciphertext(350_000, 'Record too large'),
   iv: IV_FIELD,
 });
+
+// Re-encrypting records already stored (a new master key): each one is
+// replaced in place, never created, so a deleted record can't come back
+export const resealFinanceRecordsSchema = z.object({
+  records: z.array(putFinanceRecordSchema.extend({ id: financeRecordIdSchema })).min(1).max(200),
+}).strict();
 
 // Topics: the name and icon are encrypted in the browser ({ name, icon } as one
 // payload); only the colour stays readable. Plaintext names are refused.

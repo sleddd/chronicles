@@ -42,3 +42,20 @@ describe('password normalization', () => {
     await expect(encryptionService.unwrapMasterKey('Wrong-Password-1!', ...args)).rejects.toThrow();
   });
 });
+
+describe('re-key: the old key carried under the new one', () => {
+  it('opens only under the new key and its own re-key id, and still decrypts old data', async () => {
+    const old = await generateMasterKey();
+    const { encrypt, decrypt } = await import('../crypto/primitives.js');
+    const sealedData = await encrypt(old, 'a private line');
+    const fresh = await encryptionService.setupEncryption('New-Password-123!');
+    const id = 'a'.repeat(32);
+    const carried = await encryptionService.sealOldKey(fresh.masterKey, old, id);
+    const reopened = await encryptionService.openOldKey(fresh.masterKey, carried.oldKey, carried.oldKeyIv, id);
+    expect(reopened.extractable).toBe(false);
+    expect(await decrypt(reopened, sealedData.ciphertext, sealedData.iv)).toBe('a private line');
+    await expect(encryptionService.openOldKey(fresh.masterKey, carried.oldKey, carried.oldKeyIv, 'b'.repeat(32))).rejects.toThrow();
+    const other = await encryptionService.setupEncryption('Other-Password-123!');
+    await expect(encryptionService.openOldKey(other.masterKey, carried.oldKey, carried.oldKeyIv, id)).rejects.toThrow();
+  });
+});

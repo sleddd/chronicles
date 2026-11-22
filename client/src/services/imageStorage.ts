@@ -77,6 +77,11 @@ function activeConfig(): R2Config | null {
   return isCompleteConfig(r2Config) ? r2Config : null;
 }
 
+/** The bucket settings as SAVED (never the Settings form's unsaved draft), or null when incomplete. */
+export function getSavedImageStorageConfig(): R2Config | null {
+  return activeConfig();
+}
+
 /** Decrypted object URLs cached per session, keyed by object key. */
 const objectUrlCache = new Map<string, string>();
 const inflight = new Map<string, Promise<string>>();

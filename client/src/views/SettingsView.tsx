@@ -36,7 +36,9 @@ import { PasskeyCancelled, confirmWithPasskey, suggestedPasskeyName } from '../s
 import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useSignOut } from '../hooks/useSignOut.js';
 import { useAuth } from '../contexts/AuthContext.js';
-import { useEncryption } from '../contexts/EncryptionContext.js';
+import { useEncryption, type PreparedRekey } from '../contexts/EncryptionContext.js';
+import { findImageRefs, settingsPhotoRefs, checkPhotosReachable } from '../services/rekey.js';
+import { Checkbox } from '../components/atoms/Checkbox.js';
 import { useUIStore } from '../stores/uiStore.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { useNavigate } from 'react-router-dom';
@@ -53,7 +55,7 @@ import { seedTestData, seedExerciseScheduleOnly, seedWellnessOnly, seedMediaOnly
 import { seedFinanceData } from '../utils/seedFinanceData.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
-import { parseCsvRow, splitCsvLines, csvCell, isReservedImportColumn, guardImportedFields } from '../utils/csv.js';
+import { parseCsvRow, splitCsvLines, csvCell, csvFieldText, isReservedImportColumn, guardImportedFields } from '../utils/csv.js';
 import { getSyncTopicMap } from '../services/calendarSync.js';
 import { showFlash } from '../services/flashNotice.js';
 import { downloadEntriesExample } from '../utils/importExamples.js';
@@ -65,7 +67,7 @@ import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { CUSTOM_WALLPAPER, DEFAULT_CHOICE, shownWallpaper, wallpaperById, wallpaperSetting, type WallpaperSetting } from '../utils/wallpapers.js';
 import { CustomPhotoTile } from '../components/organisms/CustomPhotoTile.js';
 import { useImagesReady } from '../hooks/useImagesReady.js';
-import { pinImageKeys, type EntryImage } from '../services/imageStorage.js';
+import { pinImageKeys, getSavedImageStorageConfig, type EntryImage } from '../services/imageStorage.js';
 import { replaceStoredImage } from '../services/backgroundImages.js';
 import { storedImageKeys } from '../utils/storedImage.js';
 
@@ -203,7 +205,12 @@ const GuideBody = styled.div`
 
 export function SettingsView() {
   const { user, logout } = useAuth();
-  const { clearKey, passwordSource, rewrapWith, recoveryKeyWith, encryptNewPost, encryptRecord, decryptRecord, decryptBytes } = useEncryption();
+  const { clearKey, passwordSource, rewrapWith, recoveryKeyWith, encryptNewPost, encryptRecord, decryptRecord, decryptBytes, prepareRekey, commitRekey } = useEncryption();
+  // "Also re-encrypt my journal": a new master key, its recovery key shown
+  // (and saved) before anything is sent
+  const [rekeyChecked, setRekeyChecked] = useState(false);
+  const [preparedRekey, setPreparedRekey] = useState<PreparedRekey | null>(null);
+  const [rekeyVia, setRekeyVia] = useState<'password' | 'passkey'>('password');
   const { savePrivateSetting, loadPrivateSettings } = usePrivateSettings();
   useInitializeData();
   // The account has a passkey this browser can use: the confirmed actions offer
@@ -441,11 +448,61 @@ export function SettingsView() {
     if (newPw !== confirmPw) { setPwMessage('Passwords do not match'); setPwError(true); return; }
     const pwProblem = newPasswordProblem(newPw, { email: user?.email, username: user?.username });
     if (pwProblem) { setPwMessage(pwProblem); setPwError(true); return; }
+    if (rekeyChecked && !preparedRekey) {
+      // Photos live in the person's own bucket: without its settings here they
+      // couldn't be re-encrypted, and would be lost with the old key
+      // (checked here, before anything is sent: once it starts, the app is
+      // shut until it is done and Settings can't be reached to fix it. Photos
+      // held by a setting count too — a background of your own, a Vision area's)
+      setPwLoading(true);
+      try {
+        const photoKeys = [
+          ...useEntriesStore.getState().decryptedEntries.flatMap(e => findImageRefs(e.metadata)),
+          ...await settingsPhotoRefs(decryptBytes),
+        ].map(r => r.key);
+        if (photoKeys.length) {
+          const cfg = getSavedImageStorageConfig();
+          if (!cfg) {
+            setPwMessage('Your photos are in your own R2 bucket, which isn’t set up here. Set up Entry Images first, or untick re-encrypt.'); setPwError(true); return;
+          }
+          // And the bucket must answer now, with these settings: a rotated
+          // key or a changed CORS policy found after the re-key was sent
+          // would leave the journal shut with no way to reach Settings
+          try { await checkPhotosReachable(cfg, photoKeys); }
+          catch (err) { setPwMessage(err instanceof Error ? err.message : 'Your photo bucket couldn’t be reached'); setPwError(true); return; }
+        }
+        setRekeyVia(via);
+        setPreparedRekey(await prepareRekey(newPw));
+      } catch (err) {
+        setPwMessage(err instanceof Error ? err.message : 'Failed'); setPwError(true);
+      } finally {
+        setPwLoading(false);
+      }
+      return;
+    }
+    if (preparedRekey) {
+      if (via !== 'passkey' && !currentPw) { setPwMessage('Enter your account password'); setPwError(true); return; }
+      if (totpEnabled && !pwCode.trim()) { setPwMessage('Enter a current code from your authenticator'); setPwError(true); return; }
+    }
     setPwLoading(true);
     let touched: Uint8Array | null = null;
     try {
       const email = user?.email ?? '';
       const newAuthSecret = await deriveAuthSecret(newPw, email);
+      if (preparedRekey) {
+        // The recovery key was saved: carry the current key over and start
+        if (via === 'passkey' && !currentPw) {
+          const c = await confirmWithPasskey('change-password', totpEnabled ? pwCode : undefined);
+          touched = c.prf;
+          await commitRekey(preparedRekey, { kind: 'passkey', prf: c.prf, wrap: c.wrap }, w => authApi.changePassword({ confirmToken: c.confirmToken, newAuthSecret, ...w }));
+        } else {
+          const source = await passwordSource(currentPw, email, 'change-password', totpEnabled ? pwCode : undefined);
+          await commitRekey(preparedRekey, source, w => authApi.changePassword({ confirmToken: source.confirmToken, newAuthSecret, ...w }));
+        }
+        setPreparedRekey(null); setRekeyChecked(false);
+        setPwMessage('Password changed'); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode(''); setShowPassword(false);
+        return;
+      }
       let wrap: { salt: string; wrappedMK: string; wrapIv: string };
       if (via === 'passkey') {
         // One touch stands in for the current password (the 2FA code still
@@ -834,10 +891,8 @@ export function SettingsView() {
           stripHtml(entry.content),
           bookmarked,
           ...cfKeys.map(k => {
-            const v = cf[k];
-            if (v == null) return '';
-            if (typeof v === 'boolean') return v ? 'Yes' : 'No';
-            return String(v);
+            // Lists and objects (ingredients, items, a to-do list…) written out in words
+            return csvFieldText(cf[k], cf);
           }),
         ];
         rows.push(row.map(escCsv).join(','));
@@ -1279,10 +1334,25 @@ export function SettingsView() {
               <>
                 {pwMessage && <RowNote $error={pwError} style={{ marginTop: 0 }}>{pwMessage}</RowNote>}
                 <div>
-                  <PasswordInput value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="New password, at least 12 characters" aria-label="New password" autoComplete="new-password" />
+                  <PasswordInput value={newPw} onChange={e => { setNewPw(e.target.value); setPreparedRekey(null); }} placeholder="New password, at least 12 characters" aria-label="New password" autoComplete="new-password" />
                   <PasswordStrengthMeter password={newPw} email={user?.email} username={user?.username} />
                 </div>
-                <PasswordInput value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Confirm new password" aria-label="Confirm new password" autoComplete="new-password" />
+                <PasswordInput value={confirmPw} onChange={e => { setConfirmPw(e.target.value); setPreparedRekey(null); }} placeholder="Confirm new password" aria-label="Confirm new password" autoComplete="new-password" />
+                <div style={{ margin: '16px 0', padding: '16px 18px', border: '1px solid var(--border-card)', borderRadius: 12 }}>
+                  <Checkbox checked={rekeyChecked} onChange={v => { setRekeyChecked(v); setPreparedRekey(null); }} label="Also re-encrypt my journal with a new key" />
+                  <RowNote style={{ marginTop: 6 }}>
+                    Use this if someone may know your old password. Everything is locked again with a new key, so the old password and any copy of your data from before can’t open what you write from now on. It takes a few minutes, signs out your other devices, removes your passkeys (add them again after) and gives you a new recovery key.
+                  </RowNote>
+                  {rekeyChecked && (
+                    <RowNote role="note" style={{ marginTop: 12 }}>
+                      Photos are tricky to encrypt and your photos’ re-encryption cannot be guaranteed. We suggest saving a copy of both your entries and photos before re-encrypting. Your entries download as a CSV file. Photos aren’t in that file, so save those separately.{' '}
+                      <RowLink type="button" onClick={handleExportCsv} disabled={exporting || decryptedEntries.length === 0}>Export entries to CSV</RowLink>
+                    </RowNote>
+                  )}
+                </div>
+                {/* Stays on the recovery-key step too: the password and the code are
+                    checked only once the key is saved, and a code typed before
+                    that has usually run out by then */}
                 <ConfirmIdentity
                   password={currentPw}
                   onPassword={setCurrentPw}
@@ -1290,13 +1360,25 @@ export function SettingsView() {
                   code={pwCode}
                   onCode={setPwCode}
                   busy={pwLoading}
-                  onUsePasskey={canPasskey ? () => void handleChangePassword('passkey') : undefined}
+                  onUsePasskey={canPasskey && !preparedRekey ? () => void handleChangePassword('passkey') : undefined}
                 />
+                {preparedRekey && (
+                  <>
+                    <RowNote>
+                      Save your new recovery key first. Your old one stops working once your journal is re-encrypted.
+                      {totpEnabled && ' Make sure the code above is a current one before you continue.'}
+                      {rekeyVia === 'passkey' && ' Leave the password box empty to use your passkey.'}
+                    </RowNote>
+                    <RecoveryKeyDisplay recoveryKey={preparedRekey.recoveryKey} onConfirm={() => void handleChangePassword(rekeyVia)} />
+                  </>
+                )}
                 <FormActions>
-                  <RowPill type="button" onClick={() => { setShowPassword(false); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode(''); setPwMessage(''); }}>Cancel</RowPill>
-                  <RowPill type="button" $tone="accent" onClick={() => void handleChangePassword()} disabled={pwLoading || !currentPw || (totpEnabled && !pwCode.trim())}>
-                    {pwLoading ? <Spinner size={14} /> : 'Update password'}
-                  </RowPill>
+                  <RowPill type="button" onClick={() => { setShowPassword(false); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwCode(''); setPwMessage(''); setRekeyChecked(false); setPreparedRekey(null); }}>Cancel</RowPill>
+                  {!preparedRekey && (
+                    <RowPill type="button" $tone="accent" onClick={() => void handleChangePassword()} disabled={pwLoading || !currentPw || (totpEnabled && !pwCode.trim())}>
+                      {pwLoading ? <Spinner size={14} /> : rekeyChecked ? 'Next' : 'Update password'}
+                    </RowPill>
+                  )}
                 </FormActions>
               </>
             )}

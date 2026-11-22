@@ -336,7 +336,21 @@ export const auth = {
     newKekWrapIv: string;
     /** Authenticator or backup code — required with the password when the account has 2FA on */
     code?: string;
+    /** Re-encrypt the journal under a new master key (services/rekey.ts) */
+    rekey?: RekeyCommit;
   } & PasswordOrToken<'currentAuthSecret'>) => request<{ success: boolean }>('/auth/change-password', { method: 'POST', body: data }),
+
+  /** A re-encryption still under way: the old key, sealed under the new one */
+  rekeyStatus: () =>
+    request<{ pending: false; drafts?: { rekeyId: string; oldKey: string; oldKeyIv: string } } | { pending: true; rekeyId: string; oldKey: string; oldKeyIv: string }>('/auth/rekey'),
+
+  /** Take (or keep) the re-encryption job for this browser: one runs it at a time */
+  rekeyClaim: (rekeyId: string, runner: string) =>
+    request<{ pending: boolean; claimed: boolean }>('/auth/rekey/claim', { method: 'POST', body: { rekeyId, runner } }),
+
+  /** Every record is under the new key: the server drops the old one (only for the browser holding the job) */
+  rekeyFinish: (rekeyId: string, runner: string) =>
+    request<{ finished: boolean }>('/auth/rekey/finish', { method: 'POST', body: { rekeyId, runner } }),
 
   changeEmail: (data: { newEmail: string; currentAuthSecret: string; newAuthSecret: string; code?: string }) =>
     request<{ success: boolean; email: string }>('/auth/change-email', { method: 'POST', body: data }),
@@ -1037,6 +1051,31 @@ export interface FinanceRecordWire {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface RekeyCommit {
+  rekeyId: string;
+  oldKey: string;
+  oldKeyIv: string;
+  recoveryWrappedMK: string;
+  recoveryWrapIv: string;
+  recoveryKeyHash: string;
+  recoveryKeySalt: string;
+}
+
+/**
+ * The records as stored, for re-encrypting them under a new master key
+ * (services/rekey.ts): nothing here opens or seals anything itself.
+ */
+export const rekeyRecords = {
+  topics: () => request<{ id: number; color: string | null; payload: string | null; iv: string | null }[]>('/topics'),
+  putTopic: (id: number, sealed: { payload: string; iv: string }) =>
+    request(`/topics/${id}`, { method: 'PUT', body: { ...sealed, format: 2 } }),
+  doses: () => request<{ records: { id: string; date: string; payload: string; iv: string }[] }>('/doses/all'),
+  resealDoses: (records: { id: string; date: string; payload: string; iv: string }[]) =>
+    request<{ resealed: number }>('/doses/reseal', { method: 'PUT', body: { records } }),
+  resealFinance: (kind: FinanceKind, records: { id: string; payload: string; iv: string }[]) =>
+    request<{ resealed: number }>(`/finance/${kind}`, { method: 'PUT', body: { records } }),
+};
 
 export const finance = {
   /** Every record of a kind. The server answers a page at a time (capped by size), so this pages while there's more. */

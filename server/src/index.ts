@@ -26,6 +26,7 @@ import noticeRoutes from './routes/notice.js';
 import betaRoutes from './routes/beta.js';
 import bugReportRoutes from './routes/bugReport.js';
 import { initConsentTable } from './db/consentQueries.js';
+import { initRekeyTable } from './db/rekeyQueries.js';
 import { initBetaTable } from './db/betaQueries.js';
 import { initAppNoticeTable } from './db/appNoticeQueries.js';
 import { initAnalyticsTable } from './db/analyticsQueries.js';
@@ -205,6 +206,7 @@ initPublicShelvesTable().catch(err => console.error('Failed to init public shelv
 initAnalyticsTable().catch(err => console.error('Failed to init analytics table:', err instanceof Error ? err.message : err));
 initAiChatTable().catch(err => console.error('Failed to init AI chat table:', err instanceof Error ? err.message : err));
 initConsentTable().catch(err => console.error('Failed to init consent table:', err instanceof Error ? err.message : err));
+initRekeyTable().catch(err => console.error('Failed to init re-key table:', err instanceof Error ? err.message : err));
 initAppNoticeTable().catch(err => console.error('Failed to init notice table:', err instanceof Error ? err.message : err));
 initBetaTable().catch(err => console.error('Failed to init beta table:', err instanceof Error ? err.message : err));
 checkStoredCredentials().then(({ recoverySealed, outdated, sessionsRevoked }) => {

@@ -83,6 +83,22 @@ export async function readDraft<T>(cipher: DraftCipher, slot: string, now = Date
   }
 }
 
+/**
+ * Re-encrypting under a new master key: the draft in a slot, moved from the old
+ * key to the new one (same time sealed). Never removes anything: one already
+ * under the new key, or that neither opens, stays exactly as it is.
+ */
+export async function resealDraft(oldCipher: DraftCipher, newCipher: DraftCipher, slot: string): Promise<void> {
+  if (!draftsAvailable()) return;
+  const row = await run<Row | undefined>('readonly', s => s.get(slot));
+  if (!row) return;
+  try { await newCipher.decryptBytes(row.ciphertext, row.iv, aad(slot)); return; } catch { /* not under the new key yet */ }
+  let plain: ArrayBuffer;
+  try { plain = await oldCipher.decryptBytes(row.ciphertext, row.iv, aad(slot)); } catch { return; }
+  const { ciphertext, iv } = await newCipher.encryptBytes(plain, aad(slot));
+  await run('readwrite', s => s.put({ slot, ciphertext, iv, savedAt: row.savedAt } satisfies Row));
+}
+
 export async function removeDraft(slot: string): Promise<void> {
   if (!draftsAvailable()) return;
   await run('readwrite', s => s.delete(slot)).catch(() => {});

@@ -15,6 +15,7 @@ import { NotFoundView } from './views/NotFoundView.js';
 import { MedHistoryView } from './views/MedHistoryView.js';
 import { MediaView } from './views/MediaView.js';
 import { PublicShelfView } from './views/PublicShelfView.js';
+import { RekeyOverlay } from './components/organisms/RekeyOverlay.js';
 import { usePublicShelfSync } from './hooks/usePublicShelfSync.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { LoginView } from './views/LoginView.js';
@@ -812,6 +813,7 @@ export function App() {
               {/* Anything else: sign-in when signed out, else a 404 page */}
               <Route path="*" element={<NotFoundView />} />
             </Routes>
+            <RekeyOverlay />
             <SessionEndedGate />
             <IdleGate />
             <ChatGate />

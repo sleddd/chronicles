@@ -16,11 +16,12 @@ import { parseId } from '../middleware/parseId.js';
 import { sharedState, resetSharedStateForTests } from '../services/sharedState.js';
 import { encryptToken, decryptToken, isTokenCryptoConfigured } from '../services/tokenCrypto.js';
 import { apiLimiter, authLimiter, strictLimiter, registerLimiter } from '../middleware/rateLimiter.js';
-import { registerSchema, loginSchema, changePasswordSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, recoveryWrapSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, keyWrapSchema, normalizeEmail, type ConfirmAction } from '@chronicles/shared';
+import { registerSchema, loginSchema, changePasswordSchema, rekeyFinishSchema, rekeyClaimSchema, changeEmailSchema, saveRecoveryKeySchema, recoverSchema, recoveryWrapSchema, emailSchema, twoFALoginSchema, enable2FASchema, disable2FASchema, deleteAccountSchema, keyWrapSchema, normalizeEmail, type ConfirmAction } from '@chronicles/shared';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { previewField } from '../services/previews.js';
 import { networkKey } from '../services/networkKey.js';
 import { findAccountPasskey } from '../db/passkeyQueries.js';
+import { insertRekey, getRekey, getFinishedRekey, dropFinishedRekey, finishRekey, claimRekey } from '../db/rekeyQueries.js';
 
 // Sign-in state every instance shares (services/sharedState.ts: Postgres by
 // default): pending 2FA sign-ins (kept by the token's hash), the last TOTP
@@ -1188,10 +1189,16 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       return;
     }
 
-    const { currentAuthSecret, confirmToken, newAuthSecret, newEncryptedMasterKey, newKekSalt, newKekWrapIv, code } = parsed.data;
+    const { currentAuthSecret, confirmToken, newAuthSecret, newEncryptedMasterKey, newKekSalt, newKekWrapIv, code, rekey } = parsed.data;
     const account = await prisma.account.findUnique({ where: { id: req.auth!.accountId } });
     if (!account) {
       res.status(404).json({ error: 'Account not found' });
+      return;
+    }
+    // One re-key at a time: the browser holds only the key before the last one,
+    // so a second re-key before the first finished would strand records under it
+    if (rekey && await getRekey(account.id)) {
+      res.status(409).json({ error: 'Finish re-encrypting your journal first' });
       return;
     }
 
@@ -1202,15 +1209,27 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
     // Sign-ins under way are cancelled before the sessions are revoked, so none
     // finishes afterwards (routes/authState.ts)
     await cancelSignIns(account.id);
-    // Atomic: update password + revoke ALL sessions (including current) in a single transaction
+    const b64 = (v: string) => new Uint8Array(Buffer.from(v, 'base64'));
+    // Atomic: update password + revoke ALL sessions (including current) in a single transaction.
+    // A re-key also swaps the recovery wrap for the new key's, keeps the old key
+    // (sealed under the new one) until the browser has moved every record, and
+    // removes the passkeys: each one's wrap holds the old key, and making a new
+    // one needs that passkey's own touch
+    try {
     await prisma.$transaction([
       prisma.account.update({
         where: { id: account.id },
         data: {
           passwordHash,
-          encryptedMasterKey: new Uint8Array(Buffer.from(newEncryptedMasterKey, 'base64')),
-          kekSalt: new Uint8Array(Buffer.from(newKekSalt, 'base64')),
-          kekWrapIv: new Uint8Array(Buffer.from(newKekWrapIv, 'base64')),
+          encryptedMasterKey: b64(newEncryptedMasterKey),
+          kekSalt: b64(newKekSalt),
+          kekWrapIv: b64(newKekWrapIv),
+          ...(rekey && {
+            recoveryWrappedMK: b64(rekey.recoveryWrappedMK),
+            recoveryWrapIv: b64(rekey.recoveryWrapIv),
+            recoveryKeyHash: sealRecoveryProof(rekey.recoveryKeyHash),
+            recoveryKeySalt: rekey.recoveryKeySalt,
+          }),
         },
       }),
       prisma.session.updateMany({
@@ -1220,7 +1239,24 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
         },
         data: { revokedAt: new Date(), revokedReason: 'password_change' },
       }),
+      ...(rekey ? [
+        // A plain insert: a second re-key racing this one fails here, and the
+        // whole transaction with it
+        // (a finished one's row, kept a few days for drafts, makes way first)
+        dropFinishedRekey(account.id),
+        insertRekey(account.id, rekey.rekeyId, b64(rekey.oldKey), b64(rekey.oldKeyIv)),
+        prisma.$executeRaw`DELETE FROM public.passkeys WHERE account_id = ${account.id}`,
+      ] : []),
     ]);
+    } catch (err) {
+      // Two re-keys sent at once: the other one's row is there, and this whole
+      // change was rolled back (nothing of it was saved)
+      if (rekey && await getRekey(account.id).catch(() => null)) {
+        res.status(409).json({ error: 'Finish re-encrypting your journal first' });
+        return;
+      }
+      throw err;
+    }
 
     // Every trusted browser was trusted under the old password
     await forgetAllTrustedDevices(account.id);
@@ -1235,7 +1271,7 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
       deviceInfo: confirmToken !== undefined ? 'passkey' : 'password',
     });
 
-    logSecurityEvent('password_change', { accountId: account.id, ip: req.ip });
+    logSecurityEvent(rekey ? 'password_change_rekey' : 'password_change', { accountId: account.id, ip: req.ip });
     // The old known-device cookie no longer verifies; this browser stays known
     rememberKnownDevice(res, { id: account.id, email: account.email, passwordHash, totpEnabled: account.totpEnabled, totpSecret: account.totpSecret });
     setSessionCookie(res, token);
@@ -1244,6 +1280,69 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
     if (sendIfHasherBusy(err, res)) return;
     console.error('Change password error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Password change failed' });
+  }
+});
+
+// =============================================================================
+// GET /api/auth/rekey — a re-encryption still under way, and the old key
+// =============================================================================
+// The old key comes sealed under the new master key, which only a browser that
+// has opened the journal holds, so handing it to the session reveals nothing.
+router.get('/rekey', authMiddleware, apiLimiter, async (req, res) => {
+  try {
+    const pending = await getRekey(req.auth!.accountId);
+    if (pending) {
+      res.json({ pending: true, rekeyId: pending.rekeyId, oldKey: pending.oldKey, oldKeyIv: pending.oldKeyIv });
+      return;
+    }
+    // One that finished in the last few days: its old key, for this browser's
+    // unsaved drafts only (never for records, which have all moved)
+    const finished = await getFinishedRekey(req.auth!.accountId);
+    res.json(finished ? { pending: false, drafts: finished } : { pending: false });
+  } catch (err) {
+    console.error('Re-key status error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Couldn’t check the re-encryption' });
+  }
+});
+
+// =============================================================================
+// POST /api/auth/rekey/claim — this browser runs the re-encryption (or keeps running it)
+// =============================================================================
+// One browser at a time: two working from their own reads of the journal could
+// write over each other. The runner calls this before it starts and before its
+// writes; another browser is told no until the runner has been quiet a while.
+router.post('/rekey/claim', authMiddleware, apiLimiter, async (req, res) => {
+  const parsed = rekeyClaimSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message });
+    return;
+  }
+  try {
+    res.json(await claimRekey(req.auth!.accountId, parsed.data.rekeyId, parsed.data.runner));
+  } catch (err) {
+    console.error('Re-key claim error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Couldn’t check the re-encryption' });
+  }
+});
+
+// =============================================================================
+// POST /api/auth/rekey/finish — every record is under the new key
+// =============================================================================
+// Only the browser holding the job (rekey/claim) can end it: the server can't
+// check that everything moved, so it takes the word of the one runner alone.
+router.post('/rekey/finish', authMiddleware, apiLimiter, async (req, res) => {
+  const parsed = rekeyFinishSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message });
+    return;
+  }
+  try {
+    const finished = await finishRekey(req.auth!.accountId, parsed.data.rekeyId, parsed.data.runner);
+    if (finished) logSecurityEvent('rekey_finished', { accountId: req.auth!.accountId, ip: req.ip });
+    res.json({ finished });
+  } catch (err) {
+    console.error('Re-key finish error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Couldn’t finish the re-encryption' });
   }
 });
 

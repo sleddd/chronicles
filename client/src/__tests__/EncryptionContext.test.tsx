@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { EncryptionProvider, useEncryption } from '../contexts/EncryptionContext.js';
 
@@ -21,6 +21,11 @@ const mockWrapForPasskey = vi.fn();
 const mockNewRecoveryWrapping = vi.fn();
 const mockPasswordWrap = vi.fn();
 const mockClaimBrowserFor = vi.fn();
+const mockRekeyStatus = vi.fn(async () => ({ pending: false }) as Record<string, unknown>);
+const mockRunRekey = vi.fn();
+const mockResealLocalDrafts = vi.fn(async (..._a: unknown[]) => {});
+const mockOpenOldKey = vi.fn();
+const mockOwnedByAnotherKey = vi.fn((_mark: string) => false);
 
 vi.mock('@shared/crypto/encryptionService.js', () => ({
   encryptionService: {
@@ -30,6 +35,7 @@ vi.mock('@shared/crypto/encryptionService.js', () => ({
     decryptPost: (...args: unknown[]) => mockDecryptPost(...args),
     decryptPosts: (...args: unknown[]) => mockDecryptPosts(...args),
     accountTag: async () => 'test-account-tag',
+    openOldKey: (...args: unknown[]) => mockOpenOldKey(...args),
     unwrapWithRecoveryKey: (...args: unknown[]) => mockUnwrapWithRecoveryKey(...args),
     rewrapMasterKey: (...args: unknown[]) => mockRewrapMasterKey(...args),
     extractableFromPassword: (...args: unknown[]) => mockExtractableFromPassword(...args),
@@ -41,13 +47,25 @@ vi.mock('@shared/crypto/encryptionService.js', () => ({
 }));
 
 // What the browser stores is kept for the same person and wiped for anyone else (services/browserData)
+vi.mock('../services/rekey.js', () => ({
+  runRekey: (...args: unknown[]) => mockRunRekey(...args),
+  resealLocalDrafts: (...args: unknown[]) => mockResealLocalDrafts(...args),
+  RekeyError: class RekeyError extends Error {},
+}));
 vi.mock('../services/browserData.js', () => ({
   claimBrowserFor: (...args: unknown[]) => mockClaimBrowserFor(...args),
+  rekeyFinishedHere: () => false,
+  markRekeyFinished: () => {},
+  ownerMark: async (tag: string) => `mark:${tag}`,
+  ownedByAnotherKey: (mark: string) => mockOwnedByAnotherKey(mark),
+  retagBrowser: async () => {},
+  noteRetagPending: () => {},
+  clearRetagPending: () => {},
 }));
 
 vi.mock('../services/api.js', async importOriginal => ({
   ...(await importOriginal<typeof import('../services/api.js')>()),
-  auth: { passwordWrap: (...args: unknown[]) => mockPasswordWrap(...args) },
+  auth: { passwordWrap: (...args: unknown[]) => mockPasswordWrap(...args), rekeyStatus: () => mockRekeyStatus(), rekeyClaim: async () => ({ pending: true, claimed: true }) },
 }));
 
 vi.mock('@shared/crypto/primitives.js', () => ({
@@ -107,6 +125,69 @@ describe('EncryptionProvider – unlock', () => {
 
     expect(result.current.isUnlocked).toBe(true);
     expect(mockUnwrapMasterKey).toHaveBeenCalledWith('password', 'salt', 'emk', 'iv', 600000);
+  });
+
+  it('uses a finished re-key’s old key for this browser’s drafts only, and opens the journal', async () => {
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    const oldKey = { type: 'secret' } as CryptoKey;
+    mockOpenOldKey.mockResolvedValue(oldKey);
+    mockRunRekey.mockClear();
+    mockResealLocalDrafts.mockClear();
+    mockRekeyStatus.mockResolvedValue({ pending: false, drafts: { rekeyId: 'e'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV' } });
+
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
+    await waitFor(() => expect(result.current.isUnlocked).toBe(true));
+    expect(mockOpenOldKey).toHaveBeenCalledWith(fakeCryptoKey, 'OLD', 'IV', 'e'.repeat(32));
+    expect(mockResealLocalDrafts).toHaveBeenCalledWith(fakeCryptoKey, oldKey);
+    // No record is ever read with it: the job doesn't run
+    expect(mockRunRekey).not.toHaveBeenCalled();
+    mockRekeyStatus.mockResolvedValue({ pending: false });
+  });
+
+  it('keeps the journal shut while a re-encryption is under way, and opens it once that is done', async () => {
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    const oldKey = { type: 'secret' } as CryptoKey;
+    mockOpenOldKey.mockResolvedValue(oldKey);
+    let finish!: () => void;
+    mockRunRekey.mockImplementation(() => new Promise<void>(r => { finish = r; }));
+    mockRekeyStatus.mockResolvedValue({ pending: true, rekeyId: 'f'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV' });
+
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
+    await waitFor(() => expect(mockRunRekey).toHaveBeenCalled());
+    expect(result.current.isUnlocked).toBe(false);
+    expect(result.current.isRestoring).toBe(true);
+    expect(mockOpenOldKey).toHaveBeenCalledWith(fakeCryptoKey, 'OLD', 'IV', 'f'.repeat(32));
+    expect(mockRunRekey.mock.calls[0][0]).toMatchObject({ newKey: fakeCryptoKey, oldKey, rekeyId: 'f'.repeat(32) });
+
+    await act(async () => { finish(); });
+    await waitFor(() => expect(result.current.isUnlocked).toBe(true));
+    expect(result.current.isRestoring).toBe(false);
+    mockRekeyStatus.mockResolvedValue({ pending: false });
+  });
+
+  it('opens the journal when the server has no re-encryption route at all (an older server)', async () => {
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    mockRekeyStatus.mockRejectedValueOnce(Object.assign(new Error('Not found'), { status: 404 }));
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
+    expect(result.current.isUnlocked).toBe(true);
+  });
+
+  it('drops its key rather than seal anything once the journal has moved to another key in this browser', async () => {
+    mockUnwrapMasterKey.mockResolvedValue(fakeCryptoKey);
+    const { result } = renderHook(() => useEncryption(), { wrapper });
+    await act(async () => { await result.current.unlock('password', 'salt', 'emk', 'iv', 600000); });
+    expect(result.current.isUnlocked).toBe(true);
+    // Another tab re-encrypted the journal, and this one never heard
+    mockOwnedByAnotherKey.mockReturnValue(true);
+    await act(async () => {
+      await expect(result.current.encryptBytes(new ArrayBuffer(4))).rejects.toThrow('Encryption not unlocked');
+    });
+    expect(mockOwnedByAnotherKey).toHaveBeenCalledWith('mark:test-account-tag');
+    expect(result.current.isUnlocked).toBe(false);
+    mockOwnedByAnotherKey.mockReturnValue(false);
   });
 
   it('rejects iterations below PBKDF2_ITERATIONS minimum', async () => {

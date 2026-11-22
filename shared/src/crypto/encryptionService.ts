@@ -277,6 +277,41 @@ class EncryptionService {
   }
 
   /**
+   * Re-encrypting the journal under a new master key: the OLD key, sealed
+   * under the NEW one, so the server can keep it (it can't open it) until
+   * every record has moved — a re-encryption cut short carries on at the next
+   * sign-in. The raw old key passes through this call only, zeroed after.
+   * Bound to the re-key it belongs to.
+   */
+  async sealOldKey(newKey: CryptoKey, oldExtractableKey: CryptoKey, rekeyId: string): Promise<{ oldKey: string; oldKeyIv: string }> {
+    const raw = new Uint8Array(await crypto.subtle.exportKey('raw', oldExtractableKey));
+    try {
+      const iv = generateIv();
+      const sealed = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer, additionalData: new TextEncoder().encode(rekeyAad(rekeyId)) },
+        newKey, raw,
+      );
+      return { oldKey: uint8ArrayToBase64(new Uint8Array(sealed)), oldKeyIv: uint8ArrayToBase64(iv) };
+    } finally {
+      raw.fill(0);
+    }
+  }
+
+  /** The old key back from `sealOldKey`, non-extractable, for reading records not yet moved. */
+  async openOldKey(newKey: CryptoKey, oldKeyBase64: string, oldKeyIvBase64: string, rekeyId: string): Promise<CryptoKey> {
+    const raw = new Uint8Array(await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: base64ToUint8Array(oldKeyIvBase64).buffer as ArrayBuffer, additionalData: new TextEncoder().encode(rekeyAad(rekeyId)) },
+      newKey, base64ToUint8Array(oldKeyBase64).buffer as ArrayBuffer,
+    ));
+    try {
+      if (raw.byteLength !== 32) throw new Error('Old key must be 32 bytes');
+      return await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    } finally {
+      raw.fill(0);
+    }
+  }
+
+  /**
    * Encrypt post content and metadata as a bound pair, bound to the entry's
    * id: each half's AAD names the entry id and the other half's IV, so a
    * server can't splice one entry's content onto another entry's metadata,
@@ -485,6 +520,11 @@ function postAad(part: 'content' | 'metadata', id: number, otherIv: string): str
 /** The v2 AAD (pair-bound, not id-bound) — read only until an account is re-sealed. */
 function postAadV2(part: 'content' | 'metadata', otherIv: string): string {
   return `chronicles:post:v2:${part}:${otherIv}`;
+}
+
+/** AAD for the old key carried through a re-encryption, bound to that re-key. */
+function rekeyAad(rekeyId: string): string {
+  return `chronicles:rekey:old-key:v1:${rekeyId}`;
 }
 
 /** AAD for a Finance record, binding it to its table (kind) and row id. */

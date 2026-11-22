@@ -15,11 +15,13 @@ vi.mock('../../db/tenantQueries.js', () => ({
   upsertFinanceRecord: vi.fn(),
   deleteFinanceRecord: vi.fn(),
   financeStorageBytes: vi.fn().mockResolvedValue(0),
+  resealFinanceRecords: vi.fn(),
+  financeRecordBytes: vi.fn().mockResolvedValue(0),
   withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),
 }));
 
 import financeRouter from '../../routes/finance.js';
-import { ensureFinanceTables, getFinancePage, upsertFinanceRecord, deleteFinanceRecord, financeStorageBytes, withTenantLock } from '../../db/tenantQueries.js';
+import { ensureFinanceTables, getFinancePage, upsertFinanceRecord, deleteFinanceRecord, financeStorageBytes, withTenantLock, resealFinanceRecords, financeRecordBytes } from '../../db/tenantQueries.js';
 import { FINANCE_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
 
 const app = createTestApp('/api/finance', financeRouter);
@@ -159,4 +161,40 @@ describe('Finance Routes', () => {
       expect(res.status).toBe(400);
     });
   });
+
+  describe('PUT /api/finance/:kind (re-encrypted records)', () => {
+    const rec = (id: string) => ({ id, payload: Buffer.from('new-cipher-with-a-tag!!').toString('base64'), iv: Buffer.from('iv-bytes-12b').toString('base64') });
+    const ID2 = '4f1c2a64-8d1e-4f5a-9b2c-0d1e2f3a4b5c';
+
+    it('replaces the records named, under the account lock', async () => {
+      (resealFinanceRecords as any).mockResolvedValue(2);
+      const res = await request(app).put('/api/finance/expenses').send({ records: [rec(ID), rec(ID2)] });
+      expect(res.status).toBe(200);
+      expect(res.body.resealed).toBe(2);
+      expect(withTenantLock).toHaveBeenCalled();
+      const [, kind, records] = (resealFinanceRecords as any).mock.calls[0];
+      expect(kind).toBe('expenses');
+      expect(records.map((r: { id: string }) => r.id)).toEqual([ID, ID2]);
+    });
+
+    it('leaves the records being replaced out of the size check, and refuses past the cap', async () => {
+      (financeStorageBytes as any).mockResolvedValue(FINANCE_STORAGE_LIMIT_BYTES);
+      (financeRecordBytes as any).mockResolvedValue(10_000);
+      (resealFinanceRecords as any).mockResolvedValue(1);
+      expect((await request(app).put('/api/finance/bills').send({ records: [rec(ID)] })).status).toBe(200);
+      (financeRecordBytes as any).mockResolvedValue(0);
+      expect((await request(app).put('/api/finance/bills').send({ records: [rec(ID)] })).status).toBe(413);
+      (financeStorageBytes as any).mockResolvedValue(0);
+    });
+
+    it('refuses a record twice, a bad id, extra fields and unknown kinds', async () => {
+      expect((await request(app).put('/api/finance/bills').send({ records: [rec(ID), rec(ID)] })).status).toBe(400);
+      expect((await request(app).put('/api/finance/bills').send({ records: [rec('nope')] })).status).toBe(400);
+      expect((await request(app).put('/api/finance/bills').send({ records: [rec(ID)], extra: 1 })).status).toBe(400);
+      expect((await request(app).put('/api/finance/bills').send({ records: [] })).status).toBe(400);
+      expect((await request(app).put('/api/finance/paydays').send({ records: [rec(ID)] })).status).toBe(404);
+      expect(resealFinanceRecords).not.toHaveBeenCalled();
+    });
+  });
 });
+

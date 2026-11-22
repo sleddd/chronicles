@@ -51,3 +51,34 @@ describe('guardImportedFields', () => {
     expect(out).toEqual({ endTime: '10:30', startOn: '2026-01-05', notes: 'Bring 2026-12-01\nnotes', allDay: true });
   });
 });
+
+describe('csvFieldText', () => {
+  it('writes lists and objects out in words, never [object Object]', async () => {
+    const { csvFieldText } = await import('../../utils/csv.js');
+    // Recipe ingredients and steps
+    expect(csvFieldText([{ id: 'a', amount: '2 cups', name: 'rice' }, { id: 'b', amount: '', name: 'salt', checked: true }])).toBe('2 cups rice | [x] salt');
+    expect(csvFieldText([{ id: 's', title: 'Rinse', text: 'Until clear' }, { id: 't', title: '', text: 'Simmer' }])).toBe('Rinse: Until clear | Simmer');
+    // Shopping list items, a to-do list, wins and priorities
+    expect(csvFieldText([{ id: '1', name: 'Milk', category: 'dairy', checked: false }])).toBe('[ ] Milk (category: dairy)');
+    expect(csvFieldText([{ id: '1', text: 'Laundry', done: true }, { id: '2', text: 'Dishes', done: false }])).toBe('[x] Laundry | [ ] Dishes');
+    expect(csvFieldText([{ id: 'w', text: 'Finished the draft' }])).toBe('Finished the draft');
+    // A meal's nutrient sources
+    expect(csvFieldText({ iron: 'ai', vitaminD: 'manual' })).toBe('iron: ai, vitaminD: manual');
+    // A media cover: where it came from, never the picture
+    expect(csvFieldText({ dataUrl: 'data:image/jpeg;base64,AAAA', source: 'Open Library' })).toBe('source: Open Library');
+    // Plain values as before
+    expect(csvFieldText(true)).toBe('Yes');
+    expect(csvFieldText(null)).toBe('');
+    expect(csvFieldText(['a', 'b'])).toBe('a | b');
+  });
+
+  it('names a training phase’s hours by category', async () => {
+    const { csvFieldText } = await import('../../utils/csv.js');
+    const row = {
+      categories: [{ id: 'c1', name: 'Aerobic', exerciseTypes: ['running', 'walking'] }, { id: 'c2', name: 'Core', exerciseTypes: [] }],
+      phases: [{ id: 'p1', name: 'Phase 1', weeks: '6', targets: { c1: '5', c2: '0.5' } }],
+    };
+    expect(csvFieldText(row.categories, row)).toBe('Aerobic (exerciseTypes: running, walking) | Core');
+    expect(csvFieldText(row.phases, row)).toBe('Phase 1 (weeks: 6, targets: Aerobic: 5, Core: 0.5)');
+  });
+});

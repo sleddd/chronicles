@@ -12,7 +12,12 @@ const handoff = vi.hoisted(() => ({ keyHolderExists: vi.fn(), requestKey: vi.fn(
 
 vi.mock('../contexts/AuthContext.js', () => ({ useOptionalAuth: () => auth }));
 vi.mock('../services/keyHandoff.js', () => handoff);
-vi.mock('../services/browserData.js', () => ({ claimBrowserFor: vi.fn().mockResolvedValue(false) }));
+vi.mock('../services/browserData.js', () => ({ claimBrowserFor: vi.fn().mockResolvedValue(false), ownerMark: async () => 'mark', ownedByAnotherKey: () => false }));
+// No re-encryption under way
+vi.mock('../services/api.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../services/api.js')>();
+  return { ...real, auth: { ...real.auth, rekeyStatus: async () => ({ pending: false }) } };
+});
 vi.mock('@shared/crypto/encryptionService.js', () => ({
   encryptionService: { accountTag: async () => 'tag', decryptFile: vi.fn() },
 }));

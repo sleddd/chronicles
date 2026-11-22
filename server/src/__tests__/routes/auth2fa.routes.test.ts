@@ -33,6 +33,14 @@ vi.mock('../../db/trustedDeviceQueries.js', () => ({
   forgetTrustedDevice: async () => true,
 }));
 vi.mock('../../db/passkeyQueries.js', () => ({ removeAllPasskeys: async () => 0 }));
+vi.mock('../../db/rekeyQueries.js', () => ({
+  insertRekey: vi.fn(),
+  claimRekey: vi.fn(),
+  getRekey: vi.fn(),
+  getFinishedRekey: vi.fn().mockResolvedValue(null),
+  dropFinishedRekey: vi.fn(),
+  finishRekey: vi.fn(),
+}));
 
 vi.mock('../../db/schemaManager.js', () => ({ registerTenant: vi.fn(), deleteAccountById: vi.fn() }));
 vi.mock('../../services/googleRevoke.js', () => ({ revokeGoogleAccess: vi.fn().mockResolvedValue(true) }));
@@ -77,6 +85,7 @@ import bcryptMock from '../../services/passwordHasher.js';
 import { prisma } from '../../db/prisma.js';
 import { decryptToken, encryptToken } from '../../services/tokenCrypto.js';
 import { deleteAccountById } from '../../db/schemaManager.js';
+import { insertRekey, getRekey, getFinishedRekey, dropFinishedRekey, finishRekey, claimRekey } from '../../db/rekeyQueries.js';
 import { revokeGoogleAccess } from '../../services/googleRevoke.js';
 import bcrypt from '../../services/passwordHasher.js';
 
@@ -954,4 +963,104 @@ describe('2FA hardening', () => {
       expect(decryptToken(call.data.totpSecret, 'totp:5')).toBe('JBSWY3DPEHPK3PXP');
     });
   });
+
+  describe('re-encrypting the journal with a password change', () => {
+    const rekey = {
+      rekeyId: 'f'.repeat(32),
+      oldKey: Buffer.alloc(48, 4).toString('base64'),
+      oldKeyIv: Buffer.alloc(12, 5).toString('base64'),
+      recoveryWrappedMK: Buffer.alloc(48, 6).toString('base64'),
+      recoveryWrapIv: Buffer.alloc(12, 7).toString('base64'),
+      recoveryKeyHash: 'd'.repeat(64),
+      recoveryKeySalt: 'e'.repeat(32),
+    };
+    const body = {
+      currentAuthSecret: SECRET, newAuthSecret: 'b'.repeat(64),
+      newEncryptedMasterKey: Buffer.alloc(48, 1).toString('base64'),
+      newKekSalt: Buffer.alloc(16, 2).toString('base64'), newKekWrapIv: Buffer.alloc(12, 3).toString('base64'),
+      code: 'BACKUP-0001', rekey,
+    };
+
+    it('swaps the recovery wrap, keeps the old key sealed and removes the passkeys, all in one transaction', async () => {
+      const app = buildApp();
+      const account = twoFAAccount(generateSecret(), [sha256('BACKUP-0001')]);
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+      (getRekey as any).mockResolvedValue(null);
+      (insertRekey as any).mockReturnValue('UPSERT_REKEY');
+      (dropFinishedRekey as any).mockReturnValue('DROP_FINISHED');
+      (prisma.$transaction as any).mockResolvedValue([]);
+      const res = await request(app).post('/api/auth/change-password').send(body);
+      expect(res.status).toBe(200);
+      const [steps] = (prisma.$transaction as any).mock.calls[0];
+      expect(steps).toContain('UPSERT_REKEY');
+      expect(steps).toHaveLength(5);
+      // A finished re-key's row (kept a few days for drafts) makes way just before the insert
+      expect(steps.indexOf('DROP_FINISHED')).toBe(steps.indexOf('UPSERT_REKEY') - 1);
+      expect(dropFinishedRekey).toHaveBeenCalledWith(account.id);
+      const [id, rekeyId, oldKey, oldKeyIv] = (insertRekey as any).mock.calls[0];
+      expect(id).toBe(account.id);
+      expect(rekeyId).toBe(rekey.rekeyId);
+      expect(Buffer.from(oldKey).toString('base64')).toBe(rekey.oldKey);
+      expect(Buffer.from(oldKeyIv).toString('base64')).toBe(rekey.oldKeyIv);
+      const data = (prisma.account.update as any).mock.calls[0][0].data;
+      expect(Buffer.from(data.recoveryWrappedMK).toString('base64')).toBe(rekey.recoveryWrappedMK);
+      // The recovery proof is stored as a check, never as sent
+      expect(data.recoveryKeyHash).not.toBe(rekey.recoveryKeyHash);
+    }, 30000);
+
+    it('refuses a second re-key while one is still under way', async () => {
+      const app = buildApp();
+      (prisma.account.findUnique as any).mockResolvedValue(twoFAAccount(generateSecret(), [sha256('BACKUP-0001')]));
+      (getRekey as any).mockResolvedValue({ rekeyId: 'a'.repeat(32), oldKey: 'x', oldKeyIv: 'y', startedAt: '' });
+      const res = await request(app).post('/api/auth/change-password').send(body);
+      expect(res.status).toBe(409);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('a plain password change keeps the recovery wrap and the passkeys', async () => {
+      const app = buildApp();
+      (prisma.account.findUnique as any).mockResolvedValue(twoFAAccount(generateSecret(), [sha256('BACKUP-0001')]));
+      (prisma.$transaction as any).mockResolvedValue([]);
+      const { rekey: _r, ...plain } = body;
+      const res = await request(app).post('/api/auth/change-password').send(plain);
+      expect(res.status).toBe(200);
+      expect((prisma.$transaction as any).mock.calls[0][0]).toHaveLength(2);
+      expect((prisma.account.update as any).mock.calls[0][0].data.recoveryWrappedMK).toBeUndefined();
+      expect(getRekey).not.toHaveBeenCalled();
+    }, 30000);
+
+    it('GET /rekey answers the old key (sealed under the new one) only while one is under way', async () => {
+      const app = buildApp();
+      (getRekey as any).mockResolvedValue({ rekeyId: 'a'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV', startedAt: 'now' });
+      expect((await request(app).get('/api/auth/rekey')).body).toEqual({ pending: true, rekeyId: 'a'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV' });
+      (getRekey as any).mockResolvedValue(null);
+      expect((await request(app).get('/api/auth/rekey')).body).toEqual({ pending: false });
+      // Finished a few days ago: the old key again, marked for drafts only
+      (getFinishedRekey as any).mockResolvedValueOnce({ rekeyId: 'a'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV' });
+      expect((await request(app).get('/api/auth/rekey')).body).toEqual({ pending: false, drafts: { rekeyId: 'a'.repeat(32), oldKey: 'OLD', oldKeyIv: 'IV' } });
+    });
+
+    it('POST /rekey/claim gives the job to one runner, and checks the ids', async () => {
+      (claimRekey as any).mockResolvedValue({ pending: true, claimed: true });
+      const ok = await request(app).post('/api/auth/rekey/claim').send({ rekeyId: 'a'.repeat(32), runner: 'b'.repeat(32) });
+      expect(ok.body).toEqual({ pending: true, claimed: true });
+      expect((claimRekey as any).mock.calls[0].slice(1)).toEqual(['a'.repeat(32), 'b'.repeat(32)]);
+      const bad = await request(app).post('/api/auth/rekey/claim').send({ rekeyId: 'a'.repeat(32), runner: 'nope' });
+      expect(bad.status).toBe(400);
+    });
+
+    it('POST /rekey/finish drops the old key for the re-key named, for the runner named, and checks the ids', async () => {
+      const app = buildApp();
+      (finishRekey as any).mockResolvedValue(true);
+      const ok = await request(app).post('/api/auth/rekey/finish').send({ rekeyId: 'a'.repeat(32), runner: 'b'.repeat(32) });
+      expect(ok.body).toEqual({ finished: true });
+      expect(finishRekey).toHaveBeenCalledWith(1, 'a'.repeat(32), 'b'.repeat(32));
+      const bad = await request(app).post('/api/auth/rekey/finish').send({ rekeyId: 'not-an-id', runner: 'b'.repeat(32) });
+      expect(bad.status).toBe(400);
+      // No runner named: nobody's word to take
+      const none = await request(app).post('/api/auth/rekey/finish').send({ rekeyId: 'a'.repeat(32) });
+      expect(none.status).toBe(400);
+    });
+  });
 });
+

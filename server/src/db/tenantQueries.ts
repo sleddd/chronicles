@@ -1082,6 +1082,40 @@ export async function upsertFinanceRecord(
   return rows[0];
 }
 
+/**
+ * Replace records already stored with new ciphertext (re-encrypting under a new
+ * master key). Never creates one, so a record deleted meanwhile stays deleted.
+ * Returns how many were replaced.
+ */
+export async function resealFinanceRecords(
+  schemaName: string,
+  kind: FinanceTableKind,
+  records: { id: string; payload: Buffer; iv: Buffer }[],
+  client?: TenantClient
+): Promise<number> {
+  const db = await clientFor(schemaName, client);
+  const s = escapeSchema(schemaName);
+  let n = 0;
+  for (const r of records) {
+    n += await db.$executeRawUnsafe(
+      `UPDATE ${s}.${FINANCE_TABLES[kind]} SET payload_encrypted = $2, payload_iv = $3, updated_at = NOW() WHERE id = $1`,
+      r.id, r.payload, r.iv
+    );
+  }
+  return n;
+}
+
+/** Bytes of the named records' payloads (+ overhead), to leave them out of a size check */
+export async function financeRecordBytes(schemaName: string, kind: FinanceTableKind, ids: string[], client?: TenantClient): Promise<number> {
+  const db = await clientFor(schemaName, client);
+  const s = escapeSchema(schemaName);
+  const rows = await db.$queryRawUnsafe<{ n: bigint | number | null }[]>(
+    `SELECT COALESCE(SUM(octet_length(payload_encrypted) + ${ROW_OVERHEAD_BYTES}), 0) AS n FROM ${s}.${FINANCE_TABLES[kind]} WHERE id = ANY($1::text[])`,
+    ids
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
 /** Bytes of encrypted payloads (+ the per-row overhead) over every finance table (optionally leaving one row out). */
 export async function financeStorageBytes(schemaName: string, exclude?: { kind: FinanceTableKind; id: string }, client?: TenantClient): Promise<number> {
   const db = await clientFor(schemaName, client);
