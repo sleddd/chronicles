@@ -6,7 +6,7 @@ import { duplicateEntryFields } from '../utils/entryDuplicate.js';
 import { QUICK_PLACEHOLDER } from '../utils/quickPlaceholder.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import styled, { css, keyframes } from 'styled-components';
-import { glassBar, glassPill } from '../styles/wallpaper.js';
+import { glassBar } from '../styles/wallpaper.js';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { PillButton } from '../components/atoms/PillButton.js';
 import { faXmark } from '@fortawesome/free-solid-svg-icons';
@@ -189,42 +189,6 @@ const HeaderActions = styled.div`
 const CrumbSlot = styled.div`
   min-width: 0;
   @media (max-width: 768px) { display: none; }
-`;
-
-/* Outlined accent pill (no fill) */
-const NewEntryPill = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 12px 0 9px;
-  border: 1px solid var(--color-accent);
-  border-radius: 999px;
-  background: transparent;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-accent);
-  /* On a wallpaper: the smoked glass pill with white text, like other pages' buttons on the photo
-     (with no fill it had no outline either, so it didn't read as a button) */
-  ${glassPill}
-  /* …but not in the phone / tablet top bar, which sits on the page colour, not the
-     photo: the accent outline and text there, in either theme */
-  html[data-wallpaper] #mobile-bar-actions &, #mobile-bar-actions & {
-    border-color: var(--color-accent-line);
-    background: transparent;
-    color: var(--color-accent-line);
-    text-shadow: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-  white-space: nowrap;
-  cursor: pointer;
-  /* A little faded, full strength on hover */
-  opacity: 0.75;
-  transition: border-color 120ms, color 120ms, opacity 120ms;
-  &:hover { opacity: 1; border-color: var(--color-accent-hover); color: var(--color-accent-hover); }
-  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
 /** Compact change-detection signature for the entry's image set. */
@@ -1250,7 +1214,7 @@ export function JournalView() {
             {/* Only while AI insights is on and agreed to in this browser (Settings → In-App AI) */}
             {aiInsightsOn && (
               <AiInsights onWrite={writeFromPrompt}
-                trigger={open => <NewEntryPill type="button" onClick={open} style={{ padding: '0 12px', marginLeft: 10 }}>AI insights</NewEntryPill>} />
+                trigger={open => <PillButton type="button" $variant="neutral" onClick={open} style={{ marginLeft: 10 }}>AI insights</PillButton>} />
             )}
           </TopBarAction>
         )}

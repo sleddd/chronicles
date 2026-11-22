@@ -237,7 +237,7 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--bg-tab-active':     'rgba(255, 255, 255, 0.13)',
   '--bg-inverse':        '#f1f2f5',
   '--text-primary':      '#f7f8fa',
-  '--text-secondary':    '#e6e9ee',
+  '--text-secondary':    '#c8c6c6',
   '--text-tertiary':     '#cdd2da',
   '--text-disabled':     '#a3a9b5',
   '--text-tab':          '#aeb4bf',  /* inactive section tabs — a step under tertiary */

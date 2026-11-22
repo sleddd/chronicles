@@ -76,13 +76,14 @@ describe('MediaView', () => {
     localStorage.removeItem('media-view-v1');
   });
 
-  it('with a public shelf on, the meta row names it with a Public shelf link, and Copy shelf link copies it', async () => {
+  it('with a public shelf on, its options sit beside the grid | list switch: the name, Copy shelf link and Open public shelf', async () => {
     usePublicShelfStore.getState().setLoaded({ token: 't'.repeat(32), title: 'My Media List', itemCount: 1, createdAt: '', updatedAt: '' });
     renderWithTheme(<MediaView />);
     expect(screen.queryByText(/items$/)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Public shelf/ })).toHaveAttribute('href', expect.stringContaining('/public-shelf/' + 't'.repeat(32)));
+    fireEvent.click(screen.getByRole('button', { name: 'Public shelf options' }));
     expect(screen.getByRole('button', { name: /Rename your public shelf, now “My Media List”/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copy the public shelf link' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy shelf link' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open public shelf' })).toBeInTheDocument();
   });
 
   it('with no public shelf yet, the bookmark opens the confirmation and saves nothing', () => {
@@ -123,6 +124,6 @@ describe('MediaView', () => {
     expect(fields.mediaTitle).toBe('Title 1');
     fireEvent.click(screen.getByRole('button', { name: 'Take Title 2 off your public shelf' }));
     expect(mockSave.mock.calls[1][1][ON_PUBLIC_SHELF]).toBe(false);
-    expect(screen.queryByRole('button', { name: /Public shelf/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Public shelf' })).not.toBeInTheDocument();
   });
 });

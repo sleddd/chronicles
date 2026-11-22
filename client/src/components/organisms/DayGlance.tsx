@@ -435,6 +435,8 @@ const AllDayTile = styled.button`
   border: none;
   border-radius: 8px;
   background: var(--bg-tile);
+  /* Dark: the agenda's cards a little lighter than the tiles' #1b1d25 */
+  html[data-theme='dark'] & { background: #21242d; }
   text-align: left;
   font-family: var(--font-sans);
   font-size: 15px;
@@ -494,6 +496,8 @@ const BlockBtn = styled.button<{ $kind: Kind }>`
   border: 1px solid transparent;
   border-radius: 8px;
   background: var(--bg-tile);
+  /* Dark: the agenda's cards a little lighter than the tiles' #1b1d25 */
+  html[data-theme='dark'] & { background: #21242d; }
   text-align: left;
   font-family: var(--font-sans);
   font-size: 15px;

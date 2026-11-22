@@ -9,6 +9,7 @@ import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { PublicShelfControl } from '../components/organisms/PublicShelfControl.js';
 import { FollowedShelves } from '../components/organisms/FollowedShelves.js';
 import { FilterTabs } from '../components/molecules/FilterTabs.js';
+import { ViewMenu } from '../components/molecules/ViewMenu.js';
 import { shelfTokenFrom } from '../utils/followedShelves.js';
 import { renamePublicShelf, turnOnPublicShelfHere } from '../hooks/usePublicShelfSync.js';
 import { PUBLIC_SHELF_TITLE_MAX } from '@shared/validation/schemas';
@@ -28,7 +29,7 @@ import { useEntriesStore } from '../stores/entriesStore.js';
 import { usePublicShelfStore } from '../stores/publicShelfStore.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { focusPosition } from '../components/organisms/EntryImageGallery.js';
-import { glassPill, onPhoto, onPhotoInDark } from '../styles/wallpaper.js';
+import { onPhoto, onPhotoInDark } from '../styles/wallpaper.js';
 import { NAV_COMPACT } from '../styles/breakpoints.js';
 import { ON_PUBLIC_SHELF, isOnPublicShelf } from '../services/publicShelf.js';
 import { PUBLIC_SHELF_PAGE_SIZE } from '@shared/validation/schemas';
@@ -113,66 +114,10 @@ const Title = styled.h1`
   @media (max-width: 480px) { font-size: 34px; }
 `;
 
-/* Under the title: the shelf's name · Public shelf, with the actions across (no item count) */
-const MetaRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px 24px;
-  margin-top: 56px;
-  ${NAV_COMPACT} { margin-top: 32px; }
-`;
-
-const Meta = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0 14px;
-  min-width: 0;
-  font-family: var(--font-sans);
-  font-size: 15px;
-  color: var(--text-muted);
-  ${onPhotoInDark}
-  /* The dots between the parts */
-  & > * + *::before { content: '·'; margin-right: 14px; color: var(--text-faint, var(--text-muted)); }
-`;
-
-/* The Public shelf link: the globe and the words in grey (never the accent; white on a wallpaper), opening the public page */
-const PublicLink = styled.a`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  white-space: nowrap;
-  /* On the wallpaper in dark it reads in white like the rest of the row, a touch see-through */
-  ${onPhotoInDark}
-  html[data-wallpaper][data-theme='dark'] & { opacity: 0.88; }
-  &:hover { color: var(--text-primary); text-decoration: underline; opacity: 1; }
-  &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
-`;
-
 /* The list layout: the app's flush rows (title, a muted line, the date), under a top rule */
 const ListBox = styled.div`
   margin-top: 40px;
   border-top: 1px solid var(--border-subtle);
-`;
-
-/* Copy shelf link: the neutral pill, a smoked glass pill on a wallpaper (like Add media) */
-const CopyLinkBtn = styled(PillButton)`
-  ${glassPill}
-`;
-
-const Actions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: none;
-  margin-left: auto;
-  /* On phones (Add media is up in the top bar) Copy shelf link sits on its own line, flush left */
-  @media (max-width: 768px) { margin-left: 0; flex: 1 1 100%; }
 `;
 
 /* The public-shelf bookmark over a cover's corner: accent and solid while the
@@ -306,13 +251,52 @@ const SECTIONS: { value: MediaSection; label: string }[] = [
   { value: 'mine', label: 'My shelf' },
   { value: 'following', label: 'Following' },
 ];
-/* Media Journal on the left, My shelf | Following across from it */
+/* Media Journal on the left; My shelf | Following and Add media across from it */
 const TitleRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px 24px;
+`;
+
+/* My shelf | Following: in light theme on the photo, smoked glass like the page's buttons — a dark
+   see-through fill with a blur, white words, the chosen one a faint white lift */
+const SectionSwitch = styled.div`
+  display: contents;
+  html[data-wallpaper][data-theme='light'] & > * {
+    background: rgba(18, 20, 26, 0.5) !important;
+    border-color: transparent !important;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    --text-primary: #fff;
+    --text-secondary: rgba(255, 255, 255, 0.9);
+    --text-muted: rgba(255, 255, 255, 0.78);
+    --bg-tab-active: rgba(255, 255, 255, 0.18);
+  }
+`;
+
+const TitleActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+`;
+
+/* The shelf's options and the grid | list switch, together at the end of the controls */
+const ControlEnd = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+/* The shelf's name in the options menu, renamed in place */
+const ShelfNameBox = styled.div`
+  padding: 4px 2px 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  & > span { display: block; margin-bottom: 2px; }
 `;
 
 export function MediaView() {
@@ -417,30 +401,15 @@ export function MediaView() {
           <Head>
             <TitleRow>
               <Title>Media Journal</Title>
-              <FilterTabs options={SECTIONS} active={section} onChange={setSection} bordered={false} flush />
-            </TitleRow>
-            <MetaRow>
-              <Meta>
-                {publicShelf && <ShelfName title={shelfTitle} />}
-                {publicShelf && (
-                  <PublicLink href={shelfUrl} target="_blank" rel="noopener noreferrer" title="Open your public shelf in a new tab">
-                    <Icon name="globe" size={15} strokeWidth={2} />Public shelf
-                  </PublicLink>
-                )}
-              </Meta>
-              <Actions>
-                {publicShelf && (
-                  <CopyLinkBtn type="button" $variant="neutral" onClick={copyLink} data-copied={copied} aria-label={copied ? 'Copied' : 'Copy the public shelf link'}>
-                    <Icon name={copied ? 'check' : 'link'} size={14} strokeWidth={2.5} />{copied ? 'Copied' : 'Copy shelf link'}
-                  </CopyLinkBtn>
-                )}
+              <TitleActions>
+                <SectionSwitch><FilterTabs options={SECTIONS} active={section} onChange={setSection} bordered={false} flush /></SectionSwitch>
                 {topicId != null && (
                   <TopBarAction>
                     <PillButton type="button" $variant="solid" onClick={() => newEntry(topicId)}>Add media</PillButton>
                   </TopBarAction>
                 )}
-              </Actions>
-            </MetaRow>
+              </TitleActions>
+            </TitleRow>
           </Head>
 
           {section === 'following' ? (
@@ -448,7 +417,20 @@ export function MediaView() {
           ) : (<>
           {items.length > 0 && (
             <MediaFilterBar roomy query={query} onQuery={setQuery} filters={{ ...filters, tag, sort }} onFilters={next => setSaved(v => ({ ...v, ...next }))} phone={phone} tags={tags}
-              aside={<MediaViewSwitch value={layout} onChange={l => setSaved(v => ({ ...v, layout: l }))} />} />
+              aside={(
+                <ControlEnd>
+                  {/* The public shelf: its name (renamed in place), its link copied or opened */}
+                  {publicShelf && (
+                    <ViewMenu label="Public shelf options" heading="Public shelf"
+                      extra={<ShelfNameBox><span>Name</span><ShelfName title={shelfTitle} /></ShelfNameBox>}
+                      items={[
+                        { label: copied ? 'Copied' : 'Copy shelf link', icon: copied ? 'check' : 'link', onSelect: () => { void copyLink(); } },
+                        { label: 'Open public shelf', icon: 'globe', onSelect: () => { window.open(shelfUrl, '_blank', 'noopener,noreferrer'); } },
+                      ]} />
+                  )}
+                  <MediaViewSwitch value={layout} onChange={l => setSaved(v => ({ ...v, layout: l }))} />
+                </ControlEnd>
+              )} />
           )}
           <PublicShelfControl open={panelOpen} onOpenChange={setPanel} anchor={anchor} pendingItem={pendingItem} onTurnedOn={turnedOn} />
 

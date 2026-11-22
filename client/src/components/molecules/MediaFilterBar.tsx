@@ -36,6 +36,10 @@ const SORT_WORDS: Record<MediaSort, string> = { newest: 'Newest first', rating: 
 const RATINGS = [5, 4.5, 4, 3.5, 3, 2];
 
 export const MediaToolBox = styled.div<{ $phone: boolean }>`
+  /* Above the shelf under it, so a menu opened from it (the public shelf's ⋯) sits over the covers
+     (the box's blur makes it a layer of its own, which would otherwise stay under the cards) */
+  position: relative;
+  z-index: 20;
   display: flex;
   flex-wrap: ${({ $phone }) => ($phone ? 'wrap' : 'nowrap')};
   align-items: center;
