@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState, type FormEvent } from 'react';
 import styled from 'styled-components';
+import { outlinedInputs } from '../../styles/filledInputs.js';
 import { PillButton } from '../atoms/PillButton.js';
 import { PopCalculator } from '../molecules/PopCalculator.js';
 import { Icon } from '../atoms/core/Icon.jsx';
@@ -373,6 +374,30 @@ function draftFrom(b?: Bill): Draft {
 }
 
 const NEW_CATEGORY = '__new__';
+
+/* Adding or editing a bill on Budget & bills: the editor in a card of its own */
+const NewBillCard = styled.section`
+  margin: 16px 0 24px;
+  padding-top: 8px;
+  border-radius: 14px;
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  font-family: var(--font-sans);
+  /* The Quick entry's Bill form's fields: outlined boxes filling their column */
+  ${outlinedInputs}
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { width: 100%; }
+`;
+
+const NewBillTitle = styled.h3`
+  margin: 0;
+  padding: 22px 36px 6px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--text-primary);
+  @media (max-width: 640px) { padding: 18px 20px 4px; }
+`;
 
 export function BillEditor({ bill, categories, onSave, onCancel, onAddCategory, framed, noHeading, card }: {
   /** In its own panel (editing a row inside the bills table) */
@@ -794,7 +819,13 @@ export function BillsTable({ bills, categories, month, onSave, onDelete, onAddCa
         </MonthTotals>
       )}
 
-      {editing === 'new' && <BillEditor categories={categories} onSave={onSave} onAddCategory={onAddCategory} onCancel={() => setEditing(null)} />}
+      {/* A new bill: in a card of its own, laid out like the Quick entry's Bill form (label-left rows) */}
+      {editing === 'new' && (
+        <NewBillCard aria-label="New bill">
+          <NewBillTitle>New bill</NewBillTitle>
+          <BillEditor card noHeading categories={categories} onSave={onSave} onAddCategory={onAddCategory} onCancel={() => setEditing(null)} />
+        </NewBillCard>
+      )}
 
       <SheetBox>
         {rows.length === 0 ? (
@@ -806,8 +837,12 @@ export function BillsTable({ bills, categories, month, onSave, onDelete, onAddCa
               : 'Nothing here for this filter.'}
           </EmptyNote>
         ) : rows.map(({ bill, state }) => (editing === bill.id ? (
-          <div key={bill.id} style={{ padding: '4px 16px' }}>
-            <BillEditor framed bill={bill} categories={categories} onSave={onSave} onAddCategory={onAddCategory} onCancel={() => setEditing(null)} />
+          <div key={bill.id} style={{ padding: '12px 16px' }}>
+            {/* Editing a bill: the same card and layout as adding one */}
+            <NewBillCard aria-label={`Edit ${bill.name}`} style={{ margin: 0 }}>
+              <NewBillTitle>Edit bill</NewBillTitle>
+              <BillEditor card noHeading bill={bill} categories={categories} onSave={onSave} onAddCategory={onAddCategory} onCancel={() => setEditing(null)} />
+            </NewBillCard>
           </div>
         ) : (
           <Fragment key={bill.id}>

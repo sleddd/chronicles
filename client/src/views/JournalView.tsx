@@ -1,4 +1,5 @@
 import { useSealedDraft } from '../hooks/useSealedDraft.js';
+import { QUICK_FINANCE_CHOICES, QuickFinance, type QuickFinanceKind } from '../components/organisms/QuickFinance.js';
 import { DraftNote } from '../components/molecules/DraftNote.js';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { validEntryRows } from '../utils/entryRows.js';
@@ -292,6 +293,10 @@ export function JournalView() {
   const [pendingNewTopicId, setPendingNewTopicId] = useState<number | null>(null);
   // …and its preset fields (a Planning board column's status)
   const [pendingNewFields, setPendingNewFields] = useState<Record<string, unknown> | null>(null);
+  // Bill / Spending picked in a new entry's topic picker (Finance on): Budget & bills' own form
+  const financeOn = useEntriesStore(s => s.featureFlags.financeEnabled === true);
+  const [financeForm, setFinanceForm] = useState<QuickFinanceKind | null>(null);
+  useEffect(() => { setFinanceForm(null); }, [selectedEntryId]);
 
   useEffect(() => {
     if (originPath) setEditorExpanded(true);
@@ -1255,7 +1260,12 @@ export function JournalView() {
               content={editorContent}
               onContentChange={setEditorContent}
               topicId={editorTopicId}
-              onTopicChange={setEditorTopicId}
+              onTopicChange={id => { setFinanceForm(null); setEditorTopicId(id); }}
+              quickExtras={financeOn && selectedEntryId == null ? QUICK_FINANCE_CHOICES : undefined}
+              quickExtra={financeOn && selectedEntryId == null ? financeForm : null}
+              onQuickExtra={k => setFinanceForm(k as QuickFinanceKind)}
+              quickExtraBody={financeOn && selectedEntryId == null && financeForm
+                ? <QuickFinance kind={financeForm} onCancel={() => setFinanceForm(null)} /> : undefined}
               topics={topics}
               customFields={customFields}
               onCustomFieldsChange={setCustomFields}

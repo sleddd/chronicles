@@ -2181,12 +2181,27 @@ export function EntryForm({
       {/* No top bar: the question, the writing area, the fields and the tool row all in one scroll */}
       <ScrollArea>
         <EdBody $full={!quick && !!fullWidth}>
-          {isTaskCard ? (
+          {quickExtra && quickExtraBody ? (
+          // Bill / Spending picked in the journal's topic picker: Budget & bills' own form
+          // in place of the entry (saved to the finance tables, never the journal)
+          <EntryCard $flat data-framed="" style={{ maxWidth: FIELDS_ROW_MAX }}>
+            <TaskHead data-journal="" data-full={fullWidth ? '' : undefined} style={{ paddingLeft: CARD_X, '--head-x': CARD_X } as CSSProperties}>
+              <JournalPrompt>
+                <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
+                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))}
+                  extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra} />
+              </JournalPrompt>
+              {headIcons}
+            </TaskHead>
+            <QuickExtraForm>{quickExtraBody}</QuickExtraForm>
+          </EntryCard>
+          ) : isTaskCard ? (
           <EntryCard $flat data-task-card="" style={{ maxWidth: TASK_ROW_MAX }}>
             <TaskHead data-journal="" data-full={fullWidth ? '' : undefined}>
               <JournalPrompt>
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
-                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
+                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))}
+                  extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra} />
               </JournalPrompt>
               <TaskFormatToggle values={taskValues} onChange={setTask} />
               {(onToggleExpand || onClose) && (
@@ -2223,7 +2238,8 @@ export function EntryForm({
             <TaskHead data-journal="" data-full={fullWidth ? '' : undefined} style={{ paddingLeft: CARD_X, '--head-x': CARD_X } as CSSProperties}>
               <JournalPrompt>
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
-                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
+                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))}
+                  extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra} />
               </JournalPrompt>
               {headIcons}
             </TaskHead>
@@ -2248,7 +2264,8 @@ export function EntryForm({
                 {/* Just the picker (no question). No topic picked asks for one ("choose a topic ⌄") rather than naming
                     Journal — saved without one (the autosave too) it still goes under Journal */}
                 <TopicSelector selectedId={topicId} onSelect={id => onTopicChange(id)} topics={topics} hideIcon
-                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))} />
+                  label={name => (topicId === null ? 'choose a topic' : quickTopicPhrase(name))}
+                  extras={quickExtras} selectedExtra={quickExtra} onSelectExtra={onQuickExtra} />
               </JournalPrompt>
               {(onToggleExpand || onClose) && (
                 <HeadIcons>
