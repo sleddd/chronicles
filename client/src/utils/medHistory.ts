@@ -61,12 +61,55 @@ export interface MedHistoryRow {
   skipped: number;
   /** Distinct days with at least one taken dose */
   days: number;
+  /** Distinct Monday–Sunday weeks with at least one taken dose */
+  weeks: number;
   lastTaken: string | null;
   /** Newest first */
   events: MedEvent[];
 }
 
+export interface MedHistoryWeek {
+  /** Monday of this week */
+  start: string;
+  /** Newest first */
+  events: MedEvent[];
+  taken: number;
+  skipped: number;
+  /** Distinct days with at least one taken dose */
+  days: number;
+}
+
 const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+
+function weekStart(day: string): string {
+  const date = new Date(`${day}T00:00:00`);
+  const weekday = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - weekday);
+  return toDateStr(date);
+}
+
+/** Split a medication's events into Monday–Sunday weeks, newest week first. */
+export function groupMedEventsByWeek(events: MedEvent[]): MedHistoryWeek[] {
+  const weeks = new Map<string, MedHistoryWeek>();
+  for (const event of events) {
+    const start = weekStart(event.day);
+    let week = weeks.get(start);
+    if (!week) {
+      week = { start, events: [], taken: 0, skipped: 0, days: 0 };
+      weeks.set(start, week);
+    }
+    week.events.push(event);
+    if (event.status === 'taken') week.taken++;
+    else week.skipped++;
+  }
+  return [...weeks.values()]
+    .map(week => {
+      week.events.sort((a, b) => (b.day + b.time).localeCompare(a.day + a.time));
+      week.days = new Set(week.events.filter(e => e.status === 'taken').map(e => e.day)).size;
+      return week;
+    })
+    .sort((a, b) => b.start.localeCompare(a.start));
+}
 
 function localTime(iso: string | null): string {
   if (!iso) return '';
@@ -93,7 +136,7 @@ export function buildMedHistory(
     const key = norm(label);
     let g = groups.get(key);
     if (!g) {
-      g = { key, name: label, dosage, taken: 0, skipped: 0, days: 0, lastTaken: null, events: [] };
+      g = { key, name: label, dosage, taken: 0, skipped: 0, days: 0, weeks: 0, lastTaken: null, events: [] };
       groups.set(key, g);
     }
     if (!g.dosage && dosage) g.dosage = dosage;
@@ -134,10 +177,16 @@ export function buildMedHistory(
   for (const g of groups.values()) {
     g.events.sort((a, b) => (b.day + b.time).localeCompare(a.day + a.time));
     const takenDays = new Set<string>();
+    const takenWeeks = new Set<string>();
     for (const e of g.events) {
-      if (e.status === 'taken') { g.taken++; takenDays.add(e.day); } else g.skipped++;
+      if (e.status === 'taken') {
+        g.taken++;
+        takenDays.add(e.day);
+        takenWeeks.add(weekStart(e.day));
+      } else g.skipped++;
     }
     g.days = takenDays.size;
+    g.weeks = takenWeeks.size;
     g.lastTaken = g.events.find(e => e.status === 'taken')?.day ?? null;
   }
 

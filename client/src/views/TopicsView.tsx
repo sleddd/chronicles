@@ -35,8 +35,8 @@ const Inner = styled.div`
   width: 100%;
   max-width: 1300px; /* a little wider than the other pages' 1150px */
   margin: 0 auto;
-  padding: 0 24px 64px;
-  @media (max-width: 768px) { padding: 0 16px 48px; }
+  padding: 0 48px 64px;
+  @media (max-width: 768px) { padding: 0 40px 48px; }
 `;
 
 /* ── Header ── */

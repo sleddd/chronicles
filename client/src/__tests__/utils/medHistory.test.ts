@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMedHistory, medPeriodRange, searchMedHistory, medHistoryTotals } from '@/utils/medHistory';
+import { buildMedHistory, groupMedEventsByWeek, medPeriodRange, searchMedHistory, medHistoryTotals } from '@/utils/medHistory';
 import type { DoseLogRecord } from '@/services/api';
 import type { FoodRow } from '@/utils/foodLog';
 
@@ -37,8 +37,8 @@ describe('buildMedHistory', () => {
       dose('f', 1, '2026-09-30', 'taken'),
     ], meds, [], october);
     const d3 = rows.find(r => r.name === 'Vitamin D3')!;
-    expect(d3).toMatchObject({ taken: 3, skipped: 0, days: 2, lastTaken: '2026-10-03', dosage: '2000 IU' });
-    expect(rows.find(r => r.name === 'Metformin')).toMatchObject({ taken: 0, skipped: 1, days: 0, lastTaken: null });
+    expect(d3).toMatchObject({ taken: 3, skipped: 0, days: 2, weeks: 1, lastTaken: '2026-10-03', dosage: '2000 IU' });
+    expect(rows.find(r => r.name === 'Metformin')).toMatchObject({ taken: 0, skipped: 1, days: 0, weeks: 0, lastTaken: null });
     expect(rows[0].name).toBe('Vitamin D3'); // most taken first
   });
 
@@ -59,6 +59,21 @@ describe('buildMedHistory', () => {
   it('keeps doses of a deleted medication', () => {
     const rows = buildMedHistory([dose('a', 99, '2026-10-02', 'taken')], meds, [], october);
     expect(rows[0]).toMatchObject({ name: 'Deleted medication', taken: 1 });
+  });
+
+  it('counts taken weeks separately when doses cross a Monday boundary', () => {
+    const rows = buildMedHistory([
+      dose('sun', 1, '2026-10-04', 'taken'),
+      dose('mon', 1, '2026-10-05', 'taken'),
+      dose('again', 1, '2026-10-05', 'taken', '20:00'),
+    ], meds, [], october);
+    expect(rows[0]).toMatchObject({ taken: 3, days: 2, weeks: 2 });
+    expect(groupMedEventsByWeek(rows[0].events).map(week => ({
+      start: week.start, taken: week.taken, days: week.days,
+    }))).toEqual([
+      { start: '2026-10-05', taken: 2, days: 1 },
+      { start: '2026-09-28', taken: 1, days: 1 },
+    ]);
   });
 });
 

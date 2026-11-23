@@ -16,7 +16,7 @@ import { foodRowsFrom, parseDay } from '../utils/foodLog.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { csvCell } from '../utils/csv.js';
 import {
-  MED_PERIODS, buildMedHistory, medHistoryTotals, medPeriodRange, searchMedHistory,
+  MED_PERIODS, buildMedHistory, groupMedEventsByWeek, medHistoryTotals, medPeriodRange, searchMedHistory,
   type MedHistoryRow, type MedInfo, type MedPeriod,
 } from '../utils/medHistory.js';
 import { topicEntries } from '../utils/topicIndex.js';
@@ -143,6 +143,10 @@ const Doses = styled.td`
   li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--text-secondary); }
   li span { color: var(--text-muted); }
   li[data-skipped] { color: var(--text-muted); text-decoration: line-through; }
+  li[data-week] { display: block; grid-column: 1 / -1; margin-top: 8px; }
+  li[data-week] > div { display: flex; justify-content: space-between; gap: 12px; color: var(--text-primary); font-size: 14px; font-weight: 500; }
+  li[data-week] > div span { color: var(--text-muted); font-weight: 400; }
+  li[data-week] ul { padding: 6px 0 0; }
 `;
 
 /* A medication's changes, above its doses */
@@ -154,6 +158,16 @@ const Changes = styled.ol`
 
 const fmtDay = (day: string, withYear = false) =>
   parseDay(day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) });
+
+const fmtWeek = (monday: string, withYear = false) => {
+  const start = parseDay(monday);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const format = (date: Date) => date.toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}),
+  });
+  return `${format(start)} – ${format(end)}`;
+};
 
 const fmtTime = (hhmm: string) => {
   if (!hhmm) return '';
@@ -285,6 +299,7 @@ export function MedHistoryView() {
                   <tr>
                     <th>Medication</th>
                     <th className="num">Taken</th>
+                    <th className="num">Weeks</th>
                     <th className="num">Days</th>
                     <th className="num">Skipped</th>
                     <th className="num">Last taken</th>
@@ -299,13 +314,14 @@ export function MedHistoryView() {
                           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(r.key); } }}>
                           <td><Name data-open={isOpen}>{r.name}{r.dosage && <span>{r.dosage}</span>}</Name></td>
                           <td className="num">{r.taken}×</td>
+                          <td className="num">{r.weeks}</td>
                           <td className="num">{r.days}</td>
                           <td className={`num${r.skipped ? '' : ' muted'}`}>{r.skipped || '—'}</td>
                           <td className="num muted">{r.lastTaken ? fmtDay(r.lastTaken, multiYear) : '—'}</td>
                         </MedRow>
                         {isOpen && (
                           <tr>
-                            <Doses colSpan={5}>
+                            <Doses colSpan={6}>
                               {(changesByName.get(r.key) ?? []).length > 0 && (
                                 <Changes aria-label={`${r.name} changes`}>
                                   {changesByName.get(r.key)!.map((c, i) => (
@@ -314,10 +330,20 @@ export function MedHistoryView() {
                                 </Changes>
                               )}
                               <ul aria-label={`${r.name} doses`}>
-                                {r.events.map(e => (
-                                  <li key={e.key} data-skipped={e.status === 'skipped' ? '' : undefined}>
-                                    {fmtDay(e.day, multiYear)}
-                                    <span>{e.status === 'skipped' ? 'Skipped' : fmtTime(e.time) || (e.source === 'meals' ? 'Logged' : 'Taken')}</span>
+                                {groupMedEventsByWeek(r.events).map(week => (
+                                  <li key={week.start} data-week="" role="group" aria-label={`Week of ${fmtWeek(week.start, multiYear)}`}>
+                                    <div role="heading" aria-level={3}>
+                                      Week of {fmtWeek(week.start, multiYear)}
+                                      <span>{week.taken} {week.taken === 1 ? 'dose' : 'doses'} · {week.days} {week.days === 1 ? 'day' : 'days'} taken{week.skipped > 0 ? ` · ${week.skipped} skipped` : ''}</span>
+                                    </div>
+                                    <ul>
+                                      {week.events.map(e => (
+                                        <li key={e.key} data-skipped={e.status === 'skipped' ? '' : undefined}>
+                                          {fmtDay(e.day, multiYear)}
+                                          <span>{e.status === 'skipped' ? 'Skipped' : fmtTime(e.time) || (e.source === 'meals' ? 'Logged' : 'Taken')}</span>
+                                        </li>
+                                      ))}
+                                    </ul>
                                   </li>
                                 ))}
                               </ul>

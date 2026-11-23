@@ -49,6 +49,7 @@ describe('MedHistoryView', () => {
     renderWithTheme(<MedHistoryView />);
     const d3 = (await screen.findByText('Vitamin D3')).closest('tr')!;
     expect(within(d3).getByText('3×')).toBeInTheDocument(); // September's dose is out of range
+    expect(within(d3).getByText('1')).toBeInTheDocument(); // weeks taken
     expect(within(d3).getByText('2')).toBeInTheDocument(); // days
     const met = screen.getByText('Metformin').closest('tr')!;
     expect(within(met).getByText('1×')).toBeInTheDocument();
@@ -60,6 +61,8 @@ describe('MedHistoryView', () => {
     renderWithTheme(<MedHistoryView />);
     fireEvent.click((await screen.findByText('Vitamin D3')).closest('tr')!);
     expect(within(screen.getByRole('list', { name: 'Vitamin D3 doses' })).getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByText('Week of Sep 28 – Oct 4')).toBeInTheDocument();
+    expect(screen.getByText('3 doses · 2 days taken')).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Vitamin D3 changes' })).toHaveTextContent('Dose 1000 IU → 2000 IU');
     fireEvent.change(screen.getByLabelText('Search medications'), { target: { value: 'metf' } });
     expect(screen.queryByText('Vitamin D3')).toBeNull();
