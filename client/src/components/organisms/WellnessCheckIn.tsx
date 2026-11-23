@@ -5,6 +5,7 @@ import { DashPanel, DashPanelHead } from './FoldingDashPanel.js';
 import { DayInventory, type DayInventoryValues } from '../molecules/DayInventory.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
+import { useUIStore } from '../../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { predictNextPeriod } from '../../utils/cyclePrediction.js';
@@ -220,11 +221,14 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
       : `Next period est. ${new Date(`${prediction.next}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${prediction.next < today ? ' (late)' : ''}`)
     : 'Log a period day to estimate the next';
 
+  // Settings → Features → Cycle tracking: off hides the Cycle cell
+  const cycleTracking = useUIStore(s => s.cycleTrackingEnabled);
   const panel = (
     <WellnessPanel
       water={water} sleep={sleep} mood={mood} flow={flow}
       onWater={setWater} onSleep={setSleep} onMood={setMood} onFlow={setFlow}
       cycleNote={nextPeriod}
+      showCycle={cycleTracking}
       compact={!quad && !strip}
       strip={strip}
       flat={strip && foldable}

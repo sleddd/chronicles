@@ -143,6 +143,19 @@ const FEATURES = [
   { key: 'inspirationEnabled', title: 'Inspiration', description: 'Save research, ideas, and quotes' },
   { key: 'holidaysEnabled', title: 'Holidays', description: 'US holidays on the calendar' },
   { key: 'financeEnabled', title: 'Finance', description: 'Budget, bills and subscriptions, goals and savings (manual entry, encrypted)' },
+  { key: 'kitchenEnabled', title: 'Kitchen', description: 'Menu, recipes and shopping lists' },
+];
+
+/* Settings → Features shows one switch per section; each turns all of that section's
+   parts on or off together. A section reads as on while any of its parts is */
+const FEATURE_GROUPS: { id: string; title: string; description: string; keys: string[] }[] = [
+  { id: 'health', title: 'Health', description: 'Meals, medications, exercise, allergies and the rest of the Health pages', keys: ['foodEnabled', 'medicationEnabled', 'exerciseEnabled', 'allergiesEnabled'] },
+  { id: 'planning', title: 'Planning', description: 'Goals, milestones, the roadmap, tasks and the planner', keys: ['goalsEnabled', 'milestonesEnabled'] },
+  { id: 'kitchen', title: 'Kitchen', description: 'Menu, recipes and shopping lists', keys: ['kitchenEnabled'] },
+  { id: 'finance', title: 'Finance', description: 'Budget, bills and subscriptions, goals and savings (manual entry, encrypted)', keys: ['financeEnabled'] },
+  { id: 'media', title: 'Media', description: 'Books, movies, TV shows and music on shelves, with ratings', keys: ['entertainmentEnabled'] },
+  { id: 'inspiration', title: 'Inspiration', description: 'Save research, ideas, and quotes', keys: ['inspirationEnabled'] },
+  { id: 'holidays', title: 'Holidays', description: 'US holidays on the calendar', keys: ['holidaysEnabled'] },
 ];
 
 
@@ -435,12 +448,15 @@ export function SettingsView() {
     await settingsApi.upsert('accentColor', color).catch(() => showFlash('Couldn’t save that setting. Check your connection and try again.'));
   };
 
-  const handleFeatureToggle = async (key: string, value: boolean) => {
-    const updated = { ...features, [key]: value };
+  /** A section's switch: every one of its parts on or off together */
+  const handleFeatureToggle = async (keys: string[], value: boolean) => {
+    const updated = { ...features };
+    for (const key of keys) updated[key] = value;
     setFeatures(updated);
     setFeatureFlags(updated);
     // Encrypted: the switches alone say which health features someone uses
-    await savePrivateSetting(key as PrivateSettingKey, value).catch(() => showFlash('Couldn’t save that setting. Check your connection and try again.'));
+    await Promise.all(keys.map(key => savePrivateSetting(key as PrivateSettingKey, value)))
+      .catch(() => showFlash('Couldn’t save that setting. Check your connection and try again.'));
   };
 
   const handleChangePassword = async (via: 'password' | 'passkey' = 'password') => {
@@ -1523,14 +1539,14 @@ export function SettingsView() {
       <Section id="features" title="Features">
       <SectionDescription>Enable optional topics for specialized tracking</SectionDescription>
       <SettingsCard>
-        {FEATURES.map(feat => (
-          <Fragment key={feat.key}>
+        {FEATURE_GROUPS.map(group => (
+          <Fragment key={group.id}>
             <SettingsRow
-              title={feat.title}
-              description={feat.description}
-              action={<Toggle aria-label={feat.title} checked={features[feat.key] ?? false} onChange={v => handleFeatureToggle(feat.key, v)} activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'} />}
+              title={group.title}
+              description={group.description}
+              action={<Toggle aria-label={group.title} checked={group.keys.some(k => features[k])} onChange={v => handleFeatureToggle(group.keys, v)} activeColor={themeMode === 'dark' ? '#2D2C2A' : '#ecebe7'} />}
             />
-            {feat.key === 'financeEnabled' && (
+            {group.id === 'finance' && (
               <FinanceDisclaimer role="note">
                 Finance is encrypted in your browser and the server never sees it, but Chronicles is not a banking app
                 and no system is perfectly secure. You're responsible for your financial data — what you store, keeping
@@ -1539,8 +1555,8 @@ export function SettingsView() {
               </FinanceDisclaimer>
             )}
             {/* The public shelf belongs with Media — shown even with Media off, so it can still be turned off */}
-            {feat.key === 'entertainmentEnabled' && <PublicShelfSettingsRow />}
-            {feat.key === 'allergiesEnabled' && (
+            {group.id === 'media' && <PublicShelfSettingsRow />}
+            {group.id === 'health' && (
               <SettingsRow
                 title="Cycle Tracking"
                 description="Add period and flow tracking to the daily wellness check-in"

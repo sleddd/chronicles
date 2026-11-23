@@ -187,8 +187,8 @@ const Vision = styled.button`
   font-style: italic;
   font-weight: 300;
   line-height: 1.8;
-  /* A step back from the text around it */
-  color: color-mix(in srgb, var(--text-secondary) 72%, transparent);
+  /* The body text colour, full strength (it was faded to 72% and read too dim) */
+  color: var(--text-primary);
   cursor: text;
   &[data-empty] { color: var(--text-muted); font-size: 16px; }
 `;

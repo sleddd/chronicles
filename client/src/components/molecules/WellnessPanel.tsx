@@ -373,8 +373,10 @@ const RowWrapper = styled(CompactWrapper)`
   && ${Fig} { font-size: 32px; color: var(--text-primary); }
   && ${Unit} { font-size: 14px; }
   && ${Slider} { margin-top: 12px; }
-  && ${Faces} { flex-wrap: nowrap; gap: 14px; }
-  && ${FaceBtn} { width: 32px; height: 32px; & > span { font-size: 38px; } }
+  /* The five faces always fit their cell: on one line, the gaps and then the faces
+     themselves shrinking with the cell (never running into Cycle) */
+  && ${Faces} { flex-wrap: nowrap; container-type: inline-size; gap: min(14px, 3cqi); }
+  && ${FaceBtn} { flex: 0 1 32px; width: min(32px, 18cqi); height: min(32px, 18cqi); & > span { font-size: min(38px, 21cqi); } }
 `;
 
 /* The journal / Quick entry: no outer border or fill (the entry card is the
@@ -393,9 +395,14 @@ const Row4 = styled.div`
     padding: 22px var(--cell-x) 24px;
     box-shadow: -1px 0 0 var(--border-card), 0 -1px 0 var(--border-card); /* rules between cells */
   }
-  /* Four across at any usual width; two by two only on a small screen */
-  @container (max-width: 760px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Four across where there's room; two by two (Water | Sleep over Mood | Cycle) in a
+     narrower card — the journal beside its list, the Quick entry — so nothing squeezes */
+  @container (max-width: 1000px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   @container (max-width: 480px) { grid-template-columns: minmax(0, 1fr); & > * { padding: 20px; } }
+  /* Cycle tracking off: Water | Sleep | Mood, and Mood across when two by two */
+  &[data-no-cycle] { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.7fr); }
+  @container (max-width: 1000px) { &[data-no-cycle] { grid-template-columns: repeat(2, minmax(0, 1fr)); } &[data-no-cycle] > :nth-child(3) { grid-column: 1 / -1; } }
+  @container (max-width: 480px) { &[data-no-cycle] { grid-template-columns: minmax(0, 1fr); } }
 `;
 
 /* A full-width last row inside the box (Your day) — its own padding */
@@ -469,6 +476,8 @@ const Quad = styled.div`
   /* Two by two down to a narrow card (a dashboard column); stacked only below that */
   @container (max-width: 560px) { --cell-x: 18px; & > * { padding: 20px var(--cell-x); } }
   @container (max-width: 360px) { grid-template-columns: minmax(0, 1fr); & > * { padding: 20px; } }
+  /* Cycle tracking off: Mood takes the whole second row */
+  &[data-no-cycle] > :nth-child(3) { grid-column: 1 / -1; }
 `;
 
 /* Strip (home dashboard): Water | Sleep | Mood | Cycle as four equal cells
@@ -519,10 +528,9 @@ const Strip = styled.div<{ $flat?: boolean }>`
     padding: 26px var(--cell-x) 28px;
     box-shadow: -1px 0 0 var(--border-card), 0 -1px 0 var(--border-card); /* rules between cells */
   }
-  /* Narrower: Water | Sleep, then Mood and Cycle a row each (Your day stays full width) */
+  /* Narrower: two by two — Water | Sleep over Mood | Cycle (Your day stays full width) */
   @container (max-width: 860px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    & > :nth-child(3), & > :nth-child(4) { grid-column: 1 / -1; }
   }
   @container (max-width: 480px) { --cell-x: 22px; & > * { padding: 22px var(--cell-x) 24px; } }
   /* Inside a panel of its own (the Health dashboard): no card of its own, only the
@@ -534,6 +542,9 @@ const Strip = styled.div<{ $flat?: boolean }>`
     border-radius: 0;
     margin: 0 calc(-1 * var(--cell-x));
   ` : '')}
+  /* Cycle tracking off: Water | Sleep | Mood across */
+  &[data-no-cycle] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @container (max-width: 860px) { &[data-no-cycle] { grid-template-columns: repeat(2, minmax(0, 1fr)); } &[data-no-cycle] > :nth-child(3) { grid-column: 1 / -1; } }
 `;
 
 interface MeterProps {
@@ -699,16 +710,16 @@ export function WellnessPanel({
   );
 
   if (strip) {
-    return <StripWrapper><Strip $flat={flat}>{water$}{sleep$}{mood$}{cycleIcons$}{footer && <FullRow>{footer}</FullRow>}</Strip></StripWrapper>;
+    return <StripWrapper><Strip $flat={flat} data-no-cycle={showCycle ? undefined : ''}>{water$}{sleep$}{mood$}{cycleIcons$}{footer && <FullRow>{footer}</FullRow>}</Strip></StripWrapper>;
   }
 
   if (row) {
-    return <RowWrapper><Row4>{water$}{sleep$}{mood$}{cycle$}{footer && <FullRow>{footer}</FullRow>}</Row4></RowWrapper>;
+    return <RowWrapper><Row4 data-no-cycle={showCycle ? undefined : ''}>{water$}{sleep$}{mood$}{cycle$}{footer && <FullRow>{footer}</FullRow>}</Row4></RowWrapper>;
   }
 
   if (quad) {
     const Wrap = smallFaces ? SmallFacesQuad : QuadWrapper;
-    return <Wrap><Quad>{water$}{sleep$}{mood$}{cycle$}{footer && <FullRow>{footer}</FullRow>}</Quad></Wrap>;
+    return <Wrap><Quad data-no-cycle={showCycle ? undefined : ''}>{water$}{sleep$}{mood$}{cycle$}{footer && <FullRow>{footer}</FullRow>}</Quad></Wrap>;
   }
 
   if (compact) {

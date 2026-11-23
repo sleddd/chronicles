@@ -224,8 +224,12 @@ describe('SettingsView', () => {
   it('renders features section with toggles', () => {
     renderWithTheme(<SettingsView />);
     expect(screen.getByRole('button', { name: 'Features' })).toBeInTheDocument();
-    expect(screen.getByText('Meals')).toBeInTheDocument();
-    expect(screen.getByText('Medication')).toBeInTheDocument();
+    // One switch per section, not one per part
+    expect(screen.getByText('Goals, milestones, the roadmap, tasks and the planner')).toBeInTheDocument();
+    expect(screen.getByText('Menu, recipes and shopping lists')).toBeInTheDocument();
+    expect(screen.getByText(/Meals, medications, exercise, allergies/)).toBeInTheDocument();
+    expect(screen.queryByText('Track meals and nutrition')).not.toBeInTheDocument();
+    expect(screen.queryByText('Break goals into milestones')).not.toBeInTheDocument();
   });
 
   it('renders privacy card', () => {
