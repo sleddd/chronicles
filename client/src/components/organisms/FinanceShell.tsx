@@ -60,6 +60,8 @@ const Body = styled.div`
   & > :first-child {
     margin-top: 24px;
     border-top: none;
+  }
+  & > :first-child:not([data-finance-panel]) {
     padding-top: 0;
   }
 `;

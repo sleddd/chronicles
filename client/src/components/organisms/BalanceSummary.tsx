@@ -2,7 +2,7 @@ import { useState } from 'react';
 import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
 import {
-  Section, SheetHead, SheetHeading, Note, StatBoxRow, StatCell, TextAction,
+  RuledSheetHead, SheetHeading, Note, StatBoxRow, StatCell, TextAction,
 } from '../molecules/FinanceParts.js';
 import { centsToInput, formatCents, formatDay, parseMoney, todayStr } from '../../utils/finance.js';
 import { balanceNow, billsStillDue, type BalanceSnapshot } from '../../utils/financeBalance.js';
@@ -46,6 +46,15 @@ const MoneyForm = styled.form`
   }
 `;
 
+const BalanceCard = styled.section`
+  margin-top: 48px;
+  padding: 24px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  @media (max-width: 640px) { padding: 16px; }
+`;
+
 export function BalanceSummary({ snapshot, bills, expenses, onSet }: {
   snapshot: BalanceSnapshot | null;
   bills: FinanceRecord<'bills'>[];
@@ -82,11 +91,11 @@ export function BalanceSummary({ snapshot, bills, expenses, onSet }: {
   const left = now ? now.cents - due.cents : 0;
 
   return (
-    <Section aria-label="Current balance" style={{ marginTop: 48 }}>
-      <SheetHead style={{ paddingLeft: 24 }}>
+    <BalanceCard aria-label="Current balance" data-finance-panel>
+      <RuledSheetHead>
         <SheetHeading>Current balance</SheetHeading>
         {snapshot && !editing && <TextAction type="button" onClick={startEdit}>Update</TextAction>}
-      </SheetHead>
+      </RuledSheetHead>
       {!snapshot || !now ? (
         <>
           <Note style={{ lineHeight: 1.75, maxWidth: 760 }}>
@@ -97,7 +106,7 @@ export function BalanceSummary({ snapshot, bills, expenses, onSet }: {
         </>
       ) : (
         <>
-          <StatBoxRow $cols={3}>
+          <StatBoxRow $cols={3} $flush={!editing}>
             <StatCell label="Available now" cents={now.cents} tone={now.cents < 0 ? 'danger' : 'accent'}
               sub={`Set ${formatDay(snapshot.setAt.slice(0, 10)).replace(/, \d{4}$/, '')}${since ? ` · ${since} since` : ''}`} />
             <StatCell label="Bills still due" cents={due.cents}
@@ -108,6 +117,6 @@ export function BalanceSummary({ snapshot, bills, expenses, onSet }: {
           {editing && form}
         </>
       )}
-    </Section>
+    </BalanceCard>
   );
 }

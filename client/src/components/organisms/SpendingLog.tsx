@@ -223,7 +223,7 @@ const SPENDING_OPEN_KEY = 'finance-spending-open-v1';
 
 /* "Spent in November ⌃" over the month's lines: folds just the list (the entry row stays) */
 const TableFold = styled(FoldHeading)`
-  margin-top: 24px;
+  margin-top: 0;
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 500;
@@ -243,8 +243,9 @@ const SortRow = styled.div`
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px 16px;
+  margin-top: 40px;
   margin-bottom: 10px;
-  & > button { margin-top: 0; margin-bottom: 0; }
+  & > button { margin-bottom: 0; }
 `;
 
 export function SpendingLog({ expenses, categories, month, onSave, onDelete }: SpendingLogProps) {
@@ -283,8 +284,8 @@ export function SpendingLog({ expenses, categories, month, onSave, onDelete }: S
 
   return (
     <Wrap aria-label="Log spending">
-      <SheetHead>
-        <SheetHeading>Log spending</SheetHeading>
+      <SheetHead style={{ rowGap: 24 }}>
+        <SheetHeading style={{ fontSize: 20 }}>Log spending</SheetHeading>
         {rows.length > 0 && <Hint style={{ margin: 0 }}>{formatMonth(month)} · {formatCents(total)}</Hint>}
       </SheetHead>
       <ExpenseForm
@@ -294,8 +295,6 @@ export function SpendingLog({ expenses, categories, month, onSave, onDelete }: S
         submitLabel="Add"
         onSubmit={e => void onSave(e)}
       />
-      <Hint style={{ marginBottom: 24 }}>Log what you spend outside your bills (groceries, gas, eating out) and it counts against that category's budget.</Hint>
-
       {rows.length > 0 && (
         // "Spent in November" and the Sort picker on one line
         <SortRow>

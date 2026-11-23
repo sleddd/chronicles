@@ -608,11 +608,11 @@ export function RowMenu({ items, label }: { items: RowMenuItem[]; label: string 
 export const SheetHeading = styled.h2`
   margin: 0;
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 300;
   line-height: 1.2;
-  color: var(--text-secondary);
-  @media (max-width: 480px) { font-size: 22px; }
+  color: color-mix(in srgb, var(--text-secondary) 90%, var(--bg-panel));
+  @media (max-width: 480px) { font-size: 20px; }
 `;
 
 export const SheetHead = styled.div`
@@ -622,6 +622,13 @@ export const SheetHead = styled.div`
   justify-content: space-between;
   gap: 12px 20px;
   margin-bottom: 20px;
+`;
+
+export const RuledSheetHead = styled(SheetHead)`
+  & > h2 { font-size: 20px; }
+  padding-bottom: 20px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border-subtle);
 `;
 
 /** One outlined box (no fill) holding a sheet's rows */
@@ -759,15 +766,23 @@ export function MonthPill({ label, onPrev, onNext }: { label: string; onPrev: ()
   );
 }
 
-/* One outlined --bg-panel strip of stat cells split by rules (Budget's totals) */
-export const StatBoxRow = styled.div<{ $cols: number }>`
+/* One --bg-panel strip of stat cells split by rules (Budget's totals) */
+export const StatBoxRow = styled.div<{ $cols: number; $flush?: boolean }>`
   display: grid;
   grid-template-columns: repeat(${({ $cols }) => $cols}, minmax(0, 1fr));
   background: var(--bg-panel);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border: ${({ $flush }) => ($flush ? 'none' : '1px solid var(--border-subtle)')};
+  border-radius: ${({ $flush }) => ($flush ? '0 0 11px 11px' : '12px')};
+  margin: ${({ $flush }) => ($flush ? '0 -24px -24px' : '0')};
+  & > div {
+    padding-left: ${({ $flush }) => ($flush ? '28px' : '22px')};
+    padding-bottom: ${({ $flush }) => ($flush ? '36px' : '20px')};
+  }
   overflow: hidden;
   @media (max-width: 760px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 640px) {
+    margin: ${({ $flush }) => ($flush ? '0 -16px -16px' : '0')};
+  }
 `;
 
 const StatCellBox = styled.div`

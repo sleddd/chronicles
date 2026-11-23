@@ -5,7 +5,7 @@ import { SpendDonut } from '../molecules/charts/SpendDonut.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import {
   Note, Actions, CellInput, StatBoxRow, StatCell,
-  SheetHead, SheetHeading, SheetBox, SHEET_RULE, UNPAID_COLOR,
+  SheetHead, RuledSheetHead, SheetHeading, SheetBox, SHEET_RULE, UNPAID_COLOR,
 FoldHeading, } from '../molecules/FinanceParts.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import {
@@ -22,23 +22,38 @@ interface BudgetTableProps {
   onDelete: (id: string) => void;
 }
 
-/* First block on the page: FinanceShell places it just under the tabs, no top rule. */
+/* Budget, chart, and category summary each have their own panel. */
 const CATS_OPEN_KEY = 'finance-by-category-open-v1';
 
 const Top = styled.section`
-  &&& { margin-top: 48px; }
-`;
-
-/* Bills + spending by category for the month: a second panel under the plan totals */
-const BreakdownBox = styled.section`
-  padding: 18px 22px 22px;
+  margin-top: 48px;
+  padding: 24px;
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
+  @media (max-width: 640px) { padding: 16px; }
+`;
+
+const BreakdownCard = styled.section`
+  margin-top: 48px;
+  padding: 20px 22px 22px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  @media (max-width: 640px) { padding: 16px; }
 `;
 
 const Section = styled.section`
   margin-top: 48px;
+`;
+
+const CategoryCard = styled.section`
+  margin-top: 48px;
+  padding: 20px 22px 22px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  @media (max-width: 640px) { padding: 16px; }
 `;
 
 const COLS = 'minmax(0, 1.6fr) repeat(4, minmax(0, 1fr))';
@@ -291,33 +306,33 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
   };
 
   return (
-    <Top>
-      <SheetHead style={{ paddingLeft: 24 }}>
-        <SheetHeading>Budget</SheetHeading>
-      </SheetHead>
-      <StatBoxRow $cols={4}>
-        <StatCell label="Planned" cents={summary.totals.plannedCents} sub={`Bills scheduled ${formatCents(committed)}/mo`} />
-        <StatCell label="Bills" cents={summary.totals.billsCents} sub={`Due this month · ${formatCents(summary.totals.paidCents)} paid`} />
-        <StatCell label="Spending" cents={summary.totals.spendingCents} sub="Logged below" />
-        <StatCell label="Left" cents={summary.totals.leftCents} tone={summary.totals.leftCents < 0 ? 'danger' : 'accent'}
-          sub={summary.totals.leftCents < 0 ? 'Over plan' : `${remaining}% of plan remaining`} />
-      </StatBoxRow>
+    <>
+      <Top aria-label="Budget">
+        <RuledSheetHead>
+          <SheetHeading>Budget</SheetHeading>
+        </RuledSheetHead>
+        <StatBoxRow $cols={4} $flush>
+          <StatCell label="Planned" cents={summary.totals.plannedCents} sub={`Bills scheduled ${formatCents(committed)}/mo`} />
+          <StatCell label="Bills" cents={summary.totals.billsCents} sub={`Due this month · ${formatCents(summary.totals.paidCents)} paid`} />
+          <StatCell label="Spending" cents={summary.totals.spendingCents} sub="Logged below" />
+          <StatCell label="Left" cents={summary.totals.leftCents} tone={summary.totals.leftCents < 0 ? 'danger' : 'accent'}
+            sub={summary.totals.leftCents < 0 ? 'Over plan' : `${remaining}% of plan remaining`} />
+        </StatBoxRow>
+      </Top>
       {breakdown.length > 0 && (
-        <>
-          <SheetHead style={{ marginTop: 48, marginBottom: 20, paddingLeft: 24 }}>
-            <SheetHeading>Where it goes (includes logged spending)</SheetHeading>
-          </SheetHead>
-          <BreakdownBox aria-label="Where it goes (includes logged spending)">
-            <SpendDonut slices={breakdown} totalCents={summary.totals.billsCents + summary.totals.spendingCents} />
-          </BreakdownBox>
-        </>
+        <BreakdownCard aria-label="Where it goes (includes logged spending)">
+          <RuledSheetHead>
+            <SheetHeading style={{ lineHeight: 1.5 }}>Where it goes (includes logged spending)</SheetHeading>
+          </RuledSheetHead>
+          <SpendDonut slices={breakdown} totalCents={summary.totals.billsCents + summary.totals.spendingCents} />
+        </BreakdownCard>
       )}
 
-      <Section aria-label="By category">
-        {sortedCats.length === 0 ? <SheetHead style={{ paddingLeft: 24 }}><SheetHeading>By category</SheetHeading></SheetHead> : (
-          <SheetHead style={{ ...(catsOpen ? {} : { marginBottom: 0 }), paddingLeft: 24 }}>
+      <CategoryCard aria-label="By category">
+        {sortedCats.length === 0 ? <SheetHead><SheetHeading style={{ fontSize: 20 }}>By category</SheetHeading></SheetHead> : (
+          <SheetHead style={{ ...(catsOpen ? {} : { marginBottom: 0 }) }}>
             <FoldHeading type="button" aria-expanded={catsOpen} aria-controls="budget-by-category" onClick={toggleCats}>
-              <SheetHeading as="h2">By category</SheetHeading>
+              <SheetHeading as="h2" style={{ fontSize: 20 }}>By category</SheetHeading>
               <Icon name={catsOpen ? 'chevron-up' : 'chevron-down'} size={18} strokeWidth={2} />
               {!catsOpen && <small>{summary.rows.length} {summary.rows.length === 1 ? 'category' : 'categories'}</small>}
             </FoldHeading>
@@ -375,7 +390,7 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
             </PillButton>
           </div>
         )}
-      </Section>
+      </CategoryCard>
 
       {managing && <Section aria-label="Categories">
         <SheetHead>
@@ -440,6 +455,6 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
         </SheetBox>
         <Note style={{ marginTop: 12, color: 'var(--text-muted)' }}>Click a name to rename it. Archive keeps a category's history but hides it from new bills and spending; deleting leaves its lines uncategorized.</Note>
       </Section>}
-    </Top>
+    </>
   );
 }

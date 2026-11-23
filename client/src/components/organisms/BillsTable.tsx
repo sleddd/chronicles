@@ -783,8 +783,8 @@ export function BillsTable({ bills, categories, month, onSave, onDelete, onAddCa
 
   return (
     <Wrap aria-label="Bills and subscriptions">
-      <SheetHead>
-        <SheetHeading>Bills &amp; subscriptions</SheetHeading>
+      <SheetHead style={{ marginBottom: 32, rowGap: 24 }}>
+        <SheetHeading style={{ fontSize: 20 }}>Bills &amp; subscriptions</SheetHeading>
         <HeadRight>
           <Seg role="tablist" aria-label="Show">
             {FILTERS.map(f => (
