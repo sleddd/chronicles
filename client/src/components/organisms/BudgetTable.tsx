@@ -25,34 +25,16 @@ interface BudgetTableProps {
 /* First block on the page: FinanceShell places it just under the tabs, no top rule. */
 const CATS_OPEN_KEY = 'finance-by-category-open-v1';
 
-/* "Show plan totals ⌄" — the accent link look, with the month's Left beside it */
-/* Hairline over the plan totals, under Current balance */
-const TopRule = styled.hr`
-  margin: 0 0 32px;
-  border: none;
-  border-top: 1px solid var(--border-default);
-`;
-
-/* Hairline closing the budget sections, before Log spending */
-const SectionRule = styled.hr`
-  margin: 40px 0 0;
-  border: none;
-  border-top: 1px solid var(--border-default);
-`;
-
 const Top = styled.section`
-  &&& { margin-top: 32px; }
+  &&& { margin-top: 48px; }
 `;
 
 /* Bills + spending by category for the month: a second panel under the plan totals */
 const BreakdownBox = styled.section`
-  /* Room between the budget stats above and this panel */
-  margin-top: 32px;
   padding: 18px 22px 22px;
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  h3 { margin: 0 0 16px; font-family: var(--font-sans); font-size: 13px; font-weight: 400; color: var(--text-soft); }
 `;
 
 const Section = styled.section`
@@ -310,7 +292,9 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
 
   return (
     <Top>
-      <TopRule />
+      <SheetHead style={{ paddingLeft: 24 }}>
+        <SheetHeading>Budget</SheetHeading>
+      </SheetHead>
       <StatBoxRow $cols={4}>
         <StatCell label="Planned" cents={summary.totals.plannedCents} sub={`Bills scheduled ${formatCents(committed)}/mo`} />
         <StatCell label="Bills" cents={summary.totals.billsCents} sub={`Due this month · ${formatCents(summary.totals.paidCents)} paid`} />
@@ -319,16 +303,19 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
           sub={summary.totals.leftCents < 0 ? 'Over plan' : `${remaining}% of plan remaining`} />
       </StatBoxRow>
       {breakdown.length > 0 && (
-        <BreakdownBox aria-label="Where it goes">
-          <h3>Where it goes</h3>
-          <SpendDonut slices={breakdown} totalCents={summary.totals.billsCents + summary.totals.spendingCents} />
-        </BreakdownBox>
+        <>
+          <SheetHead style={{ marginTop: 48, marginBottom: 20, paddingLeft: 24 }}>
+            <SheetHeading>Where it goes (includes logged spending)</SheetHeading>
+          </SheetHead>
+          <BreakdownBox aria-label="Where it goes (includes logged spending)">
+            <SpendDonut slices={breakdown} totalCents={summary.totals.billsCents + summary.totals.spendingCents} />
+          </BreakdownBox>
+        </>
       )}
 
-      <SectionRule style={{ marginTop: 48 }} />
       <Section aria-label="By category">
-        {sortedCats.length === 0 ? <SheetHead><SheetHeading>By category</SheetHeading></SheetHead> : (
-          <SheetHead style={catsOpen ? undefined : { marginBottom: 0 }}>
+        {sortedCats.length === 0 ? <SheetHead style={{ paddingLeft: 24 }}><SheetHeading>By category</SheetHeading></SheetHead> : (
+          <SheetHead style={{ ...(catsOpen ? {} : { marginBottom: 0 }), paddingLeft: 24 }}>
             <FoldHeading type="button" aria-expanded={catsOpen} aria-controls="budget-by-category" onClick={toggleCats}>
               <SheetHeading as="h2">By category</SheetHeading>
               <Icon name={catsOpen ? 'chevron-up' : 'chevron-down'} size={18} strokeWidth={2} />
@@ -453,7 +440,6 @@ export function BudgetTable({ categories, bills, expenses, month, onSave, onDele
         </SheetBox>
         <Note style={{ marginTop: 12, color: 'var(--text-muted)' }}>Click a name to rename it. Archive keeps a category's history but hides it from new bills and spending; deleting leaves its lines uncategorized.</Note>
       </Section>}
-      <SectionRule />
     </Top>
   );
 }

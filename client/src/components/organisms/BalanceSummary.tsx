@@ -82,8 +82,8 @@ export function BalanceSummary({ snapshot, bills, expenses, onSet }: {
   const left = now ? now.cents - due.cents : 0;
 
   return (
-    <Section aria-label="Current balance">
-      <SheetHead>
+    <Section aria-label="Current balance" style={{ marginTop: 48 }}>
+      <SheetHead style={{ paddingLeft: 24 }}>
         <SheetHeading>Current balance</SheetHeading>
         {snapshot && !editing && <TextAction type="button" onClick={startEdit}>Update</TextAction>}
       </SheetHead>

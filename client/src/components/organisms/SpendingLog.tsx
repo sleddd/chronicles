@@ -294,7 +294,7 @@ export function SpendingLog({ expenses, categories, month, onSave, onDelete }: S
         submitLabel="Add"
         onSubmit={e => void onSave(e)}
       />
-      <Hint>Log what you spend outside your bills (groceries, gas, eating out) and it counts against that category's budget.</Hint>
+      <Hint style={{ marginBottom: 24 }}>Log what you spend outside your bills (groceries, gas, eating out) and it counts against that category's budget.</Hint>
 
       {rows.length > 0 && (
         // "Spent in November" and the Sort picker on one line
