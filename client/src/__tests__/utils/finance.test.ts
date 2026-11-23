@@ -336,6 +336,12 @@ describe('spendingBreakdown', () => {
     expect(s.reduce((t, x) => t + x.share, 0)).toBeCloseTo(1);
   });
 
+  it('keeps what "Everything else" holds, biggest first, for the legend to open', () => {
+    const s = spendingBreakdown([row('a', 100, 0), row('b', 0, 500), row('c', 200, 100), row('d', 50, 0), row('e', 30, 0), row('f', 20, 0)]);
+    expect(s[4].parts?.map(p => [p.name, p.cents])).toEqual([['e', 30], ['f', 20]]);
+    expect(s[0].parts).toBeUndefined();
+  });
+
   it('names one extra category rather than folding it alone', () => {
     expect(spendingBreakdown([row('a', 5, 0), row('b', 4, 0), row('c', 3, 0), row('d', 2, 0), row('e', 1, 0)]).map(x => x.name)).toEqual(['a', 'b', 'c', 'd', 'e']);
   });

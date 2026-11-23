@@ -42,6 +42,24 @@ const Legend = styled.ul`
     border-bottom: 1px solid var(--border-subtle);
   }
   li:last-child { border-bottom: none; }
+  /* "Everything else": its own row opens to the categories in it */
+  li.rest { display: block; padding: 0; }
+  details > summary {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto 48px;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    list-style: none;
+    cursor: pointer;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary span::after { content: ' ⌄'; color: var(--text-muted); }
+  details[open] > summary span::after { content: ' ⌃'; }
+  details > summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+  details > ul { margin: 0 0 8px 20px; padding: 0; list-style: none; }
+  details > ul li { grid-template-columns: minmax(0, 1fr) auto 48px; padding: 7px 0; font-size: 13px; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle); }
+  details > ul li:last-child { border-bottom: none; }
   i { width: 10px; height: 10px; border-radius: 50%; }
   span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   b { font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -73,14 +91,34 @@ export function SpendDonut({ slices, totalCents }: { slices: SpendSlice[]; total
         <text x={C} y={C + 7} textAnchor="middle" fontSize={18}>{formatCents(totalCents)}</text>
       </Svg>
       <Legend aria-label="Spending by category">
-        {slices.map((s, i) => (
+        {slices.map((s, i) => (s.parts?.length ? (
+          <li key={s.key} className="rest">
+            <details>
+              <summary>
+                <i style={{ background: colorFor(s, i) }} />
+                <span>{s.name}</span>
+                <b>{formatCents(s.cents)}</b>
+                <small>{Math.round(s.share * 100)}%</small>
+              </summary>
+              <ul aria-label="Everything else">
+                {s.parts.map(p => (
+                  <li key={p.key}>
+                    <span>{p.name}</span>
+                    <b>{formatCents(p.cents)}</b>
+                    <small>{Math.round(p.share * 100)}%</small>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
+        ) : (
           <li key={s.key}>
             <i style={{ background: colorFor(s, i) }} />
             <span>{s.name}</span>
             <b>{formatCents(s.cents)}</b>
             <small>{Math.round(s.share * 100)}%</small>
           </li>
-        ))}
+        )))}
       </Legend>
     </Wrap>
   );

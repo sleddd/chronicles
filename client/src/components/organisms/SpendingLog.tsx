@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { PillButton } from '../atoms/PillButton.js';
 import { Icon } from '../atoms/core/Icon.jsx';
 import {
-  Actions, ConfirmDelete, SmallBtn, SheetHead, SheetHeading, SheetBox, SHEET_RULE, FoldHeading,
+  Actions, ConfirmDelete, SmallBtn, SheetHead, SheetHeading, SheetBox, SHEET_RULE, FoldHeading, PickerPill,
 } from '../molecules/FinanceParts.js';
 import { CardRows, CardRow, CardRowLabel, CardFootBand } from '../molecules/FinanceParts.js';
 import { centsToInput, formatCents, formatDay, formatMonth, parseMoney, todayStr } from '../../utils/finance.js';
@@ -231,16 +231,48 @@ const TableFold = styled(FoldHeading)`
   &:hover { color: var(--text-primary); }
 `;
 
+type SpendSort = 'date' | 'category' | 'amount';
+const SPEND_SORTS: { value: SpendSort; label: string }[] = [
+  { value: 'date', label: 'Newest' }, { value: 'category', label: 'Category' }, { value: 'amount', label: 'Amount' },
+];
+const SPENDING_SORT_KEY = 'finance-spending-sort-v1';
+
+const SortRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 10px;
+  & > button { margin-top: 0; margin-bottom: 0; }
+`;
+
 export function SpendingLog({ expenses, categories, month, onSave, onDelete }: SpendingLogProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const catName = (id?: string) => (id ? categories.find(c => c.id === id)?.name : undefined);
   const today = todayStr();
   const defaultDate = today.slice(0, 7) === month ? today : `${month}-01`;
 
-  const rows = useMemo(
-    () => expenses.filter(e => e.date.slice(0, 7) === month).sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
-    [expenses, month],
-  );
+  // Newest first, by category (A–Z, No category last, newest first within), or biggest first;
+  // remembered per browser
+  const [sort, setSortState] = useState<SpendSort>(() => {
+    try { const v = localStorage.getItem(SPENDING_SORT_KEY); return SPEND_SORTS.some(o => o.value === v) ? v as SpendSort : 'date'; } catch { return 'date'; }
+  });
+  const setSort = (v: SpendSort) => { setSortState(v); try { localStorage.setItem(SPENDING_SORT_KEY, v); } catch { /* private mode */ } };
+  const rows = useMemo(() => {
+    const newest = (a: typeof expenses[number], b: typeof expenses[number]) => b.date.localeCompare(a.date) || (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+    const list = expenses.filter(e => e.date.slice(0, 7) === month);
+    if (sort === 'amount') return list.sort((a, b) => b.amountCents - a.amountCents || newest(a, b));
+    if (sort === 'category') {
+      const name = (e: typeof expenses[number]) => (e.categoryId ? categories.find(c => c.id === e.categoryId)?.name : undefined);
+      return list.sort((a, b) => {
+        const na = name(a), nb = name(b);
+        if (!na !== !nb) return na ? -1 : 1;
+        return (na ?? '').localeCompare(nb ?? '') || newest(a, b);
+      });
+    }
+    return list.sort(newest);
+  }, [expenses, month, sort, categories]);
   const total = rows.reduce((s, e) => s + e.amountCents, 0);
   // The month's list folds away (open by default; remembered per browser)
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(SPENDING_OPEN_KEY) !== '0'; } catch { return true; } });
@@ -265,11 +297,22 @@ export function SpendingLog({ expenses, categories, month, onSave, onDelete }: S
       <Hint>Log what you spend outside your bills (groceries, gas, eating out) and it counts against that category's budget.</Hint>
 
       {rows.length > 0 && (
-        <TableFold type="button" aria-expanded={open} aria-controls="finance-spending-list" onClick={toggle}>
-          <span>Spent in {formatMonth(month)}</span>
-          <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} strokeWidth={2} />
-          {!open && <small>{rows.length} {rows.length === 1 ? 'line' : 'lines'} · {formatCents(total)}</small>}
-        </TableFold>
+        // "Spent in November" and the Sort picker on one line
+        <SortRow>
+          <TableFold type="button" aria-expanded={open} aria-controls="finance-spending-list" onClick={toggle}>
+            <span>Spent in {formatMonth(month)}</span>
+            <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} strokeWidth={2} />
+            {!open && <small>{rows.length} {rows.length === 1 ? 'line' : 'lines'} · {formatCents(total)}</small>}
+          </TableFold>
+          {rows.length > 1 && open && (
+            <PickerPill>
+              <select aria-label="Sort spending" value={sort} onChange={e => setSort(e.target.value as SpendSort)}>
+                {SPEND_SORTS.map(o => <option key={o.value} value={o.value}>Sort: {o.label}</option>)}
+              </select>
+              <span aria-hidden="true"><Icon name="chevron-down" size={14} strokeWidth={2} /></span>
+            </PickerPill>
+          )}
+        </SortRow>
       )}
       {rows.length > 0 && open && (
         <ListBox id="finance-spending-list">
