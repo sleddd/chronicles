@@ -24,6 +24,7 @@ vi.mock('../../services/api.js', () => {
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
     settings: {
       upsert: vi.fn().mockResolvedValue({}),
@@ -145,6 +146,7 @@ beforeEach(() => {
   });
   (entriesApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({ updatedAt: '2026-07-13T00:00:00Z' });
   (entriesApi.delete as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true });
+  (entriesApi.deleteMany as ReturnType<typeof vi.fn>).mockImplementation(async (ids: number[]) => ({ deleted: ids }));
 });
 
 describe('calendarSync push', () => {
@@ -437,10 +439,23 @@ describe('calendarSync pull', () => {
     const removed = await removeImportedEntries();
 
     expect(removed).toBe(1);
-    expect(entriesApi.delete).toHaveBeenCalledWith(10);
-    expect(entriesApi.delete).not.toHaveBeenCalledWith(11);
+    // One request for the lot, and only the imported one is in it
+    expect(entriesApi.deleteMany).toHaveBeenCalledTimes(1);
+    expect(entriesApi.deleteMany).toHaveBeenCalledWith([10]);
+    expect(entriesApi.delete).not.toHaveBeenCalled();
     expect(useEntriesStore.getState().decryptedEntries.map(e => e.id)).toEqual([11]);
     expect(readPendingDeletes()).toHaveLength(0);
+  });
+
+  it('removeEntriesLocally keeps the entries whose delete request failed (they reappear linked on reload)', async () => {
+    const { syncedHash } = await syncedFieldsFor(10, eventFields);
+    const a = makeEntry(10, { ...eventFields, _sync: { googleEventId: 'g-10', calendarId: CAL_ID, syncedHash, imported: true } });
+    const b = makeEntry(11, { ...eventFields, _sync: { googleEventId: 'g-11', calendarId: CAL_ID, syncedHash, imported: true } });
+    setupStores([a, b]);
+    (entriesApi.deleteMany as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ deleted: [10], error: new Error('offline') });
+
+    expect(await removeEntriesLocally([a, b])).toBe(1);
+    expect(useEntriesStore.getState().decryptedEntries.map(e => e.id)).toEqual([11]);
   });
 
   it('year cleanup selects only event/meeting entries outside the year and deletes them without remote propagation', async () => {
@@ -458,7 +473,7 @@ describe('calendarSync pull', () => {
     const removed = await removeEntriesLocally(outside);
 
     expect(removed).toBe(1);
-    expect(entriesApi.delete).toHaveBeenCalledWith(10);
+    expect(entriesApi.deleteMany).toHaveBeenCalledWith([10]);
     expect(useEntriesStore.getState().decryptedEntries.map(e => e.id).sort()).toEqual([11, 12, 13]);
     expect(readPendingDeletes()).toHaveLength(0); // linked entry deleted without queueing a Google delete
   });

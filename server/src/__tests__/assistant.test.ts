@@ -42,6 +42,7 @@ describe('assistantMay', () => {
     ['GET', '/api/sessions'], ['POST', '/api/sessions/revoke-all'], ['POST', '/api/auth/passkey/options'],
     ['DELETE', '/api/auth/account'], ['POST', '/api/auth/password-wrap'],
     // Removing things, and everything outside the list
+    ['POST', '/api/entries/delete'],
     ['DELETE', `/api/doses/${UUID}`], ['DELETE', `/api/finance/bills/${UUID}`], ['DELETE', '/api/settings/habitLog'],
     ['POST', '/api/entries/batch'], ['PUT', '/api/entries/reseal'], ['PUT', '/api/entries/ai-hidden'], ['GET', '/api/entries/ai-hidden'],
     ['GET', '/api/entries/fingerprint'],

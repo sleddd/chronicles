@@ -392,6 +392,38 @@ describe('entries', () => {
     expect(url).toBe('/api/entries/7');
     expect(init.method).toBe('DELETE');
   });
+
+  it('deleteMany sends the ids 100 to a request', async () => {
+    const sent: number[][] = [];
+    fetchSpy = vi.fn(async (_url: string, init: { body: string }) => {
+      const { ids } = JSON.parse(init.body);
+      sent.push(ids);
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ success: true, deleted: ids.length }) };
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const ids = Array.from({ length: 230 }, (_, k) => k + 1);
+
+    expect(await entries.deleteMany(ids)).toEqual({ deleted: ids });
+    expect(fetchSpy.mock.calls.every(c => c[0] === '/api/entries/delete' && (c[1] as { method: string }).method === 'POST')).toBe(true);
+    expect(sent.map(b => b.length)).toEqual([100, 100, 30]);
+    expect(await entries.deleteMany([])).toEqual({ deleted: [] });
+  });
+
+  it('deleteMany stops at a request that fails and says which ids went', async () => {
+    let calls = 0;
+    fetchSpy = vi.fn(async () => {
+      calls++;
+      if (calls === 2) return { ok: false, status: 500, headers: { get: () => 'application/json' }, json: async () => ({ error: 'Failed to delete entries' }) };
+      return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ success: true, deleted: 100 }) };
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const ids = Array.from({ length: 250 }, (_, k) => k + 1);
+
+    const result = await entries.deleteMany(ids);
+    expect(result.deleted).toEqual(ids.slice(0, 100));
+    expect(result.error).toBeInstanceOf(Error);
+    expect(calls).toBe(2);
+  });
 });
 
 // ---------------------------------------------------------------------------

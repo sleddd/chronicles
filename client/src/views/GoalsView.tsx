@@ -20,7 +20,7 @@ import {
 import { usePrivateSettings } from '../services/privateSettings.js';
 import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { KanbanBoard, type BoardItem } from '../components/organisms/KanbanBoard.js';
-import { deleteEntryWithImages } from '../utils/entryActions.js';
+import { deleteEntryWithImages, deleteEntriesWithImages } from '../utils/entryActions.js';
 import { GoalTable, MilestoneTable, TaskTable, type GoalGroup, type MilestoneGroup, type TaskGroup } from '../components/organisms/PlanningLists.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { dayOrNone, sameMonth } from '../utils/planTable.js';
@@ -852,8 +852,8 @@ export function GoalsView() {
   const clearCompleted = async () => {
     if (!confirmClear) { setConfirmClear(true); return; }
     setClearing(true);
-    // One at a time: a failure puts that one back and says so (deleteEntryWithImages)
-    for (const t of completedShown) await handleDeleteEntry(t.id);
+    // 100 a request: any that fail come back with one note (deleteEntriesWithImages)
+    await deleteEntriesWithImages(completedShown.map(t => t.id));
     setClearing(false);
     setConfirmClear(false);
   };

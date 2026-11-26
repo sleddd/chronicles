@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { tenantDb } from './shards.js';
 import { escapeSchema } from './escapeSchema.js';
 import { ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
+import { addUsage, fitsWithoutCounting, forgetUsage, setUsage } from './storageUsage.js';
 
 // =============================================================================
 // Tenant Query Helpers
@@ -62,8 +63,14 @@ const clientFor = async (schemaName: string, client?: TenantClient): Promise<Ten
  */
 const tenantWriteQueues = new Map<string, Promise<unknown>>();
 
-export async function withTenantLock<T>(schemaName: string, fn: (tx: TenantClient) => Promise<T>): Promise<T> {
+export async function withTenantLock<T>(
+  schemaName: string, fn: (tx: TenantClient) => Promise<T>, opts: { keepUsage?: boolean } = {},
+): Promise<T> {
   const s = escapeSchema(schemaName);
+  // A write of several rows: what the account's storage was last counted at
+  // (db/storageUsage.ts) no longer holds, so the next capped save counts again.
+  // A caller that keeps the figure up to date itself says `keepUsage`
+  if (!opts.keepUsage) forgetUsage(schemaName);
   const run = (tenantWriteQueues.get(s) ?? Promise.resolve()).then(() => lockedWrite(schemaName, s, fn));
   const tail = run.catch(() => undefined);
   tenantWriteQueues.set(s, tail);
@@ -201,16 +208,38 @@ export async function upsertSettingCapped(
 ): Promise<TenantSetting | 'Too many settings' | 'Settings storage is full'> {
   const s = escapeSchema(schemaName);
   const json = JSON.stringify(value);
-  const rows = await lockedStatement<TenantSetting>(schemaName,
-    `INSERT INTO ${s}.settings (key, value, updated_at)
+  const bytes = Buffer.byteLength(json, 'utf8');
+  const keyRoom = `(EXISTS (SELECT 1 FROM ${s}.settings WHERE key = $1) OR (SELECT COUNT(*) FROM ${s}.settings) < $3::bigint)`;
+  // Far below the cap by the last count: no need to add every value up again
+  // (it meant turning each stored value into text, megabytes on a habit tick)
+  if (fitsWithoutCounting(schemaName, 'settings', { bytes }, { maxBytes: caps.maxBytes })) {
+    const rows = await lockedStatement<TenantSetting>(schemaName,
+      `INSERT INTO ${s}.settings (key, value, updated_at)
+       SELECT $1, $2::jsonb, NOW()
+       WHERE ${keyRoom}
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+       RETURNING key, value, updated_at as "updatedAt"`,
+      [key, json, caps.maxKeys]);
+    if (rows[0]) { addUsage(schemaName, 'settings', { bytes }); return rows[0]; }
+    return 'Too many settings';
+  }
+  const rows = await lockedStatement<TenantSetting & { usedBytes?: bigint | number | null }>(schemaName,
+    `WITH used AS (SELECT COALESCE(SUM(octet_length(value::text)), 0) AS n FROM ${s}.settings WHERE key <> $1)
+     INSERT INTO ${s}.settings (key, value, updated_at)
      SELECT $1, $2::jsonb, NOW()
-     WHERE (EXISTS (SELECT 1 FROM ${s}.settings WHERE key = $1) OR (SELECT COUNT(*) FROM ${s}.settings) < $3::bigint)
-       AND (SELECT COALESCE(SUM(octet_length(value::text)), 0) FROM ${s}.settings WHERE key <> $1) + $4::bigint <= $5::bigint
+     WHERE ${keyRoom}
+       AND (SELECT n FROM used) + $4::bigint <= $5::bigint
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
-     RETURNING key, value, updated_at as "updatedAt"`,
-    [key, json, caps.maxKeys, Buffer.byteLength(json, 'utf8'), caps.maxBytes]);
-  if (rows[0]) return rows[0];
-  // Refused: say which cap (the rare path pays for the second look)
+     RETURNING key, value, updated_at as "updatedAt", (SELECT n FROM used) AS "usedBytes"`,
+    [key, json, caps.maxKeys, bytes, caps.maxBytes]);
+  if (rows[0]) {
+    const { usedBytes, ...saved } = rows[0];
+    if (usedBytes != null) setUsage(schemaName, 'settings', { bytes: Number(usedBytes) + bytes, rows: 0 });
+    return saved;
+  }
+  // Refused: whatever figure there was is no guide any more
+  forgetUsage(schemaName, 'settings');
+  // Say which cap (the rare path pays for the second look)
   return !(await settingExists(schemaName, key)) && (await countSettings(schemaName)) >= caps.maxKeys
     ? 'Too many settings' : 'Settings storage is full';
 }
@@ -719,6 +748,15 @@ export type CappedWrite = TenantPost | 'full' | null;
 const usedExcept = (s: string, idParam: string) =>
   `(SELECT COALESCE(SUM(COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0) + ${ROW_OVERHEAD_BYTES}), 0) FROM ${s}.posts WHERE id <> ${idParam})`;
 
+type CountedPost = TenantPost & { usedBytes?: bigint | number | null };
+
+/** A save that counted the journal: remember what it holds now, and hand back the entry alone. */
+function countedPost(schemaName: string, row: CountedPost, size: number): TenantPost {
+  const { usedBytes, ...post } = row;
+  if (usedBytes != null) setUsage(schemaName, 'posts', { bytes: Number(usedBytes) + size, rows: 0 });
+  return post;
+}
+
 /**
  * Save an entry's encrypted fields if the journal has room for them: lock,
  * cap check and write in one trip (`lockedStatement`). `size` is what the
@@ -728,12 +766,24 @@ export async function updatePostCapped(
   schemaName: string, id: number, fields: EncryptedPostFields, size: number, capBytes: number,
 ): Promise<CappedWrite> {
   const s = escapeSchema(schemaName);
-  const rows = await lockedStatement<TenantPost>(schemaName,
-    `UPDATE ${s}.posts SET content_encrypted = $1, content_iv = $2, metadata_encrypted = $3, metadata_iv = $4, updated_at = NOW()
-     WHERE id = $5 AND ${usedExcept(s, '$5')} + $6::bigint <= $7::bigint
-     RETURNING ${POST_SELECT}`,
-    [fields.contentEncrypted, fields.contentIv, fields.metadataEncrypted, fields.metadataIv, id, size, capBytes]);
+  const args = [fields.contentEncrypted, fields.contentIv, fields.metadataEncrypted, fields.metadataIv, id];
+  const set = `UPDATE ${s}.posts SET content_encrypted = $1, content_iv = $2, metadata_encrypted = $3, metadata_iv = $4, updated_at = NOW()`;
+  // Far below the cap by the last count: the 3-second autosave doesn't add up
+  // every entry in the journal each time
+  if (fitsWithoutCounting(schemaName, 'posts', { bytes: size }, { maxBytes: capBytes })) {
+    const rows = await lockedStatement<TenantPost>(schemaName, `${set} WHERE id = $5 RETURNING ${POST_SELECT}`, args);
+    if (rows[0]) addUsage(schemaName, 'posts', { bytes: size });
+    return rows[0] ?? null;
+  }
+  const counted = await lockedStatement<CountedPost>(schemaName,
+    `WITH used AS (SELECT ${usedExcept(s, '$5')} AS n)
+     ${set}
+     WHERE id = $5 AND (SELECT n FROM used) + $6::bigint <= $7::bigint
+     RETURNING ${POST_SELECT}, (SELECT n FROM used) AS "usedBytes"`,
+    [...args, size, capBytes]);
+  const rows = counted.map(row => countedPost(schemaName, row, size));
   if (rows[0]) return rows[0];
+  forgetUsage(schemaName, 'posts');
   // Nothing written: no such entry, or no room (the rare path pays for the second look)
   return (await postExists(schemaName, id)) ? 'full' : null;
 }
@@ -745,19 +795,34 @@ export async function updatePostCapped(
  */
 export async function createPostCapped(schemaName: string, input: CreatePostInput, size: number, capBytes: number): Promise<CappedWrite> {
   const s = escapeSchema(schemaName);
-  const room = `${usedExcept(s, '$1')} + $7::bigint <= $8::bigint`;
-  const rows = await lockedStatement<TenantPost>(schemaName,
-    `WITH reservation AS (
-       DELETE FROM ${s}.post_id_reservations WHERE id = $1 AND ${room} RETURNING id
-     )
-     INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
+  const insert = `INSERT INTO ${s}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
      SELECT reservation.id, $2, $3, $4, $5, TRUE, COALESCE($6, NOW()), COALESCE($6, NOW())
      FROM reservation
      WHERE NOT EXISTS (SELECT 1 FROM ${s}.deleted_posts d WHERE d.id = $1)
-     ON CONFLICT (id) DO NOTHING
-     RETURNING ${POST_SELECT}`,
+     ON CONFLICT (id) DO NOTHING`;
+  // Far below the cap by the last count: no need to add the journal up again
+  if (fitsWithoutCounting(schemaName, 'posts', { bytes: size }, { maxBytes: capBytes })) {
+    const rows = await lockedStatement<TenantPost>(schemaName,
+      `WITH reservation AS (
+         DELETE FROM ${s}.post_id_reservations WHERE id = $1 RETURNING id
+       )
+       ${insert}
+       RETURNING ${POST_SELECT}`,
+      insertPostArgs(input));
+    if (rows[0]) addUsage(schemaName, 'posts', { bytes: size });
+    return rows[0] ?? null;
+  }
+  const counted = await lockedStatement<CountedPost>(schemaName,
+    `WITH used AS (SELECT ${usedExcept(s, '$1')} AS n),
+     reservation AS (
+       DELETE FROM ${s}.post_id_reservations WHERE id = $1 AND (SELECT n FROM used) + $7::bigint <= $8::bigint RETURNING id
+     )
+     ${insert}
+     RETURNING ${POST_SELECT}, (SELECT n FROM used) AS "usedBytes"`,
     [...insertPostArgs(input), size, capBytes]);
+  const rows = counted.map(row => countedPost(schemaName, row, size));
   if (rows[0]) return rows[0];
+  forgetUsage(schemaName, 'posts');
   return (await postStorageBytes(schemaName)) + size > capBytes ? 'full' : null;
 }
 
@@ -781,6 +846,19 @@ export async function deletePost(schemaName: string, id: number): Promise<void> 
   await pruneDeletedPosts(schemaName).catch(err => {
     console.error('Deleted-entries trim failed:', err instanceof Error ? err.message : 'Unknown error');
   });
+}
+
+/** Delete several entries in one statement (ids that aren't entries are passed over). Returns how many went. */
+export async function deletePosts(schemaName: string, ids: number[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  const deleted = await db.$executeRawUnsafe(`DELETE FROM ${s}.posts WHERE id = ANY($1::int[])`, ids);
+  // One trim for the lot. Never fails the delete: the list is trimmed again at the next one
+  await pruneDeletedPosts(schemaName).catch(err => {
+    console.error('Deleted-entries trim failed:', err instanceof Error ? err.message : 'Unknown error');
+  });
+  return deleted;
 }
 
 // The list of deleted ids (deleted_posts) only ever grew: a row per deletion,
@@ -1007,25 +1085,55 @@ export const AI_PRIVACY_TABLES = [
   'assistant_new_records', 'assistant_owned', 'assistant_topic_creations',
 ] as const;
 
-/** JIT migration for the AI privacy tables: one catalog read once they're all in place (each is looked for by name). */
-export async function ensureAiPrivacyTables(schemaName: string): Promise<void> {
+/** How many of the AI privacy tables an account has (one catalog read). */
+async function aiPrivacyTableCount(schemaName: string): Promise<number> {
   const db = await tenantDb(schemaName);
-  const s = escapeSchema(schemaName);
-  if (aiPrivacyReady.has(s)) return;
   const [{ n }] = await db.$queryRawUnsafe<{ n: number | bigint }[]>(
     `SELECT COUNT(*) AS n FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
      WHERE n.nspname = $1 AND t.relkind = 'r' AND t.relname = ANY($2::text[])`,
-    s, [...AI_PRIVACY_TABLES]
+    escapeSchema(schemaName), [...AI_PRIVACY_TABLES]
   );
-  if (Number(n) < AI_PRIVACY_TABLES.length) await db.$transaction(aiPrivacyStatements(s).map(sql => db.$executeRawUnsafe(sql)));
+  return Number(n);
+}
+
+/**
+ * The AI privacy tables, made the first time an account needs them: when an
+ * entry is hidden from AI, or the Chronicles AI app signs in or writes. One
+ * catalog read once they're all in place (each is looked for by name).
+ *
+ * They are NOT part of a new account's schema: seven tables for every account,
+ * most of which never use AI, were seven more for every backup to lock and
+ * every connection to cache. Anything that only reads or clears them asks
+ * `aiPrivacyTablesExist` instead and treats "no tables" as "nothing there".
+ */
+export async function ensureAiPrivacyTables(schemaName: string): Promise<void> {
+  const s = escapeSchema(schemaName);
+  if (aiPrivacyReady.has(s)) return;
+  if (await aiPrivacyTableCount(schemaName) < AI_PRIVACY_TABLES.length) {
+    const db = await tenantDb(schemaName);
+    await db.$transaction(aiPrivacyStatements(s).map(sql => db.$executeRawUnsafe(sql)));
+  }
   aiPrivacyReady.add(s);
+}
+
+/**
+ * Whether the account has the AI privacy tables, without making them. "Yes"
+ * is remembered; "no" is asked again each time, since another instance may
+ * have made them a moment ago (a catalog read is far cheaper than the tables).
+ */
+export async function aiPrivacyTablesExist(schemaName: string): Promise<boolean> {
+  const s = escapeSchema(schemaName);
+  if (aiPrivacyReady.has(s)) return true;
+  if (await aiPrivacyTableCount(schemaName) < AI_PRIVACY_TABLES.length) return false;
+  aiPrivacyReady.add(s);
+  return true;
 }
 
 /** SQL that leaves out hidden entries (for an AI-app session). */
 const NOT_AI_HIDDEN = (s: string) => `id NOT IN (SELECT post_id FROM ${s}.ai_hidden_posts)`;
 
 export async function getAiHiddenIds(schemaName: string): Promise<number[]> {
-  await ensureAiPrivacyTables(schemaName);
+  if (!(await aiPrivacyTablesExist(schemaName))) return [];
   const db = await tenantDb(schemaName);
   const rows = await db.$queryRawUnsafe<{ post_id: number }[]>(
     `SELECT post_id FROM ${escapeSchema(schemaName)}.ai_hidden_posts ORDER BY post_id`
@@ -1039,6 +1147,8 @@ export async function getAiHiddenIds(schemaName: string): Promise<number[]> {
  * the account's entries.
  */
 export async function setAiHidden(schemaName: string, ids: number[], hidden: boolean): Promise<void> {
+  // Sharing again with no tables: nothing was ever hidden
+  if (!hidden && !(await aiPrivacyTablesExist(schemaName))) return;
   await ensureAiPrivacyTables(schemaName);
   await ensurePostReservations(schemaName);
   const db = await tenantDb(schemaName);
@@ -1057,7 +1167,7 @@ export async function setAiHidden(schemaName: string, ids: number[], hidden: boo
 
 /** Drop rows for entries that no longer exist. Reserved-but-not-yet-created ids stay (the entry may be on its way). */
 export async function pruneAiHidden(schemaName: string): Promise<void> {
-  await ensureAiPrivacyTables(schemaName);
+  if (!(await aiPrivacyTablesExist(schemaName))) return;
   await ensurePostReservations(schemaName);
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
@@ -1427,16 +1537,38 @@ export async function upsertDoseRecordCapped(
   schemaName: string, id: string, date: string, payload: Buffer, iv: Buffer, caps: { maxRows: number; maxBytes: number },
 ): Promise<DoseRecordRow | null> {
   const s = escapeSchema(schemaName);
-  const rows = await lockedStatement<DoseRecordRow>(schemaName,
-    `INSERT INTO ${s}.medication_dose_records (id, date, payload_encrypted, payload_iv)
+  const upsert = `ON CONFLICT (id) DO UPDATE SET date = EXCLUDED.date, payload_encrypted = EXCLUDED.payload_encrypted,
+       payload_iv = EXCLUDED.payload_iv, updated_at = NOW()`;
+  const write = { bytes: payload.length, rows: 1 };
+  // Far below both caps by the last count: ticking a dose doesn't count every record again
+  if (fitsWithoutCounting(schemaName, 'doses', write, caps)) {
+    const rows = await lockedStatement<DoseRecordRow>(schemaName,
+      `INSERT INTO ${s}.medication_dose_records (id, date, payload_encrypted, payload_iv)
+       VALUES ($1, $2::date, $3, $4)
+       ${upsert}
+       RETURNING ${DOSE_RECORD_COLUMNS}`,
+      [id, date, payload, iv]);
+    if (rows[0]) addUsage(schemaName, 'doses', write);
+    return rows[0] ?? null;
+  }
+  const rows = await lockedStatement<DoseRecordRow & { usedRows?: bigint | number | null; usedBytes?: bigint | number | null }>(schemaName,
+    `WITH used AS (
+       SELECT count(*) AS rows, COALESCE(SUM(octet_length(payload_encrypted)), 0) AS bytes
+       FROM ${s}.medication_dose_records WHERE id <> $1
+     )
+     INSERT INTO ${s}.medication_dose_records (id, date, payload_encrypted, payload_iv)
      SELECT $1, $2::date, $3, $4
-     WHERE (SELECT count(*) FROM ${s}.medication_dose_records WHERE id <> $1) + 1 <= $5::bigint
-       AND (SELECT COALESCE(SUM(octet_length(payload_encrypted)), 0) FROM ${s}.medication_dose_records WHERE id <> $1) + $6::bigint <= $7::bigint
-     ON CONFLICT (id) DO UPDATE SET date = EXCLUDED.date, payload_encrypted = EXCLUDED.payload_encrypted,
-       payload_iv = EXCLUDED.payload_iv, updated_at = NOW()
-     RETURNING ${DOSE_RECORD_COLUMNS}`,
+     WHERE (SELECT rows FROM used) + 1 <= $5::bigint
+       AND (SELECT bytes FROM used) + $6::bigint <= $7::bigint
+     ${upsert}
+     RETURNING ${DOSE_RECORD_COLUMNS}, (SELECT rows FROM used) AS "usedRows", (SELECT bytes FROM used) AS "usedBytes"`,
     [id, date, payload, iv, caps.maxRows, payload.length, caps.maxBytes]);
-  return rows[0] ?? null;
+  if (!rows[0]) { forgetUsage(schemaName, 'doses'); return null; }
+  const { usedRows, usedBytes, ...saved } = rows[0];
+  if (usedRows != null && usedBytes != null) {
+    setUsage(schemaName, 'doses', { bytes: Number(usedBytes) + payload.length, rows: Number(usedRows) + 1 });
+  }
+  return saved as DoseRecordRow;
 }
 
 /** Rows and payload bytes of an account's dose records (leaving out the ones being replaced). */

@@ -742,7 +742,6 @@ export function getImportedEntries(): DecryptedPost[] {
  * mistakes it for one whose entry was deleted and removes it.
  */
 export async function removeEntriesLocally(entries: DecryptedPost[]): Promise<number> {
-  let removed = 0;
   for (const entry of entries) {
     const { _sync, ...rest } = (entry.metadata._customFields || {}) as Record<string, unknown>;
     const sync = _sync as EntrySyncState | undefined;
@@ -759,13 +758,13 @@ export async function removeEntriesLocally(entries: DecryptedPost[]): Promise<nu
     useEntriesStore.getState().updateDecryptedEntry(entry.id, {
       metadata: { ...entry.metadata, _customFields: rest },
     });
-    try {
-      await entriesApi.delete(entry.id);
-      useEntriesStore.getState().removeEntry(entry.id);
-      removed++;
-    } catch { /* keep going — remaining entries reappear linked on reload */ }
   }
-  return removed;
+  // Every event is marked kept by now. The entries go 100 a request (one
+  // request an entry stopped a year's clean-up at the request limit)
+  const { deleted } = await entriesApi.deleteMany(entries.map(e => e.id));
+  // Keep going past a failure: the remaining entries reappear linked on reload
+  for (const id of deleted) useEntriesStore.getState().removeEntry(id);
+  return deleted.length;
 }
 
 /** Delete all imported entries from Chronicles (Google events are kept). */

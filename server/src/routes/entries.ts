@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
 import crypto from 'crypto';
 import {
-  createPost, createPostCapped, updatePostCapped, createPosts, getPost, getPostPage, updatePost, deletePost, postExists,
+  createPost, createPostCapped, updatePostCapped, createPosts, getPost, getPostPage, updatePost, deletePost, deletePosts, postExists,
   postStorageBytes, reservePostIds, resealPosts, withTenantLock, type CreatePostInput, type CappedWrite,
   // Entry sync
   ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, getPostFingerprint, getPostUpdatedAt,
@@ -10,10 +10,10 @@ import {
   getAiHiddenIds, setAiHidden, pruneAiHidden, getAiVisibleIds, isAiHidden,
 } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
-import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema, aiHiddenSchema } from '@chronicles/shared';
+import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema, aiHiddenSchema, deletePostsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 import { assistantIdLimiter } from '../middleware/rateLimiter.js';
-import { deleteSharesForEntry } from '../db/shareQueries.js';
+import { deleteSharesForEntry, deleteSharesForEntries } from '../db/shareQueries.js';
 import { assistantWrite, assistantCreatePost, assistantMayDelete, assistantMark, forgetAssistantChangesFor, expireAssistantChanges, AssistantHistoryFull, ASSISTANT_HISTORY_FULL } from '../db/assistantHistory.js';
 
 const router = Router();
@@ -362,6 +362,42 @@ router.post('/batch', async (req, res) => {
   } catch (err) {
     console.error('Create entries error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to create entries' });
+  }
+});
+
+// POST /api/entries/delete — Delete several entries in one request (the
+// journal's Select entries, Clear completed, removing imported events). One
+// request an entry stopped a large clean-up at the per-account request limit,
+// and made a round trip, a share lookup and a trim of the deleted list for
+// each. The same steps as a single delete, in the same order, once for the lot.
+// Never for the Chronicles AI app (not on its list, and refused here too).
+router.post('/delete', async (req, res) => {
+  try {
+    if (req.auth!.assistant) {
+      res.status(403).json({ error: 'Not available to the Chronicles AI app' });
+      return;
+    }
+    const parsed = deletePostsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+    const { ids } = parsed.data;
+    const schema = req.auth!.tenantSchemaName;
+    const refs = ids.map(String);
+    // Public links first, then the versions kept from the AI app's changes,
+    // then the entries, then both again for anything made in between (see
+    // the single delete below)
+    await deleteSharesForEntries(req.auth!.accountId, ids);
+    await forgetAssistantChangesFor(schema, 'entry', refs);
+    const deleted = await deletePosts(schema, ids);
+    await deleteSharesForEntries(req.auth!.accountId, ids);
+    await forgetAssistantChangesFor(schema, 'entry', refs);
+    // Ids that weren't entries (already deleted) are passed over: the lot is gone either way
+    res.json({ success: true, deleted });
+  } catch (err) {
+    console.error('Delete entries error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed to delete entries' });
   }
 });
 

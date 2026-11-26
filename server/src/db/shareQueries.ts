@@ -142,6 +142,15 @@ export async function deleteSharesForEntry(accountId: number, entryId: number): 
   return result as unknown as number;
 }
 
+/** The same for several entries at once (a batch delete). */
+export async function deleteSharesForEntries(accountId: number, entryIds: number[]): Promise<number> {
+  if (entryIds.length === 0) return 0;
+  const result = await prisma.$executeRaw`
+    DELETE FROM public.shares WHERE account_id = ${accountId} AND entry_id = ANY(${entryIds}::int[])
+  `;
+  return result as unknown as number;
+}
+
 /**
  * Delete shares that can no longer be viewed: expired ones, and rows left
  * switched off by the old soft revoke. Run at startup and periodically.

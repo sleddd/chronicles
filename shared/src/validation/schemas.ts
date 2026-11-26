@@ -401,6 +401,13 @@ export const aiHiddenSchema = z.object({
   hidden: z.boolean(),
 }).strict();
 
+// Delete several entries in one request (POST /api/entries/delete): up to 100,
+// each id once
+export const deletePostsSchema = z.object({
+  ids: z.array(z.number().int().positive().max(2_147_483_647)).min(1).max(100)
+    .refine(ids => new Set(ids).size === ids.length, 'Each entry once'),
+}).strict();
+
 // The one-time move of older entries to the id-bound format: up to 100 at a time
 export const resealPostsSchema = z.object({
   entries: z.array(z.object({

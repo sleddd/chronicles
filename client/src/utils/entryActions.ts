@@ -55,3 +55,48 @@ export async function deleteEntryWithImages(entryId: number): Promise<void> {
   // A habit's check-ins go with it too
   useHabitStore.getState().apply(log => withoutHabit(log, entryId));
 }
+
+/**
+ * Delete several entries the same way, 100 a request (the journal's Select
+ * entries, Clear completed). They leave the store straight away. Any whose
+ * request failed come back, with one short notice for the lot. Returns the ids
+ * that were deleted. Never throws.
+ */
+export async function deleteEntriesWithImages(entryIds: number[]): Promise<number[]> {
+  const ids = [...new Set(entryIds)];
+  if (ids.length === 0) return [];
+  const state = useEntriesStore.getState();
+  const wanted = new Set(ids);
+  const entries = state.decryptedEntries.filter(e => wanted.has(e.id));
+  const raws = state.rawEntries.filter(e => wanted.has(e.id));
+  for (const id of ids) state.removeEntry(id);
+
+  const { deleted, error } = await entriesApi.deleteMany(ids);
+  const gone = new Set(deleted);
+  if (error !== undefined) {
+    // What wasn't deleted goes back in the list
+    const now = useEntriesStore.getState();
+    const there = new Set(now.decryptedEntries.map(e => e.id));
+    const back = entries.filter(e => !gone.has(e.id) && !there.has(e.id));
+    const backIds = new Set(back.map(e => e.id));
+    if (back.length > 0) {
+      useEntriesStore.setState({
+        decryptedEntries: [...back, ...now.decryptedEntries],
+        rawEntries: [...raws.filter(r => backIds.has(r.id)), ...now.rawEntries],
+      });
+    }
+    console.error('Failed to delete entries:', error instanceof Error ? error.message : 'Unknown error');
+    showFlash(back.length === 1
+      ? 'Couldn’t delete that entry, so it’s back in the list. Try again.'
+      : `Couldn’t delete ${back.length} entries, so they’re back in the list. Try again.`);
+  }
+  if (deleted.length === 0) return [];
+
+  // Photos no entry still uses (the deleted ones are already out of the store)
+  const imageKeys = filterDeletableImageKeys(collectImageKeys(entries.filter(e => gone.has(e.id))));
+  if (imageKeys.length > 0) void bestEffortDeleteImages(imageKeys);
+  // Their tracked time and habit check-ins go with them
+  useTimeStore.getState().apply(list => (list.some(x => gone.has(x.entryId)) ? list.filter(x => !gone.has(x.entryId)) : list));
+  useHabitStore.getState().apply(log => deleted.reduce((next, id) => withoutHabit(next, id), log));
+  return deleted;
+}

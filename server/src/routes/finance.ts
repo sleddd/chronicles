@@ -17,6 +17,7 @@ import {
 } from '../db/tenantQueries.js';
 import { financeRecordIdSchema, putFinanceRecordSchema, resealFinanceRecordsSchema } from '@chronicles/shared';
 import { FINANCE_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
+import { addUsage, fitsWithoutCounting, setUsage } from '../db/storageUsage.js';
 
 // Finance records are opaque to the server: each row is one AES-GCM payload
 // the client encrypted (AAD bound to kind + id). The server only stores it.
@@ -135,14 +136,24 @@ router.put('/:kind/:id', async (req, res) => {
       // creates one (the route is bills-only for it: services/assistant.ts).
       // Looked up under the lock, so a bill deleted a moment ago isn't made again
       if (req.auth!.assistant && (await financeRecordBytes(schema, kind, [id.data], tx)) === 0) return 'missing' as const;
-      if (await financeStorageBytes(schema, { kind, id: id.data }, tx) + payload.length + ROW_OVERHEAD_BYTES > FINANCE_STORAGE_LIMIT_BYTES) return null;
+      // Far below the cap by the last count (db/storageUsage.ts): the five
+      // finance tables aren't added up again for every bill ticked paid
+      const size = payload.length + ROW_OVERHEAD_BYTES;
+      if (fitsWithoutCounting(schema, 'finance', { bytes: size }, { maxBytes: FINANCE_STORAGE_LIMIT_BYTES })) {
+        addUsage(schema, 'finance', { bytes: size });
+      } else {
+        const others = await financeStorageBytes(schema, { kind, id: id.data }, tx);
+        if (others + size > FINANCE_STORAGE_LIMIT_BYTES) return null;
+        setUsage(schema, 'finance', { bytes: others + size, rows: 0 });
+      }
       return upsertFinanceRecord(schema, kind, id.data, payload, iv, tx);
     };
     const row = req.auth!.assistant
       // …and the bill as it was is kept under the same lock, for the owner to
       // put back (a full list refuses the save)
       ? await assistantWrite(schema, 'bill', id.data, assistantMark.record(iv, payload), write, saved => saved !== null && saved !== 'missing')
-      : await withTenantLock(schema, write);
+      // (this save keeps the account's usage figure up to date itself)
+      : await withTenantLock(schema, write, { keepUsage: true });
     if (row === 'missing') {
       res.status(404).json({ error: 'Bill not found' });
       return;

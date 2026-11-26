@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { prisma } from './prisma.js';
 import { escapeSchema } from './escapeSchema.js';
 import { MAIN_SHARD, shardClient, shardForNewAccount, tenantDb, forgetTenant } from './shards.js';
-import { financeTableStatements, doseRecordStatements, postSyncStatements, postReservationStatements, taxonomyReservationStatements, aiPrivacyStatements } from './tenantQueries.js';
+import { financeTableStatements, doseRecordStatements, postSyncStatements, postReservationStatements, taxonomyReservationStatements } from './tenantQueries.js';
 
 // =============================================================================
 // Tenant Schema Manager
@@ -94,8 +94,8 @@ function generateTenantSchemaStatements(schemaName: string): string[] {
     ...postReservationStatements(s),
     // The same for topics (reserveTaxonomyIds)
     ...taxonomyReservationStatements(s),
-    // Entries hidden from AI, and what the AI app created (undo window)
-    ...aiPrivacyStatements(s),
+    // The AI privacy tables are NOT made here: an account gets them the first
+    // time it hides an entry from AI or the AI app signs in (ensureAiPrivacyTables)
 
     // Record initial schema version
     `INSERT INTO ${s}._migrations (version, name) VALUES (1, 'initial_schema')`,

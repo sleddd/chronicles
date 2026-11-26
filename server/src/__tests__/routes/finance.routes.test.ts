@@ -112,7 +112,7 @@ describe('Finance Routes', () => {
         .send({ payload: Buffer.from('finance-cipher-with-tag!').toString('base64'), iv: Buffer.from('iv-bytes-12b').toString('base64') });
       expect(res.status).toBe(413);
       expect(financeStorageBytes).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { kind: 'goals', id: ID }, 'TX');
-      expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function));
+      expect(withTenantLock).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, expect.any(Function), { keepUsage: true });
       expect(upsertFinanceRecord).not.toHaveBeenCalled();
     });
 

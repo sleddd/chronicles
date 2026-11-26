@@ -38,7 +38,7 @@ import crypto from 'crypto';
 import { tenantDb } from './shards.js';
 import { escapeSchema } from './escapeSchema.js';
 import {
-  ensureAiPrivacyTables, ensureFinanceTables, ensureDoseRecordsTable, ensurePostReservations, withTenantLock,
+  ensureAiPrivacyTables, aiPrivacyTablesExist, ensureFinanceTables, ensureDoseRecordsTable, ensurePostReservations, withTenantLock,
   createPost, postStorageBytes, ASSISTANT_CREATES_PER_DAY, ASSISTANT_UNDO_MS, type CreatePostInput, type TenantClient, type TenantPost,
 } from './tenantQueries.js';
 
@@ -334,14 +334,15 @@ export async function assistantNewRecordAllowed(
 
 /** Versions past their days go (run when the owner's browser loads, so they don't wait for the list to be opened). */
 export async function expireAssistantChanges(schemaName: string): Promise<void> {
-  await ensureAiPrivacyTables(schemaName);
+  if (!(await aiPrivacyTablesExist(schemaName))) return;
   const db = await tenantDb(schemaName);
   await db.$executeRawUnsafe(expireSql(escapeSchema(schemaName)));
 }
 
 /** Newest first, a page at a time (`before`: the last id of the page before). */
 export async function listAssistantChanges(schemaName: string, before?: number): Promise<{ changes: AssistantChange[]; more: boolean }> {
-  await ensureAiPrivacyTables(schemaName);
+  // No tables: the AI app has never written for this account
+  if (!(await aiPrivacyTablesExist(schemaName))) return { changes: [], more: false };
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   // Past their days: gone before anyone is shown them
@@ -398,7 +399,7 @@ function writeBackSql(s: string, kind: AssistantChangeKind): string {
  * version leaves it as the other joins.
  */
 export async function restoreAssistantChange(schemaName: string, id: number): Promise<RestoreResult> {
-  await ensureAiPrivacyTables(schemaName);
+  if (!(await aiPrivacyTablesExist(schemaName))) return { ok: false, reason: 'unknown' };
   const s = escapeSchema(schemaName);
   // Its kind first, so the record's own table is known to be there before the lock is taken
   const db = await tenantDb(schemaName);
@@ -429,26 +430,30 @@ export async function restoreAssistantChange(schemaName: string, id: number): Pr
  * the owner removed. And again after it: a write by the AI app that landed
  * between the two would otherwise leave a version of a record that is gone.
  */
-export async function forgetAssistantChangesFor(schemaName: string, kind: AssistantChangeKind, ref: string): Promise<void> {
-  await ensureAiPrivacyTables(schemaName);
+export async function forgetAssistantChangesFor(schemaName: string, kind: AssistantChangeKind, ref: string | string[]): Promise<void> {
+  const refs = Array.isArray(ref) ? ref : [ref];
+  if (refs.length === 0) return;
+  // Every delete in the app runs this, whether or not the account uses the AI
+  // app. One that never has keeps no versions, and has no tables to look in
+  if (!(await aiPrivacyTablesExist(schemaName))) return;
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
-  // One trip: every delete in the app runs this, whether or not the account uses the AI app
+  // One trip, however many records
   await db.$executeRawUnsafe(
-    `WITH kept AS (DELETE FROM ${s}.assistant_changes WHERE kind = $1 AND ref = $2)
-     DELETE FROM ${s}.assistant_wrote WHERE kind = $1 AND ref = $2`, kind, ref);
+    `WITH kept AS (DELETE FROM ${s}.assistant_changes WHERE kind = $1 AND ref = ANY($2::text[]))
+     DELETE FROM ${s}.assistant_wrote WHERE kind = $1 AND ref = ANY($2::text[])`, kind, refs);
 }
 
 /** Throw one kept version away. */
 export async function deleteAssistantChange(schemaName: string, id: number): Promise<void> {
-  await ensureAiPrivacyTables(schemaName);
+  if (!(await aiPrivacyTablesExist(schemaName))) return;
   const db = await tenantDb(schemaName);
   await db.$executeRawUnsafe(`DELETE FROM ${escapeSchema(schemaName)}.assistant_changes WHERE id = $1::bigint`, id);
 }
 
 /** Throw them all away (asked for, or the account moved to a new key: the old versions couldn't be opened any more). */
 export async function clearAssistantChanges(schemaName: string): Promise<void> {
-  await ensureAiPrivacyTables(schemaName);
+  if (!(await aiPrivacyTablesExist(schemaName))) return;
   const db = await tenantDb(schemaName);
   await db.$executeRawUnsafe(`DELETE FROM ${escapeSchema(schemaName)}.assistant_changes`);
 }

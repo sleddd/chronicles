@@ -28,6 +28,7 @@ vi.mock('../../db/tenantQueries.js', () => ({
   getPostChanges: vi.fn(),
   updatePost: vi.fn(),
   deletePost: vi.fn(),
+  deletePosts: vi.fn(),
   setPostTaxonomies: vi.fn(),
   getPostTaxonomies: vi.fn(),
   getAllTaxonomies: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock('../../db/tenantQueries.js', () => ({
   withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),
 }));
 
-vi.mock('../../db/shareQueries.js', () => ({ deleteSharesForEntry: vi.fn().mockResolvedValue(0) }));
+vi.mock('../../db/shareQueries.js', () => ({ deleteSharesForEntry: vi.fn().mockResolvedValue(0), deleteSharesForEntries: vi.fn().mockResolvedValue(0) }));
 
 // Mock parseId (use real implementation)
 vi.mock('../../middleware/parseId.js', async () => {
@@ -52,9 +53,10 @@ vi.mock('../../middleware/parseId.js', async () => {
 });
 
 import entriesRouter from '../../routes/entries.js';
-import { getPostPage, getPost, createPost, createPostCapped, updatePostCapped, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, getPostFingerprint, updatePost, deletePost, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
+import { getPostPage, getPost, createPost, createPostCapped, updatePostCapped, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, getPostFingerprint, updatePost, deletePost, deletePosts, setPostTaxonomies, getPostTaxonomies, getAllTaxonomies, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES } from '../../utils/storageLimits.js';
-import { deleteSharesForEntry } from '../../db/shareQueries.js';
+import { deleteSharesForEntry, deleteSharesForEntries } from '../../db/shareQueries.js';
+import { forgetAssistantChangesFor } from '../../db/assistantHistory.js';
 
 const app = createTestApp('/api/entries', entriesRouter);
 
@@ -478,6 +480,60 @@ describe('Entry Routes', () => {
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Failed to update entry');
+    });
+  });
+
+  // =========================================================================
+  // POST /api/entries/delete
+  // =========================================================================
+  describe('POST /api/entries/delete', () => {
+    it('deletes several entries in one request, with their links and kept versions, before and after', async () => {
+      (deletePosts as any).mockResolvedValue(3);
+
+      const res = await request(app).post('/api/entries/delete').send({ ids: [4, 5, 6] });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ success: true, deleted: 3 });
+      expect(deletePosts).toHaveBeenCalledTimes(1);
+      expect(deletePosts).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, [4, 5, 6]);
+      expect(deleteSharesForEntries).toHaveBeenCalledTimes(2);
+      expect(deleteSharesForEntries).toHaveBeenCalledWith(TEST_AUTH.accountId, [4, 5, 6]);
+      expect(forgetAssistantChangesFor).toHaveBeenCalledTimes(2);
+      expect(forgetAssistantChangesFor).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, 'entry', ['4', '5', '6']);
+      // The links go before the entries do
+      expect((deleteSharesForEntries as any).mock.invocationCallOrder[0]).toBeLessThan((deletePosts as any).mock.invocationCallOrder[0]);
+      expect(deletePost).not.toHaveBeenCalled();
+    });
+
+    it('counts ids that were already gone as done', async () => {
+      (deletePosts as any).mockResolvedValue(1);
+      const res = await request(app).post('/api/entries/delete').send({ ids: [4, 5] });
+      expect(res.status).toBe(200);
+      expect(res.body.deleted).toBe(1);
+    });
+
+    it.each([
+      ['no ids', { ids: [] }],
+      ['more than 100', { ids: Array.from({ length: 101 }, (_, i) => i + 1) }],
+      ['an id twice', { ids: [1, 1] }],
+      ['an id that is not a whole positive number', { ids: [1.5] }],
+      ['an id past int4', { ids: [2_147_483_648] }],
+      ['a string id', { ids: ['1'] }],
+      ['anything else in the body', { ids: [1], schema: 'usr_2_x' }],
+      ['no body', {}],
+    ])('refuses %s', async (_name, body) => {
+      const res = await request(app).post('/api/entries/delete').send(body);
+      expect(res.status).toBe(400);
+      expect(deletePosts).not.toHaveBeenCalled();
+      expect(deleteSharesForEntries).not.toHaveBeenCalled();
+    });
+
+    it('keeps the entries when their links could not be deleted', async () => {
+      (deleteSharesForEntries as any).mockRejectedValueOnce(new Error('DB error'));
+      const res = await request(app).post('/api/entries/delete').send({ ids: [1, 2] });
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Failed to delete entries');
+      expect(deletePosts).not.toHaveBeenCalled();
     });
   });
 

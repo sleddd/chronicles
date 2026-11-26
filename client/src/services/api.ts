@@ -554,7 +554,30 @@ export const entries = {
 
   delete: (id: number) =>
     request<{ success: boolean }>(`/entries/${id}`, { method: 'DELETE' }),
+
+  /**
+   * Delete several entries, 100 a request (one request an entry stopped a big
+   * clean-up at the per-account request limit). Ids already gone count as
+   * done. Returns the ids whose request went through, in order: a request that
+   * fails stops there, and `error` says why, so the caller knows which are left.
+   */
+  deleteMany: async (ids: number[]): Promise<{ deleted: number[]; error?: unknown }> => {
+    const deleted: number[] = [];
+    for (let i = 0; i < ids.length; i += DELETE_BATCH) {
+      const batch = ids.slice(i, i + DELETE_BATCH);
+      try {
+        await request<{ success: boolean; deleted: number }>('/entries/delete', { method: 'POST', body: { ids: batch } });
+      } catch (error) {
+        return { deleted, error };
+      }
+      deleted.push(...batch);
+    }
+    return { deleted };
+  },
 };
+
+/** How many entries one delete request names (the server takes up to 100). */
+const DELETE_BATCH = 100;
 
 // =============================================================================
 // Topics
