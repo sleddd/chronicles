@@ -123,7 +123,7 @@ const WhenTail = styled.div`
   margin-top: 12px;
   .migrate { margin-left: 2px; font-family: var(--font-sans); font-size: 15px; color: var(--text-secondary); }
   .migrate .ch-check__label { color: var(--text-secondary); font-size: 15px; }
-  .migrate .ch-check__box, .migrate .ch-check__box svg { width: 15px; height: 15px; }
+  .migrate .ch-check__box, .migrate .ch-check__box svg { width: 14px; height: 14px; }
 `;
 
 /* A row: its name (small tracked capitals) on the left, the field on the right */

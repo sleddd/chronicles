@@ -118,13 +118,13 @@
 .ch-check { position: relative; display: inline-flex; align-items: center; gap: var(--space-3); cursor: pointer; user-select: none; }
 .ch-check input { position: absolute; top: 0; left: 0; margin: 0; opacity: 0; width: 0; height: 0; }
 .ch-check__box {
-  width: 18px; height: 18px; flex: none; border-radius: 50%;
+  width: 16px; height: 16px; flex: none; border-radius: 50%; /* a bit smaller than the 18px it was (the user's call, app-wide) */
   border: 1.5px solid var(--control-border); background: transparent;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--on-accent);
   transition: var(--transition-colors), box-shadow var(--duration-fast) var(--ease-out);
 }
-.ch-check__box svg { width: 18px; height: 18px; opacity: 0; transform: scale(0.6); transition: opacity var(--duration-fast), transform var(--duration-fast) var(--ease-out); color: var(--color-accent); }
+.ch-check__box svg { width: 16px; height: 16px; opacity: 0; transform: scale(0.6); transition: opacity var(--duration-fast), transform var(--duration-fast) var(--ease-out); color: var(--color-accent); }
 .ch-check input:checked + .ch-check__box { background: transparent; border: none; }
 .ch-check input:checked + .ch-check__box svg { opacity: 1; transform: scale(1); }
 .ch-check input:focus-visible + .ch-check__box { box-shadow: var(--shadow-ring); }

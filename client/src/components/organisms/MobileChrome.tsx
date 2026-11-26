@@ -113,9 +113,9 @@ const NavRow = styled.button<{ $active: boolean; $quiet?: boolean }>`
   padding: 0 14px;
   border: none;
   border-radius: 10px;
-  background: transparent; /* dark: the current page gets no fill — just its name a step heavier */
-  /* Light: the current page's row on the same light shade as an open section's row */
-  html[data-theme='light'] & { background: ${({ $active }) => ($active ? 'var(--bg-rail-logo)' : 'transparent')}; }
+  /* The current page's row on the same shade as an open section's row: a light step in
+     light, a little darker than the menu in dark */
+  background: ${({ $active }) => ($active ? 'var(--bg-rail-logo)' : 'transparent')};
   font-family: var(--font-sans);
   font-size: 16px;
   /* Light names (Open Sans's lightest bundled weight is 300), the current page a step heavier */
@@ -179,7 +179,7 @@ const ViewList = styled.ul`
   padding: 0;
   /* A step darker than the open section's row; between rows a dark line over a faint light one */
   background: color-mix(in srgb, var(--bg-rail) 82%, #fff);
-  html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 95%, #c8d4ff); } /* lifted with a cool tint, never plain white */
+  html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 98%, #c8d4ff); } /* a hair lighter than the menu, with a cool tint — never bright, never plain white */
   /* Light: the views sit a little lighter than the current page's row, both shades of the
      tile colour (#ede6e2) worked out from the menu's own colour */
   html[data-theme='light'] & { background: color-mix(in srgb, var(--bg-rail) 75%, var(--bg-tile)); }

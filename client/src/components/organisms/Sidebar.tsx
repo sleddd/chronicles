@@ -139,7 +139,7 @@ const NavIconBtn = styled.button<{ $active?: boolean; $tab?: boolean; $fullTab?:
     color: ${({ $active }) => $active ? 'var(--text-primary)' : 'var(--text-primary)'};
   }
   /* Dark: hovering brightens the icon only (no block behind it) */
-  html[data-theme='dark'] &:hover { background: transparent; }
+  html[data-theme='dark'] &:hover { background: ${({ $active }) => ($active ? 'var(--bg-rail-active)' : 'transparent')}; }
   /* No lines between items, in either theme */
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
 
@@ -230,7 +230,7 @@ const ViewList = styled.ul`
   padding: 0;
   /* A step darker than the open section's row; between rows a dark line over a faint light one */
   background: color-mix(in srgb, var(--bg-rail) 82%, #fff);
-  html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 96%, #fff); }
+  html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 98%, #c8d4ff); } /* a hair lighter than the rail, with its cool cast — never bright */
   /* Light: the views sit a little lighter than the current page's row, both shades of the
      tile colour (#ede6e2) worked out from the menu's own colour */
   html[data-theme='light'] & { background: color-mix(in srgb, var(--bg-rail) 75%, var(--bg-tile)); }

@@ -9,9 +9,14 @@ interface TickMarkProps {
   size?: number;
 }
 
+/** Every tick is drawn a bit smaller than the size it is asked for (the user's call,
+ *  app-wide): 22 → 20, 20 → 18, 18 → 16, 16 → 14. Callers keep their own tap targets. */
+const DRAWN = 0.89;
+
 export function TickMark({ checked, size = 20 }: TickMarkProps) {
+  const px = Math.round(size * DRAWN);
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+    <svg width={px} height={px} viewBox="0 0 24 24" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
       aria-hidden="true" style={{ display: 'block', flex: 'none' }}>
       {checked ? (
         <g style={{ stroke: 'var(--color-accent)' }}>

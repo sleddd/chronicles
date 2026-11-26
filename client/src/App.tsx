@@ -288,10 +288,12 @@ const DARK_CSS_VARS: Record<string, string> = {
   '--border-strong':     '#3e4350',
   '--border-field':      '#31343f',  /* faint outline on styled-form boxes + nutrition panel */
   /* Nav rail — one strip a shade darker than the page with the logo in it (no darker cell); the active
-     item is just its accent icon and a thin accent bar, never a lifted block */
+     item is its white icon and name, a thin accent bar and a slightly darker row, never a lifted block */
   '--bg-rail':           '#12141a',
-  '--bg-rail-logo':      '#12141a',
-  '--bg-rail-active':    'transparent',
+  /* The current page's row and an open section's row: a little darker than the rail
+     (the user's call), worked out from the rail's own colour */
+  '--bg-rail-logo':      'color-mix(in srgb, var(--bg-rail) 82%, #000)',
+  '--bg-rail-active':    'var(--bg-rail-logo)',
   /* Chart series — brightened a notch for the slate canvas */
   '--chart-blue':        '#6aa6e6',
   '--chart-violet':      '#a68cf0',
