@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import styled from 'styled-components';
-import { SettingsGroup, SettingsActionRow, SettingsNotice, RowPill } from '../molecules/SettingsGroup.js';
+import { SettingsGroup, SettingsActionRow, SettingsDisclosureRow, SettingsNotice, RowPill } from '../molecules/SettingsGroup.js';
 import { Toggle } from '../atoms/Toggle.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
 import { useOptionalAuth } from '../../contexts/AuthContext.js';
@@ -30,7 +30,7 @@ const FEATURE_NOTES: Record<AiFeatureKey, (app: boolean) => string> = {
  * Settings → In-App AI, under the AI switches:
  *  - "Chronicles AI app (Mac and iPad)": lets the app sign in with this
  *    account's password (offered only to accounts it's available to)
- *  - "Don't share with AI": topics and features no AI ever sees — not In-App
+ *  - "Hide from AI": topics and features no AI ever sees — not In-App
  *    AI, AI insights, AI planning, the AI kitchen, calorie estimates, or the
  *    Chronicles AI app. Shown while any AI is on.
  * Single entries are hidden from the editor (the In-App AI row's Hide checkbox).
@@ -40,6 +40,8 @@ export function AiPrivacySettings({ inAppAiOn }: { inAppAiOn: boolean }) {
   const privacy = useAiPrivacy();
   const topics = useEntriesStore(s => s.allTopics);
   const [saving, setSaving] = useState(false);
+  // Hide from AI folds away under its title, shut to start
+  const [hideOpen, setHideOpen] = useState(false);
   const available = user?.assistantAvailable === true;
   const aiOn = inAppAiOn || privacy.appEnabled;
 
@@ -83,7 +85,7 @@ export function AiPrivacySettings({ inAppAiOn }: { inAppAiOn: boolean }) {
 
   if (aiPrivacyUnreadable(privacy)) {
     return (
-      <SettingsGroup label="Don’t share with AI">
+      <SettingsGroup label="Hide from AI">
         <SettingsActionRow
           title="Your choices couldn’t be read in this browser"
           description={available
@@ -107,9 +109,7 @@ export function AiPrivacySettings({ inAppAiOn }: { inAppAiOn: boolean }) {
         <SettingsGroup label="Chronicles AI app">
           <SettingsActionRow
             title="Chronicles AI app (Mac and iPad)"
-            description={privacy.appEnabled
-              ? 'On. The app signs in with your password and holds your key while it’s open, like a browser you signed in on. Chronicles never sends it anything below that you keep from AI. It uses the AI provider key you saved for In-App AI. It adds entries, ticks doses, habits and tasks, and records bill payments. Anything it changes can be put back from the list below. Signed-in copies show under Security → Sessions. Turning this off signs them all out.'
-              : 'Off. Turning it on lets the Chronicles AI app on your Mac or iPad sign in with your password.'}
+            description="When on, the Mac and iPad AI app signs in with your password, holds your saved In-App AI key while open, and respects items hidden from AI. It can add entries, log bill payments, and check off doses, habits, or tasks—with undo available below. Manage active sign-ins under Security → Sessions; turning this off signs all out."
             action={<Toggle checked={privacy.appEnabled} disabled={saving}
               onChange={v => { void save(now => ({ ...now, appEnabled: v })); }} aria-label="Chronicles AI app" />}
           />
@@ -118,30 +118,27 @@ export function AiPrivacySettings({ inAppAiOn }: { inAppAiOn: boolean }) {
       )}
 
       {aiOn && (
-        <SettingsGroup label="Don’t share with AI">
-          {/* One plain fact a line. The Chronicles AI app is named only to the accounts it is offered to */}
+        <SettingsGroup>
+          <SettingsDisclosureRow title="Hide from AI" open={hideOpen} onToggle={() => setHideOpen(o => !o)} />
+          {hideOpen && (<>
+          {/* The owner's wording, as written */}
           <SettingsNotice>
-            <NoteLine><strong>On means hidden.</strong> AI never gets a topic or item whose switch is on.</NoteLine>
             <NoteLine>
-              AI gets your entries only when you press one of these buttons. AI insights in the Journal. AI plan in the Planner.
-              AI menu and Recipe from ingredients in the Kitchen.
+              Switch this on to exclude a topic or entry from AI insights by default. You can enable it on a whole topic
+              or on a single entry.
             </NoteLine>
             <NoteLine>
-              Before anything is sent, you see a list of exactly what will be shared. Press Cancel and nothing is sent.
-              Hidden topics and hidden entries are never on that list.
+              This setting acts as your global default for AI insights, and a separate consent modal still appears when
+              you tap AI insights to show what will be shared and let you confirm or cancel for that run.
             </NoteLine>
             <NoteLine>
-              When you save a meal or an exercise, AI gets that one meal or exercise to estimate its calories. Nothing else is sent.
-              If it is hidden, nothing is sent at all.
+              AI task management and menu planning do not use this setting. Each time you run them, a pop-up modal shows
+              the exact data that will be shared, and your consent comes from that modal rather than these switches.
             </NoteLine>
             <NoteLine>
-              The chat cannot read your journal. It knows only what you type to it and the names of your topics.
-              It is not told the name of a hidden topic.
+              AI Chat will still never be able to access or read any part of your journal. However, you can still save
+              things from chat to chronicles.
             </NoteLine>
-            <NoteLine>
-              To hide one entry and not its whole topic, open the entry in the Journal and tick Hide next to In-App AI.
-            </NoteLine>
-            {available && <NoteLine>The Chronicles AI app on your Mac or iPad never receives anything hidden here.</NoteLine>}
           </SettingsNotice>
           {sortedTopics.map(t => {
             const hidden = privacy.hiddenTopicIds.includes(t.id);
@@ -168,6 +165,7 @@ export function AiPrivacySettings({ inAppAiOn }: { inAppAiOn: boolean }) {
               />
             );
           })}
+          </>)}
         </SettingsGroup>
       )}
     </>

@@ -39,7 +39,7 @@ export function mentionsMedical(text: string): boolean {
 }
 
 /** Version of the chat consent / safety notice — bump it to ask everyone again. */
-export const AI_CONSENT_VERSION = 1;
+export const AI_CONSENT_VERSION = 2;
 
 /*
  * AI task planning and AI insights send decrypted entries to the person's AI

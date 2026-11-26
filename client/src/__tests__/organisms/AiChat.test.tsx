@@ -3,8 +3,10 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom';
 
 const state = vi.hoisted(() => ({
-  status: { consentAt: '2026-10-18T12:00:00Z', consentVersion: 1, blocked: false } as {
+  status: { consentAt: '2026-10-18T12:00:00Z', consentVersion: 2, blocked: false } as {
     consentAt: string | null; consentVersion: number | null; blocked: boolean;
+    aiUserId?: string;
+    enforcement?: { level: string; pausedUntil: string | null; refusals24h: number; refusals30d: number };
   },
 }));
 
@@ -29,7 +31,7 @@ vi.mock('@/services/api', () => ({
   aiChat: {
     status: vi.fn(async () => state.status),
     consent: vi.fn(async () => {
-      state.status = { consentAt: '2026-10-18T12:00:00Z', consentVersion: 1, blocked: false };
+      state.status = { consentAt: '2026-10-18T12:00:00Z', consentVersion: 2, blocked: false };
       return state.status;
     }),
     withdraw: vi.fn(),
@@ -61,7 +63,7 @@ async function send(text: string) {
 describe('AiChat safety', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    state.status = { consentAt: '2026-10-18T12:00:00Z', consentVersion: 1, blocked: false };
+    state.status = { consentAt: '2026-10-18T12:00:00Z', consentVersion: 2, blocked: false };
     useAiChatStore.setState({ status: null, loadError: false });
     (chatReply as any).mockResolvedValue('Here to help.');
     (classifyRisk as any).mockResolvedValue(NONE);
@@ -82,7 +84,7 @@ describe('AiChat safety', () => {
     expect(turnOn).toBeDisabled();
     fireEvent.click(screen.getByLabelText('I’m 18 or older'));
     await act(async () => { fireEvent.click(turnOn); });
-    expect(aiChat.consent).toHaveBeenCalledWith(1);
+    expect(aiChat.consent).toHaveBeenCalledWith(2);
     expect(await screen.findByLabelText('Message')).toBeInTheDocument();
   });
 
@@ -242,5 +244,25 @@ describe('AiChat safety', () => {
     state.status = { consentAt: null, consentVersion: null, blocked: true };
     openChat();
     expect(await screen.findByText(/turned off for this account/)).toBeInTheDocument();
+  });
+
+  it('warned: one quiet line about declined requests, and the chat still works', async () => {
+    state.status = { ...state.status, aiUserId: 'a'.repeat(32), enforcement: { level: 'warned', pausedUntil: null, refusals24h: 5, refusals30d: 5 } };
+    openChat();
+    expect(await screen.findByText('Some recent requests were declined by the AI. Repeated declined requests pause In-App AI for a day.')).toBeInTheDocument();
+    await send('What should I cook tonight?');
+    expect(await screen.findByText('Here to help.')).toBeInTheDocument();
+  });
+
+  it('paused: says until when, and sends nothing', async () => {
+    const until = new Date(Date.now() + 20 * 3_600_000).toISOString();
+    state.status = { ...state.status, aiUserId: 'a'.repeat(32), enforcement: { level: 'paused', pausedUntil: until, refusals24h: 10, refusals30d: 10 } };
+    openChat();
+    expect(await screen.findByText(/In-App AI is paused until .+\./)).toBeInTheDocument();
+    expect(screen.queryByText('Before you chat')).not.toBeInTheDocument();
+    await send('hello');
+    expect(chatReply).not.toHaveBeenCalled();
+    expect(classifyRisk).not.toHaveBeenCalled();
+    expect(screen.getAllByText(/In-App AI is paused until/).length).toBeGreaterThan(0);
   });
 });

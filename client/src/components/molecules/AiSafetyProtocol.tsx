@@ -7,7 +7,7 @@ import { MEDICAL_DISCLAIMER } from '../../utils/chatDisclosure.js';
    (shown whether the AI is on or off), with the chat consent status under it.
    Props only. Change the date and the change log whenever the text changes. */
 
-export const PROTOCOL_DATE = 'Nov 20, 2026';
+export const PROTOCOL_DATE = 'Nov 25, 2026';
 
 const Wrap = styled.div`
   padding: 16px 0 4px;
@@ -273,6 +273,26 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
             report is requested.
           </p>
 
+          <h4>Declined requests and your anonymous ID</h4>
+          <p>
+            Every request In-App AI sends to your provider carries an anonymous ID for your account. It is a code that
+            holds no name, email or account number. It lets the provider tell one account’s requests from another’s.
+          </p>
+          <p>
+            AI providers decline some requests under their own usage rules. When that happens, Chronicles records it for
+            your account, with the time and which Chronicles app sent it. It never records what you asked. Several
+            requests declined within a few seconds count once.
+          </p>
+          <ul>
+            <li>Five in a day shows a notice in the chat.</li>
+            <li>Ten in a day pauses every AI feature for a day. They start again on their own.</li>
+            <li>Twenty in 30 days turns In-App AI off for the account. Write to support to ask for it back.</li>
+          </ul>
+          <p>
+            The screening requests described above are not counted. These records stop counting after 30 days and are
+            then deleted. They are also deleted when you delete your account.
+          </p>
+
           <h4>Limits</h4>
           <p>
             The AI chat is not a therapist, doctor, or crisis counselor, and it cannot contact anyone for you. Its answers
@@ -291,6 +311,7 @@ export function AiSafetyProtocol({ consentAt, blocked, onWithdraw }: AiSafetyPro
           <table>
             <thead><tr><th>Date</th><th>Change</th></tr></thead>
             <tbody>
+              <tr><td>November 25, 2026</td><td>Every request to your AI provider now carries an anonymous ID for your account, with no name or email in it. Chronicles records when the provider declines a request, never what was asked. Repeated declined requests show a notice, then pause In-App AI for a day, then turn it off for the account.</td></tr>
               <tr><td>November 20, 2026</td><td>Added a medical disclaimer. The first time in a chat that you raise a medical question, Chronicles shows a note that the AI is not a doctor and can’t give medical advice, and the AI says so itself. It never diagnoses or tells you to change a medication or dose, and it points to emergency services first when something could be an emergency.</td></tr>
               <tr><td>November 19, 2026</td><td>Added AI insights, an optional feature that reads the Journal entries you choose to send. Its reflections are screened like chat replies, and support resources are shown when your writing shows a risk sign.</td></tr>
               <tr><td>October 20, 2026</td><td>Cravings, treats, comfort food and eating to cope are no longer treated as a risk sign, and the AI no longer mentions crisis lines for an ordinary bad day. After a risk sign, the AI brings up the resources when risk shows again or you ask, instead of in every reply. The resources stay shown in the chat.</td></tr>

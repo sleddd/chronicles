@@ -5,7 +5,9 @@
  * allowlist here, enforced by authMiddleware on every request:
  *
  * - API only, nothing else: no account, security, session, passkey, sharing,
- *   calendar, AI-chat or analytics route.
+ *   calendar or analytics route. Of the AI-chat routes only the account's
+ *   status (consent, pause, block, anonymous AI user id), giving consent and
+ *   reporting a declined request as 'smith' (checked in the route).
  * - Add and tick, never remove: it can create entries, record doses, check off
  *   habits, record bill payments and change a task's status. The only delete is
  *   undoing an entry it created itself, within ASSISTANT_UNDO_MS.
@@ -99,6 +101,13 @@ export const ASSISTANT_RULES: Rule[] = [
   { method: 'GET', path: /^\/api\/finance\/bills$/, feature: 'bills' },
   // Only an existing bill (checked in the route)
   { method: 'PUT', path: new RegExp(`^/api/finance/bills/${UUID}$`), feature: 'bills' },
+
+  // In-App AI's status, consent and declined requests, shared with the browser
+  // (the pause and block count across both apps). Never withdrawing consent
+  { method: 'GET', path: /^\/api\/ai-chat$/ },
+  { method: 'POST', path: /^\/api\/ai-chat\/consent$/ },
+  // Only as 'smith' (checked in the route)
+  { method: 'POST', path: /^\/api\/ai-chat\/refusal$/ },
 ];
 
 /** Signing out: allowed even while the journal is moving to a new key. */

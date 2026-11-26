@@ -15,6 +15,7 @@ import { MAX_CHAT_NOTES } from '../../utils/chatSave.js';
 import { AiSafetyProtocol } from '../molecules/AiSafetyProtocol.js';
 import { AiFeatureConsent } from '../molecules/AiFeatureConsent.js';
 import { useAiChatStore } from '../../stores/aiChatStore.js';
+import { aiHold, aiHoldMessage } from '../../services/aiAccess.js';
 import { useEncryption } from '../../contexts/EncryptionContext.js';
 import { settings as settingsApi } from '../../services/api.js';
 import { showFlash } from '../../services/flashNotice.js';
@@ -275,6 +276,8 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
   const loadChatStatus = useAiChatStore(st => st.load);
   const withdrawChatConsent = useAiChatStore(st => st.withdraw);
   useEffect(() => { void loadChatStatus(); }, [loadChatStatus]);
+  // Paused (or turned off) for the account after declined requests: every AI feature waits
+  const hold = aiHold(chatStatus);
 
   const missing = missingCredentials(cfg);
   const statusNode = (() => {
@@ -291,6 +294,14 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
           title="Use AI in Chronicles"
           action={<Toggle checked={cfg.enabled} onChange={v => update({ enabled: v }, true)} aria-label="Use AI in Chronicles" />}
         />
+        {cfg.enabled && hold && (
+          <SettingsActionRow
+            title={hold.kind === 'paused' ? 'Paused' : 'Turned off'}
+            description={hold.kind === 'paused'
+              ? `${aiHoldMessage(hold)} Some recent requests were declined by the AI, so estimates, the chat and the other AI features are taking a break. They start again on their own.`
+              : `${aiHoldMessage(hold)} Estimates, the chat and the other AI features are off.`}
+          />
+        )}
         {cfg.enabled && notHere && (
           <SettingsActionRow
             title="This browser"
@@ -303,7 +314,7 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
           <SettingsActionRow
             title="AI chat"
             description={cfg.chatEnabled
-              ? 'A chat bubble will appear in the corner of every page.'
+              ? 'A chat bubble will appear in the corner of every page. No part of your journal is shared with AI chat, however you may save to your journal from chat.'
               : 'Off. The AI only estimates calories. Click here to enable In-App AI Chat.'}
             action={<Toggle checked={cfg.chatEnabled === true} onChange={v => update({ chatEnabled: v }, true)} aria-label="AI chat" />}
           />
@@ -334,17 +345,11 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
         })}
       </SettingsGroup>
 
-      {/* The Chronicles AI app, and what no AI may see */}
-      <AiPrivacySettings inAppAiOn={cfg.enabled} />
-
       {cfg.enabled && (
         <>
           <SettingsGroup label="Provider">
             <SettingsNotice>
-              Your key is encrypted with your master key. Chat messages, topic names, and the food and exercise you log go from your browser straight to {providerName}.
-              {cfg.planEnabled && ' With AI task planning on, so do your tasks, goals and milestones with their notes, your visions, the names of your goal categories and task types, and the names and times of your events when you press its button.'}
-              {cfg.insightsEnabled && ' With AI insights on, so do your Journal entries when you press its button.'}
-              {cfg.kitchenEnabled && ' With AI kitchen on, so do your recipes, your food budget, the ingredients you list and, only when you tick it, your allergies when you press its buttons.'}
+              Your API key is encrypted with your master key, connects straight from your browser to {providerName}, and only shares what you allow via Hide from AI below or each feature’s consent modal.
             </SettingsNotice>
             <SettingsGroupRow label="Provider">
               <Select value={cfg.provider} onChange={e => handleProviderChange(e.target.value as AiProvider)} aria-label="Provider">
@@ -474,13 +479,16 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
           onWithdraw={() => { void withdrawChatConsent().catch(() => {}); }}
         />
       </SafetyWrap>
+
+      {/* The Chronicles AI app, and what no AI may see */}
+      <AiPrivacySettings inAppAiOn={cfg.enabled} />
     </>
   );
 }
 
 /* The Safety protocol keeps its own fold, set apart under the groups */
 const SafetyWrap = styled.div`
-  margin-top: 36px;
+  margin: 36px 0;
 `;
 
 function ActionLink({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {

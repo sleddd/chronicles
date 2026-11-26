@@ -30,6 +30,7 @@ describe('assistantMay', () => {
     ['GET', '/api/topics'], ['GET', '/api/settings'], ['PUT', '/api/settings'],
     ['GET', '/api/doses'], ['GET', '/api/doses/all'], ['PUT', `/api/doses/${UUID}`],
     ['GET', '/api/finance/bills'], ['PUT', `/api/finance/bills/${UUID}`],
+    ['GET', '/api/ai-chat'], ['POST', '/api/ai-chat/consent'], ['POST', '/api/ai-chat/refusal'],
   ];
   it.each(allowed)('allows %s %s', (method, path) => {
     expect(assistantMay(method, path, ON)).toEqual({ ok: true });
@@ -49,7 +50,8 @@ describe('assistantMay', () => {
     ['GET', '/api/finance/expenses'], ['GET', '/api/finance/budget'], ['GET', '/api/finance/savings'], ['GET', '/api/finance/goals'],
     ['PUT', `/api/finance/expenses/${UUID}`], ['PUT', '/api/finance/bills'],
     // Other features
-    ['POST', '/api/ai-chat/log'], ['GET', '/api/calendar/status'], ['POST', '/api/shares'], ['GET', '/api/analytics/x'],
+    ['POST', '/api/ai-chat/log'], ['DELETE', '/api/ai-chat/consent'], ['GET', '/api/ai-chat/consent'], ['GET', '/api/ai-chat/refusal'],
+    ['POST', '/api/ai-chat'], ['POST', '/api/ai-chat/refusal/extra'], ['GET', '/api/calendar/status'], ['POST', '/api/shares'], ['GET', '/api/analytics/x'],
     ['PUT', '/api/doses/reseal'], ['GET', '/api/entries/42/extra'],
   ];
   it.each(refused)('refuses %s %s', (method, path) => {
@@ -264,7 +266,8 @@ describe('Every write the AI app may make is held to its rule in the route', () 
     const name = /api\\?\/([a-z-]+)/.exec(path.source)?.[1];
     return readFileSync(new URL(`../routes/${name}.ts`, import.meta.url), 'utf8');
   };
-  const writes = ASSISTANT_RULES.filter(r => r.method !== 'GET' && !/auth/.test(r.path.source) && !/ids/.test(r.path.source));
+  // (In-App AI's consent and declined requests aren't journal records: their own test below)
+  const writes = ASSISTANT_RULES.filter(r => r.method !== 'GET' && !/auth|ai-chat/.test(r.path.source) && !/ids/.test(r.path.source));
 
   it('finds them', () => {
     expect(writes.map(r => r.method).sort()).toEqual(['DELETE', 'POST', 'PUT', 'PUT', 'PUT', 'PUT']);
@@ -276,6 +279,13 @@ describe('Every write the AI app may make is held to its rule in the route', () 
     if (rule.method === 'PUT') expect(source).toContain('assistantWrite');
     if (rule.method === 'POST') expect(source).toContain('assistantCreatePost(');
     if (rule.method === 'DELETE') expect(source).toContain('assistantMayUndo(');
+  });
+
+  it('the AI-chat routes are the status, consent and declined requests only — and a declined request is checked as its own in the route', () => {
+    const aiChat = ASSISTANT_RULES.filter(r => /ai-chat/.test(r.path.source)).map(r => `${r.method} ${r.path.source}`);
+    expect(aiChat).toEqual(['GET ^\\/api\\/ai-chat$', 'POST ^\\/api\\/ai-chat\\/consent$', 'POST ^\\/api\\/ai-chat\\/refusal$']);
+    const source = readFileSync(new URL('../routes/aiChat.ts', import.meta.url), 'utf8');
+    expect(source).toContain("req.auth!.assistant ? 'smith' : 'chronicles'");
   });
 
   it('signing out is the one thing left during a re-key', () => {

@@ -9,6 +9,7 @@
  */
 
 import { SignatureV4 } from '@smithy/signature-v4';
+import { AiDeclinedError } from './aiDeclined.js';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { isBedrockRegion } from '@shared/validation/awsRegions.js';
 
@@ -130,22 +131,27 @@ function bedrockErrorMessage(status: number, data: Record<string, unknown>): str
   return `Bedrock error ${status}${msg ? `: ${msg}` : ''}`;
 }
 
-/** Completion through the Converse API (works for every Bedrock text model): one prompt or a whole conversation. */
+/**
+ * Completion through the Converse API (works for every Bedrock text model): one prompt or a whole conversation.
+ * `userId`: the account's anonymous id, sent as request metadata (it shows in the
+ * account's own invocation logs, so one person's requests can be told apart).
+ */
 export async function bedrockConverse(
   creds: BedrockCredentials, modelId: string, system: string,
-  turns: string | { role: 'user' | 'assistant'; content: string }[], maxTokens = 2048,
+  turns: string | { role: 'user' | 'assistant'; content: string }[], maxTokens = 2048, userId?: string,
 ): Promise<string> {
   const messages = typeof turns === 'string' ? [{ role: 'user' as const, content: turns }] : turns;
   const data = await bedrockFetch(creds, 'runtime', 'POST', `/model/${encodeURIComponent(modelId.trim())}/converse`, {}, {
     system: [{ text: system }],
     messages: messages.map(m => ({ role: m.role, content: [{ text: m.content }] })),
     inferenceConfig: { maxTokens },
+    ...(userId ? { requestMetadata: { user_id: userId } } : {}),
   }) as {
     stopReason?: string;
     output?: { message?: { content?: { text?: string }[] } };
   };
   if (data.stopReason === 'guardrail_intervened' || data.stopReason === 'content_filtered') {
-    throw new Error('The model declined this request');
+    throw new AiDeclinedError();
   }
   // Reasoning models return reasoning blocks alongside the answer — keep text only
   return (data.output?.message?.content ?? []).map(b => b.text ?? '').join('');

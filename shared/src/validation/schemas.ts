@@ -577,6 +577,66 @@ export const aiChatConsentSchema = z.object({
   ageConfirmed: z.literal(true),
 }).strict();
 
+/** Which app's request the AI declined (stop_reason "refusal"): Chronicles in the browser, or the Chronicles AI app. */
+export const AI_REFUSAL_APPS = ['chronicles', 'smith'] as const;
+export type AiRefusalApp = typeof AI_REFUSAL_APPS[number];
+/** POST /api/ai-chat/refusal — one declined request, no content. */
+export const aiRefusalSchema = z.object({
+  app: z.enum(AI_REFUSAL_APPS),
+}).strict();
+
+/*
+ * Declined requests, counted per account across both apps: 5 in a day warns,
+ * 10 in a day pauses In-App AI for a day, 20 in 30 days turns it off (like
+ * `npm run ai:block`, which also turns it back on).
+ */
+export const AI_REFUSAL_WARN_24H = 5;
+export const AI_REFUSAL_PAUSE_24H = 10;
+export const AI_REFUSAL_BLOCK_30D = 20;
+export const AI_PAUSE_MS = 24 * 60 * 60 * 1000;
+/** Declined requests this close together count as one: a single message can make several requests, in either app. */
+export const AI_REFUSAL_DEDUPE_S = 15;
+
+/** Why In-App AI is turned off for an account: by hand (`npm run ai:block`, e.g. believed under 18) or by the declined-request ladder. */
+export type AiBlockReason = 'operator' | 'refusals';
+
+export type AiEnforcementLevel = 'ok' | 'warned' | 'paused' | 'blocked';
+export interface AiEnforcement {
+  level: AiEnforcementLevel;
+  /** ISO time, or null when not paused */
+  pausedUntil: string | null;
+  refusals24h: number;
+  refusals30d: number;
+}
+
+/** GET /api/ai-chat (and what POST /consent and POST /refusal answer). */
+export interface AiChatStatus {
+  consentAt: string | null;
+  consentVersion: number | null;
+  blocked: boolean;
+  /** Anonymous id sent to Anthropic as metadata.user_id: no email or name, the same in both apps */
+  aiUserId: string;
+  enforcement: AiEnforcement;
+}
+
+/** The level for these counts: blocked, then paused (until a time still ahead), then warned. */
+export function aiEnforcementLevel(
+  s: { blocked: boolean; pausedUntil: Date | null; refusals24h: number },
+  now: Date = new Date(),
+): AiEnforcementLevel {
+  if (s.blocked) return 'blocked';
+  if (s.pausedUntil && s.pausedUntil.getTime() > now.getTime()) return 'paused';
+  if (s.refusals24h >= AI_REFUSAL_WARN_24H) return 'warned';
+  return 'ok';
+}
+
+/** What one more declined request does, given the counts that include it. */
+export function aiRefusalAction(counts: { refusals24h: number; refusals30d: number }): 'block' | 'pause' | 'none' {
+  if (counts.refusals30d >= AI_REFUSAL_BLOCK_30D) return 'block';
+  if (counts.refusals24h >= AI_REFUSAL_PAUSE_24H) return 'pause';
+  return 'none';
+}
+
 // Sign-up / re-consent card: three separate affirmative boxes, plus how to
 // get a breach notice (email, or a mailed letter to a postal address)
 export const accountConsentSchema = z.object({

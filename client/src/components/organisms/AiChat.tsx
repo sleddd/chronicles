@@ -23,6 +23,7 @@ import { findBanned, limitEmojis, rewriteInstruction, scrubBanned } from '../../
 import { AI_DISCLOSURE, AI_REMINDER, MEDICAL_DISCLAIMER, mentionsMedical, reminderDue } from '../../utils/chatDisclosure.js';
 import { maxRisk, minorPattern, patternScreen, replyNeedsReview, replyPatternScreen, NO_RISK, type RiskKind, type RiskResult } from '../../utils/chatSafety.js';
 import { useAiChatStore, hasCurrentConsent } from '../../stores/aiChatStore.js';
+import { AI_WARNED_NOTICE, aiHold, aiHoldMessage, aiWarned } from '../../services/aiAccess.js';
 import { Checkbox } from '../atoms/core/Checkbox.jsx';
 import { CrisisCard, SupportNotice } from '../molecules/CrisisCard.js';
 
@@ -263,6 +264,16 @@ const PausedNote = styled.span`
   color: var(--text-muted);
 `;
 
+/* One quiet line above the message box: declined requests, or the pause */
+const StatusLine = styled.p`
+  margin: 0;
+  padding: 8px 16px 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+`;
+
 const Empty = styled.div`
   margin: auto 0;
   font-family: var(--font-sans);
@@ -402,7 +413,11 @@ export function AiChat() {
   const acceptConsent = useAiChatStore(s => s.accept);
   const blocked = !!consentStatus?.blocked;
   const consented = hasCurrentConsent(consentStatus);
-  const chatOn = aiReady && consented;
+  // Paused for a day after repeated declined requests (in either app); nothing is sent until it ends
+  const hold = aiHold(consentStatus);
+  const pauseNote = hold?.kind === 'paused' ? aiHoldMessage(hold) : '';
+  const warned = aiWarned(consentStatus);
+  const chatOn = aiReady && consented && !hold;
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -618,6 +633,8 @@ export function AiChat() {
     if (!chatOn) {
       push({ role: 'user', text }, blocked
         ? { role: 'note', text: 'In-App AI chat is turned off for this account.' }
+        : pauseNote
+          ? { role: 'note', text: pauseNote }
         : aiReady
           ? { role: 'note', text: 'Turn on the chat first.' }
           : { role: 'note', text: 'Set up In-App AI to chat.', settingsLink: true });
@@ -710,7 +727,7 @@ export function AiChat() {
               <Icon name="x" size={18} strokeWidth={2} aria-hidden="true" />
             </HeadBtn>
           </Head>
-          {aiReady && !blocked && !consented ? (
+          {aiReady && !hold && !consented ? (
             <Consent>
               <h3>Before you chat</h3>
               <ul>
@@ -719,6 +736,7 @@ export function AiChat() {
                 <li>Your messages go to the AI provider you chose in Settings, under its terms and data rules. Chronicles doesn’t keep the chat unless you type <code>/save</code>.</li>
                 <li>Every message is screened for signs of suicide, self-harm or eating disorder risk. If one appears, crisis resources appear under the reply, starting with the 988 Suicide &amp; Crisis Lifeline; for the most serious signs, the chat pauses.</li>
                 <li>Chronicles records only that crisis resources were shown — the date, the rating and the kind of risk. Never what you wrote, or that it was you.</li>
+                <li>Each request carries an anonymous ID for your account, never your name or email. If the AI provider declines a request, Chronicles records that it happened and when, never what you asked. Repeated declined requests pause In-App AI for a day.</li>
                 <li>The AI isn’t a therapist, doctor or crisis counselor, and it can’t contact anyone for you. In immediate danger, call 911.</li>
               </ul>
               <Checkbox label="I’m 18 or older" checked={ageOk} onChange={e => setAgeOk(e.target.checked)} />
@@ -747,6 +765,7 @@ export function AiChat() {
                 <p>
                 {AI_DISCLOSURE}{' '}
                 {blocked ? 'In-App AI chat is turned off for this account.'
+                  : pauseNote ? pauseNote
                   : aiReady ? 'It’s here to help with Chronicles: estimating calories, sorting tasks, and thinking through entries. It isn’t a companion or a counselor. This chat isn’t saved and the AI cannot see anything in your journal.' : 'Set up In-App AI in Settings to chat.'}
                 </p>
                 <p>To keep something, type <code>/save topic text</code> — it becomes a journal entry — or <code>/save chat</code> to keep the whole conversation.</p>
@@ -773,6 +792,10 @@ export function AiChat() {
               </Msg>
             )}
           </Log>}
+          {/* The pause is in the empty state already; once there's a thread it sits here */}
+          {!paused && !minorLocked && (warned || (pauseNote && messages.length > 0)) && (
+            <StatusLine role="status">{pauseNote || AI_WARNED_NOTICE}</StatusLine>
+          )}
           {/* While paused, the message bar holds Keep talking — always in view, never scrolled away */}
           {minorLocked ? (
             <Composer>

@@ -170,6 +170,24 @@ export const betaLimiter = rateLimit({
   message: { error: 'Too many sign-ups from here, please try again later' },
 });
 
+/**
+ * Declined AI requests reported by the apps (POST /api/ai-chat/refusal): a
+ * minute apart on average is far more than real use, where one message counts
+ * once. Per account and app, in this instance's memory — a coarse cap.
+ */
+export const aiRefusalLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const auth = (req as Request).auth;
+    if (auth) return `${auth.accountId}${auth.assistant ? ':assistant' : ''}:ai-refusal`;
+    return ipKeyGenerator(req.ip || 'unknown');
+  },
+  message: { error: 'Too many requests, please try again later' },
+});
+
 /** Public bug reports (sent on to support by email): a handful an hour per IP */
 export const bugReportLimiter = rateLimit({
   store: sharedRateLimitStore('bug-report'),

@@ -11,6 +11,8 @@
 
 import { isBedrockRegion } from '@shared/validation/awsRegions.js';
 import { isHiddenFromAi } from './aiPrivacy.js';
+import { aiHold, assertAiNotHeld, reportAiRefusal, requireAiUserId, subscribeAiStatus } from './aiAccess.js';
+import { AiDeclinedError } from './aiDeclined.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
 import { isSealed, openSetting, sealSetting, seenRevision } from './settingCipher.js';
 import {
@@ -130,7 +132,9 @@ function notify(): void { for (const l of listeners) l(); }
 /** Subscribe to config changes (async decrypt on init/unlock). Returns unsubscribe. */
 export function subscribeAi(listener: () => void): () => void {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  // A pause or block (aiAccess.ts) changes what's ready too
+  const unsubscribeStatus = subscribeAiStatus(listener);
+  return () => { listeners.delete(listener); unsubscribeStatus(); };
 }
 
 /** What still has to be filled in before requests can be made (empty = ready). */
@@ -178,9 +182,9 @@ export function chooseAiHere(on: boolean): void {
   notify();
 }
 
-/** AI is switched on (and chosen in this browser), unlocked, and fully configured. */
+/** AI is switched on (and chosen in this browser), unlocked, fully configured, and not paused or turned off for the account. */
 export function isAiReady(): boolean {
-  return !!aiConfig && aiConfig.enabled && aiChosenHere() && hasCredentials(aiConfig);
+  return !!aiConfig && aiConfig.enabled && aiChosenHere() && hasCredentials(aiConfig) && !aiHold();
 }
 
 /** The AI is on (here) and its chat switched on — the chat bubble shows (setup may still be unfinished). */
@@ -323,7 +327,7 @@ interface ClaudeMessage {
 }
 
 function claudeText(res: ClaudeMessage): string {
-  if (res.stop_reason === 'refusal') throw new Error('The model declined this request');
+  if (res.stop_reason === 'refusal') throw new AiDeclinedError();
   return res.content.filter(b => b.type === 'text').map(b => b.text ?? '').join('');
 }
 
@@ -338,19 +342,23 @@ interface CompleteOptions {
   mode: 'json' | 'chat';
   /** Room for the answer, when the mode's usual amount isn't enough (a plan for many tasks) */
   maxTokens?: number;
+  /** A safety screening request: if the model declines it, that isn't counted toward the pause (someone in a hard moment is never turned away for it) */
+  uncounted?: boolean;
 }
 
 const maxTokensFor = (opts: CompleteOptions): number => opts.maxTokens ?? (opts.mode === 'chat' ? 4096 : 2048);
 
-async function completeClaude(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
+async function completeClaude(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions, userId: string): Promise<string> {
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   // Keys are the user's own, typed into their own browser — there is no
   // server to hold them, which is the point of the zero-knowledge design
   const client = new Anthropic({ apiKey: cfg.apiKey.trim(), dangerouslyAllowBrowser: true, maxRetries: 1 });
   const model = cfg.model.trim();
+  // Every request names the account only by its anonymous id (aiAccess.ts): no email, no name
   const params = {
     model,
     max_tokens: maxTokensFor(opts),
+    metadata: { user_id: userId },
     system,
     messages: turns.map(t => ({ role: t.role, content: t.content })),
     // A one-number estimate is a simple task — low effort keeps it fast and cheap.
@@ -393,19 +401,21 @@ export function suggestedBedrockModels(region: string): BedrockModelOption[] {
   return fallbackBedrockModels(region);
 }
 
-async function completeBedrock(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
-  return bedrockConverse(bedrockCreds(cfg), cfg.model, system, turns, maxTokensFor(opts));
+async function completeBedrock(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions, userId: string): Promise<string> {
+  return bedrockConverse(bedrockCreds(cfg), cfg.model, system, turns, maxTokensFor(opts), userId);
 }
 
 // No token limit is sent to OpenAI: without one a model may write up to its own
 // maximum, which is the most room there is (`opts.maxTokens` is for the others)
-async function completeOpenAI(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
+async function completeOpenAI(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions, userId: string): Promise<string> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey.trim()}` },
     body: JSON.stringify({
       model: cfg.model.trim(),
       messages: [{ role: 'system', content: system }, ...turns],
+      // The account's anonymous id (aiAccess.ts): no email, no name
+      safety_identifier: userId,
       ...(opts.mode === 'json' ? { response_format: { type: 'json_object' } } : {}),
     }),
   });
@@ -415,16 +425,28 @@ async function completeOpenAI(cfg: AiConfig, system: string, turns: ChatTurn[], 
     if (res.status === 401) throw new Error('OpenAI rejected the API key');
     throw new Error(`OpenAI error ${res.status}${detail ? `: ${detail}` : ''}`);
   }
-  const data = await res.json() as { choices?: { message?: { content?: string } }[] };
-  return data.choices?.[0]?.message?.content ?? '';
+  const data = await res.json() as { choices?: { finish_reason?: string; message?: { content?: string | null; refusal?: string | null } }[] };
+  const choice = data.choices?.[0];
+  // Declined: the model's own refusal, or its content filter
+  if (choice?.message?.refusal || choice?.finish_reason === 'content_filter') throw new AiDeclinedError();
+  return choice?.message?.content ?? '';
 }
 
 async function completeTurns(cfg: AiConfig, system: string, turns: ChatTurn[], opts: CompleteOptions): Promise<string> {
+  // Paused or turned off for the account: nothing is sent, whichever provider.
+  // Judged by the status as the server has it: a tab that doesn't hold it yet
+  // reads it first (requireAiUserId), and if it can't be read nothing is sent —
+  // "not read yet" must never pass for "not paused"
+  assertAiNotHeld();
+  const userId = await requireAiUserId();
+  assertAiNotHeld();
   try {
-    if (cfg.provider === 'anthropic') return await completeClaude(cfg, system, turns, opts);
-    if (cfg.provider === 'bedrock') return await completeBedrock(cfg, system, turns, opts);
-    return await completeOpenAI(cfg, system, turns, opts);
+    if (cfg.provider === 'anthropic') return await completeClaude(cfg, system, turns, opts, userId);
+    if (cfg.provider === 'bedrock') return await completeBedrock(cfg, system, turns, opts, userId);
+    return await completeOpenAI(cfg, system, turns, opts, userId);
   } catch (err) {
+    // Declined, by any provider: counted on the server once (it may pause In-App AI), then the usual error
+    if (err instanceof AiDeclinedError && !opts.uncounted) void reportAiRefusal();
     // A browser CORS/network failure surfaces as a bare TypeError
     if (err instanceof TypeError) throw new Error(`Could not reach ${AI_PROVIDER_LABELS[cfg.provider]} — check your connection`);
     throw err;
@@ -432,8 +454,8 @@ async function completeTurns(cfg: AiConfig, system: string, turns: ChatTurn[], o
 }
 
 /** One-shot JSON request (calorie/nutrient estimates). */
-function complete(cfg: AiConfig, system: string, prompt: string): Promise<string> {
-  return completeTurns(cfg, system, [{ role: 'user', content: prompt }], { mode: 'json' });
+function complete(cfg: AiConfig, system: string, prompt: string, uncounted = false): Promise<string> {
+  return completeTurns(cfg, system, [{ role: 'user', content: prompt }], { mode: 'json', uncounted });
 }
 
 /** The answer room every supported model allows */
@@ -464,6 +486,7 @@ export async function aiFeatureJson(feature: AiFeature, system: string, prompt: 
  * the feature is still on and agreed to in this browser.
  */
 export async function classifyFeatureReply(feature: AiFeature, reply: string, sent: string): Promise<RiskKind | null> {
+  assertAiNotHeld();
   if (!isAiFeatureEnabled(feature)) throw new Error('This AI feature isn’t turned on in this browser');
   return classifyReply(reply, sent);
 }
@@ -475,13 +498,13 @@ export async function chatReply(system: string, turns: ChatTurn[]): Promise<stri
 
 /** Safety layer 2: rate the latest user message (in context) for risk. Uses the user's own key. */
 export async function classifyRisk(turns: ChatTurn[]): Promise<RiskResult> {
-  return parseClassification(await complete(requireReady(), riskClassifierPrompt(), classifierTranscript(turns)));
+  return parseClassification(await complete(requireReady(), riskClassifierPrompt(), classifierTranscript(turns), true));
 }
 
 /** Safety layer 2 for replies: the kind of harmful content in an AI reply, or null. */
 export async function classifyReply(reply: string, lastUser: string): Promise<RiskKind | null> {
   const prompt = `<user_message>\n${lastUser.slice(0, 2000)}\n</user_message>\n<ai_reply>\n${reply.slice(0, 8000)}\n</ai_reply>`;
-  return parseReplyClassification(await complete(requireReady(), replyClassifierPrompt(), prompt));
+  return parseReplyClassification(await complete(requireReady(), replyClassifierPrompt(), prompt, true));
 }
 
 // ── Calorie estimates ────────────────────────────────────────────────────────
@@ -510,6 +533,7 @@ function requireReady(): AiConfig {
   if (!aiChosenHere()) throw new Error('In-App AI isn’t turned on in this browser');
   const missing = missingCredentials(aiConfig);
   if (missing.length) throw new Error(`In-App AI needs: ${missing.join(', ')}`);
+  assertAiNotHeld();
   return aiConfig;
 }
 

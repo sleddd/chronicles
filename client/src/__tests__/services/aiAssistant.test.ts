@@ -18,6 +18,7 @@ import { encryptBytes as rawEncryptBytes, decryptBytes as rawDecryptBytes, gener
 import { SETTING_REVS_STORE } from '../../services/settingCipher.js';
 import { beforeEach } from 'vitest';
 import { loadAiPrivacy } from '../../services/aiPrivacy.js';
+import { clearAiStatus, setAiStatus } from '../../services/aiAccess.js';
 
 // An entry of a topic that isn't kept from AI (the choices are read in beforeEach: until then everything counts as hidden)
 const META = { _taxonomyId: 1 };
@@ -28,6 +29,11 @@ beforeEach(() => {
   localStorage.clear();
   setEgressAccount('tag-a');
   recordAiChoice(true);
+  // The account's In-App AI status as the server gave it: nothing is sent without it (aiAccess.ts)
+  setAiStatus({
+    consentAt: null, consentVersion: null, blocked: false, aiUserId: 'f'.repeat(32),
+    enforcement: { level: 'ok', pausedUntil: null, refusals24h: 0, refusals30d: 0 },
+  });
 });
 
 const openai: AiConfig = { ...DEFAULT_AI_CONFIG, enabled: true, provider: 'openai', model: 'gpt-5-mini', apiKey: 'sk-test' };
@@ -57,6 +63,7 @@ function promptOf(spy: ReturnType<typeof mockOpenAIJson>, call = 0): string {
 afterEach(() => {
   vi.restoreAllMocks();
   setAiConfig(null, null);
+  clearAiStatus();
 });
 
 describe('parseCalories', () => {

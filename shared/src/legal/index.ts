@@ -8,7 +8,7 @@ export const LEGAL_VERSIONS = {
   /** Terms of Service, including the risk notice and image rules */
   terms: '2026-11-20',
   /** Consumer Health Data Privacy Policy */
-  health: '2026-11-20',
+  health: '2026-11-25',
 } as const;
 
 export const LEGAL_DETAILS = {

@@ -208,6 +208,11 @@ mainDb.$executeRawUnsafe('DROP TABLE IF EXISTS public.remember_grants')
 initPublicShelvesTable().catch(err => console.error('Failed to init public shelves table:', err instanceof Error ? err.message : err));
 initAnalyticsTable().catch(err => console.error('Failed to init analytics table:', err instanceof Error ? err.message : err));
 initAiChatTable().catch(err => console.error('Failed to init AI chat table:', err instanceof Error ? err.message : err));
+// The anonymous AI user id is only as stable as its key: derived from another
+// secret, rotating that secret (the database password, say) changes every id
+if (process.env.NODE_ENV !== 'development' && !process.env.AI_USER_ID_SECRET?.trim()) {
+  console.warn('AI_USER_ID_SECRET is not set: anonymous AI user ids are derived from another server secret and change if it does. Set it (the same on every instance)');
+}
 initConsentTable().catch(err => console.error('Failed to init consent table:', err instanceof Error ? err.message : err));
 initRekeyTable().catch(err => console.error('Failed to init re-key table:', err instanceof Error ? err.message : err));
 initAppNoticeTable().catch(err => console.error('Failed to init notice table:', err instanceof Error ? err.message : err));

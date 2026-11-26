@@ -11,6 +11,7 @@ import { PBKDF2_ITERATIONS } from '@shared/crypto/constants.js';
 import type { EncryptedPostData, DecryptedPost, EncryptedPost, SetupEncryptionResult } from '@shared/crypto/types.js';
 import { clearImageCache, rederiveImageStorageConfig } from '../services/imageStorage.js';
 import { clearAiConfig, rederiveAiConfig, setAiConfig } from '../services/aiAssistant.js';
+import { clearAiStatus } from '../services/aiAccess.js';
 import { clearRecordCipher, installRecordCipher } from '../services/recordCipher.js';
 import { clearFinanceCache } from '../stores/financeStore.js';
 import { stopAllFocusSounds } from '../services/focusSounds.js';
@@ -151,6 +152,8 @@ function dropDecryptedState(): void {
   clearImageCache();
   // Drop the decrypted AI provider credentials too
   clearAiConfig();
+  // …and the account's In-App AI status (its anonymous AI user id goes with the account)
+  clearAiStatus();
   clearAiPrivacy();
   clearRecordCipher();
   // And the decrypted Finance records

@@ -137,7 +137,7 @@ export function AssistantChanges() {
   return (
     <SettingsActionRow
       title="Changes the app made"
-      description="When the app changes an entry, a dose, a bill or your habit check-ins, Chronicles keeps the version from before for 14 days. You can put it back here."
+      description="Previous versions of entries, doses, bills, and habit check-ins changed by the app are saved for 14 days and can be restored here."
       action={<RowPill type="button" onClick={toggle} aria-expanded={open}>{open ? 'Hide' : 'View'}</RowPill>}
     >
       {open && (

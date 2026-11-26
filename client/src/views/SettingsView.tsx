@@ -1587,7 +1587,7 @@ export function SettingsView() {
         <ImageStorageSettings themeMode={themeMode} />
       </Section>
 
-      <Section id="ai" title="In-App AI" subtitle="Calorie estimates for food and workouts, plus chat, using your own AI account.">
+      <Section id="ai" title="In-App AI">
         <AiSettings themeMode={themeMode} />
       </Section>
 

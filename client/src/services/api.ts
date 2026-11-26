@@ -3,7 +3,7 @@
  * Always sends X-Requested-With header for CSRF protection on cookie-based auth
  */
 
-import type { AnalyticsEvent, PublicShelfItem, PutPublicShelf } from '@shared/validation/schemas.js';
+import type { AiChatStatus, AnalyticsEvent, PublicShelfItem, PutPublicShelf } from '@shared/validation/schemas.js';
 import { entryCacheAvailable, readCache, replaceCache, applyToCache, type WireEntry } from './entryCache.js';
 import { recordCipher } from './recordCipher.js';
 import { sealSetting } from './settingCipher.js';
@@ -776,13 +776,15 @@ export const settings = {
 // AI chat consent + app analytics (the analytics rows carry no account)
 // =============================================================================
 
-export interface AiChatStatus { consentAt: string | null; consentVersion: number | null; blocked: boolean }
+export type { AiChatStatus };
 
 export const aiChat = {
   status: () => request<AiChatStatus>('/ai-chat'),
   consent: (version: number) =>
     request<AiChatStatus>('/ai-chat/consent', { method: 'POST', body: { version, ageConfirmed: true } }),
   withdraw: () => request<AiChatStatus>('/ai-chat/consent', { method: 'DELETE' }),
+  /** One request the AI declined (no content): counted toward the pause and block */
+  refusal: () => request<AiChatStatus>('/ai-chat/refusal', { method: 'POST', body: { app: 'chronicles' } }),
 };
 
 export interface ConsentRecord {
