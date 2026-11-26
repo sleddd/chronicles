@@ -14,6 +14,10 @@ vi.mock('../../db/tenantQueries.js', () => ({
   reserveTaxonomyIds: vi.fn(),
   taxonomyCount: vi.fn().mockResolvedValue(0),
   withTenantLock: vi.fn((_schema: string, fn: (tx: unknown) => unknown) => fn('TX')),
+  ensureAiPrivacyTables: vi.fn().mockResolvedValue(undefined),
+  assistantTopicAllowed: vi.fn().mockResolvedValue(true),
+  recordAssistantTopic: vi.fn().mockResolvedValue(undefined),
+  ASSISTANT_TOPICS_PER_DAY: 5,
 }));
 
 vi.mock('../../middleware/parseId.js', async () => ({

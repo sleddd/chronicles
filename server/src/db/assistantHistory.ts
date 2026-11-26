@@ -232,10 +232,17 @@ export type AssistantCreate = TenantPost | 'full' | 'limit' | null;
  * and its mark — so the app changing an entry it just made keeps nothing (the
  * version it replaces is its own) and doesn't fill the list with its own work.
  *
+ * With `owned`, the entry is the app's own data (a memory, a letter, a
+ * conversation summary) and is recorded in assistant_owned in the same
+ * transaction: the app may then edit and delete it at any age. It still comes
+ * out of the day's budget.
+ *
  * `limit`: the day's budget is spent. `full`: no room in the journal. Null:
  * the id was never reserved or is taken.
  */
-export async function assistantCreatePost(schemaName: string, input: CreatePostInput, size: number, capBytes: number): Promise<AssistantCreate> {
+export async function assistantCreatePost(
+  schemaName: string, input: CreatePostInput, size: number, capBytes: number, options: { owned?: boolean } = {},
+): Promise<AssistantCreate> {
   await ensureAiPrivacyTables(schemaName);
   await ensurePostReservations(schemaName);
   const s = escapeSchema(schemaName);
@@ -250,6 +257,9 @@ export async function assistantCreatePost(schemaName: string, input: CreatePostI
       `INSERT INTO ${s}.assistant_creations (post_id) VALUES ($1) ON CONFLICT (post_id) DO UPDATE SET created_at = NOW()`, post.id);
     // Old rows have no further use
     await tx.$executeRawUnsafe(`DELETE FROM ${s}.assistant_creations WHERE created_at < NOW() - interval '2 days'`);
+    if (options.owned) {
+      await tx.$executeRawUnsafe(`INSERT INTO ${s}.assistant_owned (post_id) VALUES ($1) ON CONFLICT (post_id) DO NOTHING`, post.id);
+    }
     await rememberWrote(tx, s, 'entry', String(post.id),
       assistantMark.entry(input.contentIv, input.contentEncrypted, input.metadataIv, input.metadataEncrypted));
     return post;

@@ -27,7 +27,7 @@ describe('assistantMay', () => {
     ['GET', '/api/entries'], ['GET', '/api/entries/cursor'], ['GET', '/api/entries/changes'], ['GET', '/api/entries/visible-ids'],
     ['GET', '/api/entries/42'], ['POST', '/api/entries/ids'], ['POST', '/api/entries'], ['PUT', '/api/entries/42'],
     ['DELETE', '/api/entries/42'],
-    ['GET', '/api/topics'], ['GET', '/api/settings'], ['PUT', '/api/settings'],
+    ['GET', '/api/topics'], ['POST', '/api/topics/ids'], ['POST', '/api/topics'], ['GET', '/api/settings'], ['PUT', '/api/settings'],
     ['GET', '/api/doses'], ['GET', '/api/doses/all'], ['PUT', `/api/doses/${UUID}`],
     ['GET', '/api/finance/bills'], ['PUT', `/api/finance/bills/${UUID}`],
     ['GET', '/api/ai-chat'], ['POST', '/api/ai-chat/consent'], ['POST', '/api/ai-chat/refusal'],
@@ -45,7 +45,8 @@ describe('assistantMay', () => {
     ['DELETE', `/api/doses/${UUID}`], ['DELETE', `/api/finance/bills/${UUID}`], ['DELETE', '/api/settings/habitLog'],
     ['POST', '/api/entries/batch'], ['PUT', '/api/entries/reseal'], ['PUT', '/api/entries/ai-hidden'], ['GET', '/api/entries/ai-hidden'],
     ['GET', '/api/entries/fingerprint'],
-    ['POST', '/api/topics'], ['PUT', '/api/topics/3'], ['DELETE', '/api/topics/3'], ['POST', '/api/topics/ids'],
+    // Topics: it may create one (above), never rename, reorder or delete one
+    ['PUT', '/api/topics/3'], ['DELETE', '/api/topics/3'], ['POST', '/api/topics/reorder'], ['GET', '/api/topics/3'],
     // Finance other than bills
     ['GET', '/api/finance/expenses'], ['GET', '/api/finance/budget'], ['GET', '/api/finance/savings'], ['GET', '/api/finance/goals'],
     ['PUT', `/api/finance/expenses/${UUID}`], ['PUT', '/api/finance/bills'],
@@ -270,15 +271,23 @@ describe('Every write the AI app may make is held to its rule in the route', () 
   const writes = ASSISTANT_RULES.filter(r => r.method !== 'GET' && !/auth|ai-chat/.test(r.path.source) && !/ids/.test(r.path.source));
 
   it('finds them', () => {
-    expect(writes.map(r => r.method).sort()).toEqual(['DELETE', 'POST', 'PUT', 'PUT', 'PUT', 'PUT']);
+    expect(writes.map(r => r.method).sort()).toEqual(['DELETE', 'POST', 'POST', 'PUT', 'PUT', 'PUT', 'PUT']);
   });
 
   it.each(writes.map(r => [`${r.method} ${r.path.source}`, r] as const))('%s', (_name, rule) => {
     const source = routeFile(rule.path);
     expect(source).toContain('req.auth!.assistant');
     if (rule.method === 'PUT') expect(source).toContain('assistantWrite');
-    if (rule.method === 'POST') expect(source).toContain('assistantCreatePost(');
-    if (rule.method === 'DELETE') expect(source).toContain('assistantMayUndo(');
+    // A new entry: counted, recorded for undo and, when its own data, owned. A new topic: its day's budget
+    if (rule.method === 'POST' && /entries/.test(rule.path.source)) expect(source).toContain('assistantCreatePost(');
+    if (rule.method === 'POST' && /topics/.test(rule.path.source)) {
+      expect(source).toContain('assistantTopicAllowed(');
+      expect(source).toContain('recordAssistantTopic(');
+    }
+    if (rule.method === 'DELETE') {
+      expect(source).toContain('assistantMayUndo(');
+      expect(source).toContain('assistantOwnsVisible(');
+    }
   });
 
   it('the AI-chat routes are the status, consent and declined requests only — and a declined request is checked as its own in the route', () => {

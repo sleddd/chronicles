@@ -9,8 +9,11 @@
  *   status (consent, pause, block, anonymous AI user id), giving consent and
  *   reporting a declined request as 'smith' (checked in the route).
  * - Add and tick, never remove: it can create entries, record doses, check off
- *   habits, record bill payments and change a task's status. The only delete is
- *   undoing an entry it created itself, within ASSISTANT_UNDO_MS.
+ *   habits, record bill payments and change a task's status. The only deletes
+ *   are undoing an entry it created itself, within ASSISTANT_UNDO_MS, and its
+ *   own data: entries it created with `assistantOwned` (assistant_owned), at
+ *   any age. It may create a few topics for that data (ASSISTANT_TOPICS_PER_DAY),
+ *   never rename, reorder or delete one.
  * - Limited reading: entries hidden from AI are left out (routes/entries.ts),
  *   topics on the "Don't share with AI" list are left out (routes/topics.ts),
  *   settings come back filtered (assistantMayReadSetting), finance is bills only,
@@ -86,10 +89,16 @@ export const ASSISTANT_RULES: Rule[] = [
   { method: 'POST', path: /^\/api\/entries\/ids$/ },
   { method: 'POST', path: /^\/api\/entries$/ },
   { method: 'PUT', path: new RegExp(`^/api/entries/${ID}$`) },
-  // Only its own creation, within the undo window (checked in the route)
+  // Only its own creation within the undo window, or its own data
+  // (assistantOwned) at any age (checked in the route)
   { method: 'DELETE', path: new RegExp(`^/api/entries/${ID}$`) },
 
   { method: 'GET', path: /^\/api\/topics$/ },
+  // New topics for its own data, the sealed way (reserve an id, then create),
+  // at most ASSISTANT_TOPICS_PER_DAY a day (checked in the route). Never
+  // renaming, reordering or deleting one
+  { method: 'POST', path: /^\/api\/topics\/ids$/ },
+  { method: 'POST', path: /^\/api\/topics$/ },
 
   { method: 'GET', path: /^\/api\/settings$/ },
   // Only habitLog (checked in the route)

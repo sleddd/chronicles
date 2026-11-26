@@ -7,7 +7,7 @@ import {
   // Entry sync
   ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, getPostFingerprint, getPostUpdatedAt,
   // Hidden from AI, and the Chronicles AI app
-  getAiHiddenIds, setAiHidden, pruneAiHidden, getAiVisibleIds, isAiHidden, assistantMayUndo,
+  getAiHiddenIds, setAiHidden, pruneAiHidden, getAiVisibleIds, isAiHidden, assistantMayUndo, assistantOwnsVisible,
 } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema, aiHiddenSchema } from '@chronicles/shared';
@@ -255,11 +255,13 @@ router.put('/reseal', async (req, res) => {
   }
 });
 
+const NOT_FOR_BROWSER = { error: 'assistantOwned is only for the Chronicles AI app' };
+
 // The schema only admits encrypted posts — the server never stores plaintext
 type CreatePostBody = NonNullable<ReturnType<typeof createPostSchema.safeParse>['data']>;
 
 function toCreateInput(data: CreatePostBody): CreatePostInput {
-  const { taxonomyIds: _ignored, createdAt, id, format: _v3, ...postData } = data;
+  const { taxonomyIds: _ignored, createdAt, id, format: _v3, assistantOwned: _owned, ...postData } = data;
   return {
     id,
     contentEncrypted: Buffer.from(postData.contentEncrypted, 'base64'),
@@ -278,14 +280,20 @@ router.post('/', async (req, res) => {
       res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
+    // Only the AI app's own data is owned by it: a browser sending the flag is refused, not ignored
+    if (parsed.data.assistantOwned !== undefined && !req.auth!.assistant) {
+      res.status(400).json(NOT_FOR_BROWSER);
+      return;
+    }
 
     const input = toCreateInput(parsed.data);
     const size = input.contentEncrypted.length + input.metadataEncrypted.length + ROW_OVERHEAD_BYTES;
     const schema = req.auth!.tenantSchemaName;
     const post = req.auth!.assistant
       // The AI app: its day's budget (it can't delete entries later), the cap,
-      // the create and what lets it undo this entry, all under one lock
-      ? await assistantCreatePost(schema, input, size, ENTRY_STORAGE_LIMIT_BYTES)
+      // the create, what lets it undo this entry and, for its own data
+      // (assistantOwned), what lets it edit and delete it later, all under one lock
+      ? await assistantCreatePost(schema, input, size, ENTRY_STORAGE_LIMIT_BYTES, { owned: parsed.data.assistantOwned === true })
       // Lock, cap check and insert in one trip to the database
       : await createPostCapped(schema, input, size, ENTRY_STORAGE_LIMIT_BYTES);
     if (post === 'limit') {
@@ -314,6 +322,11 @@ router.post('/batch', async (req, res) => {
     const parsed = createPostsBatchSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+    // Imports are the browser's: nothing in them is the AI app's own
+    if (parsed.data.entries.some(e => e.assistantOwned !== undefined)) {
+      res.status(400).json(NOT_FOR_BROWSER);
       return;
     }
     const inputs = parsed.data.entries.map(toCreateInput);
@@ -390,7 +403,8 @@ router.put('/:id', async (req, res) => {
     const size = fields ? fields.contentEncrypted.length + fields.metadataEncrypted.length + ROW_OVERHEAD_BYTES : 0;
     let post: CappedWrite | undefined;
     if (req.auth!.assistant) {
-      // The AI app makes only full saves — never a bare updated_at touch
+      // Any entry it can see (its own data, assistantOwned, included, at any
+      // age). The AI app makes only full saves — never a bare updated_at touch
       if (!fields) {
         res.status(400).json({ error: 'A full save is required' });
         return;
@@ -442,9 +456,11 @@ router.delete('/:id', async (req, res) => {
     const id = parseId(req.params.id);
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
     // The AI app never removes anything — except undoing an entry it created
-    // itself, within the undo window
-    if (req.auth!.assistant && !(await assistantMayUndo(req.auth!.tenantSchemaName, id))) {
-      res.status(403).json({ error: 'The Chronicles AI app can only undo what it just created' });
+    // itself, within the undo window, and its own data (assistantOwned) at any
+    // age while it can see it
+    if (req.auth!.assistant && !(await assistantMayUndo(req.auth!.tenantSchemaName, id))
+        && !(await assistantOwnsVisible(req.auth!.tenantSchemaName, id))) {
+      res.status(403).json({ error: 'The Chronicles AI app can only undo what it just created, or remove its own data' });
       return;
     }
     // Public links hold the entry as plaintext — they go first, so a failure

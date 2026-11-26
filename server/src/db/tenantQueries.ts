@@ -929,7 +929,10 @@ export async function ensurePostReservations(schemaName: string): Promise<void> 
  *
  * assistant_creations records each entry the AI app created, so it can undo
  * its own creation for a short while (and nothing else). assistant_changes
- * keeps what it overwrote (db/assistantHistory.ts).
+ * keeps what it overwrote (db/assistantHistory.ts). assistant_owned lists the
+ * entries that are the AI app's own data (its memories, letters, conversation
+ * summaries): it may edit and delete those at any age. assistant_topic_creations
+ * counts the topics it made, for its day's budget.
  */
 export function aiPrivacyStatements(s: string): string[] {
   return [
@@ -950,6 +953,13 @@ export function aiPrivacyStatements(s: string): string[] {
     // its day's budget: it can't delete them, and there is no earlier version
     // to put back (assistantNewRecordAllowed, db/assistantHistory.ts)
     `CREATE TABLE IF NOT EXISTS ${s}.assistant_new_records (kind TEXT NOT NULL, ref TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (kind, ref))`,
+    // Entries that are the AI app's own data (created with assistantOwned): it
+    // may edit and delete these at any age. Kept for as long as the entry is,
+    // and gone with it (the foreign key), however the entry is deleted
+    `CREATE TABLE IF NOT EXISTS ${s}.assistant_owned (post_id INTEGER PRIMARY KEY REFERENCES ${s}.posts(id) ON DELETE CASCADE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
+    // Topics the AI app made, for its day's budget (ASSISTANT_TOPICS_PER_DAY).
+    // Last: ensureAiPrivacyTables looks for it to know they are all in place
+    `CREATE TABLE IF NOT EXISTS ${s}.assistant_topic_creations (taxonomy_id INTEGER PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
   ];
 }
 
@@ -962,7 +972,7 @@ export async function ensureAiPrivacyTables(schemaName: string): Promise<void> {
   if (aiPrivacyReady.has(s)) return;
   const [{ ready }] = await db.$queryRawUnsafe<{ ready: boolean }[]>(
     `SELECT EXISTS (SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
-                    WHERE n.nspname = $1 AND t.relname = 'assistant_new_records') AS ready`,
+                    WHERE n.nspname = $1 AND t.relname = 'assistant_topic_creations') AS ready`,
     s
   );
   if (!ready) await db.$transaction(aiPrivacyStatements(s).map(sql => db.$executeRawUnsafe(sql)));
@@ -1061,6 +1071,42 @@ export async function assistantMayUndo(schemaName: string, id: number, windowMs 
     id, windowMs
   );
   return rows.length > 0;
+}
+
+/**
+ * Whether the AI app may delete this entry as its own data: it is in
+ * assistant_owned (any age) and not hidden from AI — what it can't see it
+ * can't remove.
+ */
+export async function assistantOwnsVisible(schemaName: string, id: number): Promise<boolean> {
+  await ensureAiPrivacyTables(schemaName);
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  const rows = await db.$queryRawUnsafe<{ post_id: number }[]>(
+    `SELECT post_id FROM ${s}.assistant_owned WHERE post_id = $1 AND post_id NOT IN (SELECT post_id FROM ${s}.ai_hidden_posts)`, id
+  );
+  return rows.length > 0;
+}
+
+/** How many topics the AI app may create in a day (its memories, letters and conversations need three). */
+export const ASSISTANT_TOPICS_PER_DAY = 5;
+
+/** Whether the AI app has topics left in its day's budget. With `client`: inside the create's locked transaction. */
+export async function assistantTopicAllowed(schemaName: string, client?: TenantClient): Promise<boolean> {
+  if (!client) await ensureAiPrivacyTables(schemaName);
+  const db = await clientFor(schemaName, client);
+  const [{ n }] = await db.$queryRawUnsafe<{ n: number | bigint }[]>(
+    `SELECT COUNT(*) AS n FROM ${escapeSchema(schemaName)}.assistant_topic_creations WHERE created_at > NOW() - interval '1 day'`);
+  return Number(n) < ASSISTANT_TOPICS_PER_DAY;
+}
+
+/** Count a topic the AI app just created, inside the create's transaction (the tables are in place: the route sees to it). */
+export async function recordAssistantTopic(schemaName: string, id: number, client: TenantClient): Promise<void> {
+  const s = escapeSchema(schemaName);
+  await client.$executeRawUnsafe(
+    `INSERT INTO ${s}.assistant_topic_creations (taxonomy_id) VALUES ($1) ON CONFLICT (taxonomy_id) DO UPDATE SET created_at = NOW()`, id);
+  // Old rows have no further use
+  await client.$executeRawUnsafe(`DELETE FROM ${s}.assistant_topic_creations WHERE created_at < NOW() - interval '2 days'`);
 }
 
 /** A cursor taken before reading: every transaction below it has finished. */

@@ -378,6 +378,10 @@ export const createPostSchema = z.object({
   isEncrypted: z.literal(true, { message: 'Entries must be encrypted' }),
   taxonomyIds: z.array(z.number()).max(50).optional(),
   createdAt: z.string().datetime({ offset: true }).optional(),
+  // The Chronicles AI app's own data (memories, letters, conversation
+  // summaries): it may edit and delete these at any age. Only an assistant
+  // session may send it — a browser that does gets 400 (routes/entries.ts)
+  assistantOwned: z.boolean().optional(),
 });
 
 // Imports create many entries at once: up to 100 a request, so a big import

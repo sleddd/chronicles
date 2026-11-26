@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
-import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns, ensureTaxonomyReservations, reserveTaxonomyIds, taxonomyCount, withTenantLock } from '../db/tenantQueries.js';
+import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTaxonomy, reorderTaxonomies, ensureTopicEncryptionColumns, ensureTaxonomyReservations, reserveTaxonomyIds, taxonomyCount, withTenantLock,
+  ensureAiPrivacyTables, assistantTopicAllowed, recordAssistantTopic, ASSISTANT_TOPICS_PER_DAY } from '../db/tenantQueries.js';
 import { createTaxonomySchema, updateTaxonomySchema, isPlaintextTopicWrite, reservePostIdsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 
@@ -19,6 +20,12 @@ export const TOPIC_LIMIT = (() => {
 })();
 const TOPICS_FULL = { error: `You can have up to ${TOPIC_LIMIT} topics — delete some to make room` };
 const FULL = Symbol('full');
+
+/* The Chronicles AI app may create topics for its own data (its memories,
+   letters and conversations), the same sealed way, but no more than
+   ASSISTANT_TOPICS_PER_DAY in a day — it can't rename, reorder or delete one */
+const ASSISTANT_TOPICS_SPENT = { error: `The Chronicles AI app can create up to ${ASSISTANT_TOPICS_PER_DAY} topics a day — try again tomorrow` };
+const LIMIT = Symbol('limit');
 
 const router = Router();
 
@@ -82,6 +89,11 @@ router.post('/ids', async (req, res) => {
       res.status(413).json(TOPICS_FULL);
       return;
     }
+    // …nor for the AI app once its day's topics are spent (the create counts them)
+    if (req.auth!.assistant && !(await assistantTopicAllowed(req.auth!.tenantSchemaName))) {
+      res.status(429).json(ASSISTANT_TOPICS_SPENT);
+      return;
+    }
     res.json({ ids: await reserveTaxonomyIds(req.auth!.tenantSchemaName, parsed.data.count) });
   } catch (err) {
     console.error('Reserve topic ids error:', err instanceof Error ? err.message : 'Unknown error');
@@ -102,13 +114,23 @@ router.post('/', async (req, res) => {
     await ensureTaxonomyReservations(req.auth!.tenantSchemaName);
     const { format: _v2, ...data } = parsed.data;
     const schema = req.auth!.tenantSchemaName;
-    // Count and insert under the account's lock, so parallel creates can't pass the cap
+    const assistant = !!req.auth!.assistant;
+    if (assistant) await ensureAiPrivacyTables(schema);
+    // Count and insert under the account's lock, so parallel creates can't
+    // pass the cap (nor the AI app its day's budget)
     const taxonomy = await withTenantLock(schema, async (tx) => {
       if (await taxonomyCount(schema, tx) >= TOPIC_LIMIT) return FULL;
-      return createTaxonomy(schema, data, tx);
+      if (assistant && !(await assistantTopicAllowed(schema, tx))) return LIMIT;
+      const made = await createTaxonomy(schema, data, tx);
+      if (made && assistant) await recordAssistantTopic(schema, made.id, tx);
+      return made;
     });
     if (taxonomy === FULL) {
       res.status(413).json(TOPICS_FULL);
+      return;
+    }
+    if (taxonomy === LIMIT) {
+      res.status(429).json(ASSISTANT_TOPICS_SPENT);
       return;
     }
     if (!taxonomy) {

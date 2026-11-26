@@ -19,6 +19,18 @@ vi.mock('../../db/tenantQueries.js', () => ({
   isAiHidden: vi.fn().mockResolvedValue(false),
   getPostUpdatedAt: vi.fn().mockResolvedValue([]),
   assistantMayUndo: vi.fn().mockResolvedValue(false),
+  assistantOwnsVisible: vi.fn().mockResolvedValue(false),
+  ensureAiPrivacyTables: vi.fn().mockResolvedValue(undefined),
+  assistantTopicAllowed: vi.fn().mockResolvedValue(true),
+  recordAssistantTopic: vi.fn().mockResolvedValue(undefined),
+  ASSISTANT_TOPICS_PER_DAY: 5,
+  createTaxonomy: vi.fn(),
+  ensureTaxonomyReservations: vi.fn().mockResolvedValue(undefined),
+  reserveTaxonomyIds: vi.fn().mockResolvedValue([9]),
+  taxonomyCount: vi.fn().mockResolvedValue(0),
+  updateTaxonomy: vi.fn(),
+  deleteTaxonomy: vi.fn(),
+  reorderTaxonomies: vi.fn(),
   getAiVisibleIds: vi.fn().mockResolvedValue([1, 2]),
   getAiHiddenIds: vi.fn().mockResolvedValue([3]),
   setAiHidden: vi.fn().mockResolvedValue(undefined),
@@ -77,7 +89,8 @@ import { revokeAssistantSessions } from '../../middleware/auth.js';
 import type { AiPrivacy } from '@chronicles/shared';
 import {
   getPostPage, getPost, getPostChanges, createPostCapped, updatePostCapped, deletePost, isAiHidden, getPostUpdatedAt,
-  assistantMayUndo, updatePost, postStorageBytes, upsertDoseRecord, upsertSetting, getAllSettings, upsertSettingCapped, financeRecordBytes, upsertFinanceRecord, setAiHidden, getAllTaxonomies, deleteSetting,
+  assistantMayUndo, assistantOwnsVisible, assistantTopicAllowed, recordAssistantTopic, createTaxonomy, reserveTaxonomyIds,
+  updatePost, postStorageBytes, upsertDoseRecord, upsertSetting, getAllSettings, upsertSettingCapped, financeRecordBytes, upsertFinanceRecord, setAiHidden, getAllTaxonomies, deleteSetting,
 } from '../../db/tenantQueries.js';
 
 const SCHEMA = 'usr_1_a1b2c3';
@@ -130,8 +143,32 @@ describe('Entries, for the AI app', () => {
     (assistantCreatePost as any).mockResolvedValue(post);
     const res = await request(smith).post('/api/entries').send({ id: 5, ...fullSave, isEncrypted: true });
     expect(res.status).toBe(201);
-    expect(assistantCreatePost).toHaveBeenCalledWith(SCHEMA, expect.objectContaining({ id: 5 }), expect.any(Number), expect.any(Number));
+    expect(assistantCreatePost).toHaveBeenCalledWith(SCHEMA, expect.objectContaining({ id: 5 }), expect.any(Number), expect.any(Number), { owned: false });
     expect(createPostCapped).not.toHaveBeenCalled();
+  });
+
+  it('records its own data (assistantOwned) in the same locked create, out of the same day’s budget', async () => {
+    (assistantCreatePost as any).mockResolvedValue(post);
+    const res = await request(smith).post('/api/entries').send({ id: 5, ...fullSave, isEncrypted: true, assistantOwned: true });
+    expect(res.status).toBe(201);
+    expect(assistantCreatePost).toHaveBeenCalledWith(SCHEMA, expect.objectContaining({ id: 5 }), expect.any(Number), expect.any(Number), { owned: true });
+    // The flag is never stored as part of the entry
+    expect((assistantCreatePost as any).mock.calls[0][1]).not.toHaveProperty('assistantOwned');
+    expect((await request(smith).post('/api/entries').send({ id: 5, ...fullSave, isEncrypted: true, assistantOwned: 'yes' })).status).toBe(400);
+  });
+
+  it('a browser sending assistantOwned is refused, single or in an import; without it nothing changes', async () => {
+    (createPostCapped as any).mockResolvedValue(post);
+    for (const assistantOwned of [true, false]) {
+      const res = await request(browser).post('/api/entries').send({ id: 5, ...fullSave, isEncrypted: true, assistantOwned });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/only for the Chronicles AI app/);
+    }
+    const batch = await request(browser).post('/api/entries/batch').send({ entries: [{ id: 5, ...fullSave, isEncrypted: true, assistantOwned: true }] });
+    expect(batch.status).toBe(400);
+    expect(createPostCapped).not.toHaveBeenCalled();
+    expect((await request(browser).post('/api/entries').send({ id: 5, ...fullSave, isEncrypted: true })).status).toBe(201);
+    expect(assistantCreatePost).not.toHaveBeenCalled();
   });
 
   it('can’t change an entry hidden from AI', async () => {
@@ -169,6 +206,41 @@ describe('Entries, for the AI app', () => {
     (assistantMayUndo as any).mockResolvedValue(true);
     const undone = await request(smith).delete('/api/entries/5');
     expect(undone.status).toBe(200);
+    expect(deletePost).toHaveBeenCalledWith(SCHEMA, 5);
+  });
+
+  it('deletes its own data at any age, past the undo window; an entry it doesn’t own is still refused', async () => {
+    (assistantMayUndo as any).mockResolvedValue(false);
+    (assistantOwnsVisible as any).mockResolvedValue(false);
+    const refused = await request(smith).delete('/api/entries/5');
+    expect(refused.status).toBe(403);
+    expect(assistantOwnsVisible).toHaveBeenCalledWith(SCHEMA, 5);
+    expect(deletePost).not.toHaveBeenCalled();
+
+    (assistantOwnsVisible as any).mockResolvedValue(true);
+    const removed = await request(smith).delete('/api/entries/5');
+    expect(removed.status).toBe(200);
+    // The same delete as any other: kept versions forgotten, the entry gone
+    expect(forgetAssistantChangesFor).toHaveBeenCalledWith(SCHEMA, 'entry', '5');
+    expect(deletePost).toHaveBeenCalledWith(SCHEMA, 5);
+  });
+
+  it('edits its own data at any age, through the kept-first write (no undo window involved)', async () => {
+    (assistantWrite as any).mockImplementation(async (_s: string, _k: string, _r: string, _m: Buffer, write: (tx: unknown) => unknown) => write('TX'));
+    (isAiHidden as any).mockResolvedValue(false);
+    (postStorageBytes as any).mockResolvedValue(0);
+    (updatePost as any).mockResolvedValue(post);
+    const res = await request(smith).put('/api/entries/5').send(fullSave);
+    expect(res.status).toBe(200);
+    expect(assistantWrite).toHaveBeenCalledWith(SCHEMA, 'entry', '5', expect.any(Buffer), expect.any(Function), expect.any(Function));
+    expect(assistantMayUndo).not.toHaveBeenCalled();
+  });
+
+  it('a browser deletes as before, never asking whether the app owns the entry', async () => {
+    const res = await request(browser).delete('/api/entries/5');
+    expect(res.status).toBe(200);
+    expect(assistantMayUndo).not.toHaveBeenCalled();
+    expect(assistantOwnsVisible).not.toHaveBeenCalled();
     expect(deletePost).toHaveBeenCalledWith(SCHEMA, 5);
   });
 
@@ -256,6 +328,46 @@ describe('Topics, for the AI app', () => {
     app.use('/api/topics', topicsRouter);
     const res = await request(app).get('/api/topics');
     expect(res.status).toBe(403);
+  });
+
+  const topic = { id: 4, format: 2, payload: 'c2VhbGVkLXRvcGljLWNpcGhlcnRleHQh', iv: 'dG9waWMtaXYtMTJi' };
+
+  it('creates a topic the sealed way, counted for its day’s budget under the same lock', async () => {
+    (assistantTopicAllowed as any).mockResolvedValue(true);
+    (createTaxonomy as any).mockResolvedValue({ id: 4 });
+    expect((await request(smith).post('/api/topics/ids').send({ count: 1 })).body).toEqual({ ids: [9] });
+    const res = await request(smith).post('/api/topics').send(topic);
+    expect(res.status).toBe(201);
+    expect(assistantTopicAllowed).toHaveBeenCalledWith(SCHEMA, 'TX');
+    expect(createTaxonomy).toHaveBeenCalledWith(SCHEMA, { id: 4, payload: topic.payload, iv: topic.iv }, 'TX');
+    expect(recordAssistantTopic).toHaveBeenCalledWith(SCHEMA, 4, 'TX');
+  });
+
+  it('past its day’s budget: 429, no topic and no ids', async () => {
+    (assistantTopicAllowed as any).mockResolvedValue(false);
+    const res = await request(smith).post('/api/topics').send(topic);
+    expect(res.status).toBe(429);
+    expect(res.body.error).toMatch(/up to 5 topics a day/);
+    expect(createTaxonomy).not.toHaveBeenCalled();
+    expect(recordAssistantTopic).not.toHaveBeenCalled();
+    expect((await request(smith).post('/api/topics/ids').send({ count: 1 })).status).toBe(429);
+    expect(reserveTaxonomyIds).not.toHaveBeenCalled();
+  });
+
+  it('an id that wasn’t reserved isn’t counted', async () => {
+    (assistantTopicAllowed as any).mockResolvedValue(true);
+    (createTaxonomy as any).mockResolvedValue(null);
+    expect((await request(smith).post('/api/topics').send(topic)).status).toBe(409);
+    expect(recordAssistantTopic).not.toHaveBeenCalled();
+  });
+
+  it('the owner’s topics have no budget', async () => {
+    (assistantTopicAllowed as any).mockResolvedValue(false);
+    (createTaxonomy as any).mockResolvedValue({ id: 4 });
+    expect((await request(browser).post('/api/topics').send(topic)).status).toBe(201);
+    expect((await request(browser).post('/api/topics/ids').send({ count: 1 })).status).toBe(200);
+    expect(assistantTopicAllowed).not.toHaveBeenCalled();
+    expect(recordAssistantTopic).not.toHaveBeenCalled();
   });
 });
 
