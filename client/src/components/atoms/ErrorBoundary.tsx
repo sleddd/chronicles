@@ -23,8 +23,8 @@ const Wrap = styled.div`
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--bg-app, #f4f5f7);
-  color: var(--text-primary, #1f2128);
+  background: var(--bg-app, #fef9f5);
+  color: var(--text-primary, #231e1a);
   font-family: var(--font-sans, 'Open Sans', sans-serif);
 `;
 
@@ -32,8 +32,8 @@ const Panel = styled.div`
   width: 100%;
   max-width: 520px;
   padding: 32px;
-  background: var(--bg-panel, #fbfbfc);
-  border: 1px solid var(--border-subtle, #d3d7dd);
+  background: var(--bg-panel, #f9f4ee);
+  border: 1px solid var(--border-subtle, #ece7e1);
   border-radius: 14px;
 `;
 
@@ -49,7 +49,7 @@ const Text = styled.p`
   margin: 0 0 24px;
   font-size: 15px;
   line-height: 1.6;
-  color: var(--text-muted, #575d68);
+  color: var(--text-muted, #5c5753);
 `;
 
 const Actions = styled.div`
@@ -63,10 +63,10 @@ const Action = styled.a`
   align-items: center;
   height: 38px;
   padding: 0 18px;
-  border: 1px solid var(--border-pill, var(--border-default, #80868f));
+  border: 1px solid var(--border-pill, var(--border-default, #aca9a4));
   border-radius: 999px;
   background: transparent;
-  color: var(--text-primary, #1f2128);
+  color: var(--text-primary, #231e1a);
   font: inherit;
   font-size: 14px;
   text-decoration: none;

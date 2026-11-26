@@ -493,6 +493,24 @@ export const entries = {
     return rows;
   },
 
+  /**
+   * What changed on the server since this browser's copy (another device, the
+   * Chronicles AI app): the entries written and the ids deleted, with the copy
+   * moved on. `null` when there is no copy to compare against (no IndexedDB,
+   * another scope) or the server asks for a full download — the open page
+   * keeps what it has, and the next sign-in downloads everything.
+   */
+  changesSince: async (): Promise<{ entries: WireEntry[]; deleted: number[] } | null> => {
+    if (!entryCacheAvailable()) return null;
+    const { scope } = await request<{ cursor: string; scope: string }>('/entries/cursor');
+    const cached = await readCache(scope).catch(() => null);
+    if (!cached) return null;
+    const changes = await request<EntryChanges>(`/entries/changes?since=${cached.cursor}`);
+    if (changes.reset || changes.scope !== scope) return null;
+    await applyToCache(scope, changes.cursor, changes.entries, changes.deleted).catch(() => {});
+    return { entries: changes.entries, deleted: changes.deleted };
+  },
+
   get: (id: number) => request<Record<string, unknown>>(`/entries/${id}`),
 
   // An entry's topic lives only in its encrypted metadata (`_taxonomyId`);

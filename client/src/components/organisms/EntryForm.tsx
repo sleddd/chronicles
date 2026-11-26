@@ -9,7 +9,6 @@ import { EntryTagsField } from '../molecules/fields/EntryTagsField.js';
 import { tagsInUse, tagsOf } from '../../utils/entryTags.js';
 import { topicKind } from '../../utils/topicKind.js';
 import { TitleField } from '../molecules/fields/TitleInput.js';
-import { Checkbox } from '../atoms/core/Checkbox.jsx';
 import { isHiddenFromAi } from '../../services/aiPrivacy.js';
 import { useAiPrivacy } from '../../hooks/useAiPrivacy.js';
 import { NAME_FIELD_BY_TYPE, NAME_MAX, NAME_PLACEHOLDER_BY_TYPE, contentWithName, nameFromContent } from '../../utils/nameFields.js';
@@ -363,7 +362,7 @@ const SaveButton = styled.button<{ $disabled?: boolean }>`
 
 /* ── The task card (journal and Quick entry) ── */
 
-/* Its head: the topic picker and Single task | To-do list, full screen / close at the right; no line under it */
+/* Its head: the topic picker and Single task | To-do list, full screen / close at the right; a rule under it */
 const TaskHead = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -376,7 +375,7 @@ const TaskHead = styled.div`
   /* …and a little more room under the row, above its rule */
   &[data-journal] { padding-top: 28px; padding-right: 30px; padding-bottom: 14px; margin-bottom: 32px; }
   /* The journal: a rule under the row, between the content's edges (--head-x: 26px on a task card, the card's 36px elsewhere) */
-  &[data-journal]::after {
+  &[data-journal]::after, [data-quick-open] > &::after {
     content: '';
     position: absolute;
     left: var(--head-x, 26px);
@@ -385,6 +384,9 @@ const TaskHead = styled.div`
     border-bottom: 1px solid var(--border-card);
     pointer-events: none;
   }
+  /* The Quick entry: the same rule under the picker row, a little room under it */
+  [data-quick-open] > & { margin-bottom: 10px; }
+  [data-quick-open] > &::after { border-bottom-color: var(--border-default); } /* firm enough to see on the cream card */
   /* Full width: room between the topic picker / close row and the entry under it */
   @media (min-width: 1025px) { &[data-full] { margin-bottom: 32px; } }
   /* Phones / tablets: snug under the "Entry list" row above it */
@@ -463,21 +465,29 @@ const FootLeft = styled.div`
   min-width: 0;
 `;
 
-/* Hide from AI: the core checkbox, on a row of its own — the last field, right
-   above the Save row (it takes over the foot's "push to the bottom") */
-const AiHideCheck = styled.span`
+/* Shared with AI or hidden from it: the AI sparkle, with a slash drawn through it once
+   the entry is hidden. The slash is a line of our own (the icon font has no crossed-out
+   sparkle), ringed in the surface colour so it reads against the glyph. */
+const AiMark = styled.span<{ $off: boolean }>`
+  position: relative;
   display: inline-flex;
   align-items: center;
-  font-size: 14px;
-  color: var(--text-soft);
-  white-space: nowrap;
-`;
-
-/* …and the row that holds it, pushed to the card's foot (36px: the card's side padding, CARD_X) */
-const AiHideRow = styled.div`
-  margin-top: auto;
-  padding: 4px 24px 6px 36px;
-  @media (max-width: 640px) { padding: 10px 20px; }
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  &::after {
+    content: '';
+    display: ${({ $off }) => ($off ? 'block' : 'none')};
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 24px;
+    height: 1.6px;
+    border-radius: 1px;
+    background: currentColor;
+    box-shadow: 0 0 0 1.5px var(--editor-surface, var(--bg-app));
+    transform: translate(-50%, -50%) rotate(-45deg);
+  }
 `;
 
 /* Delete at the foot's left: the trash and the word, in the danger colour */
@@ -815,6 +825,7 @@ const PromptLine = styled.div`
     border-radius: 0;
     background: none;
     font: inherit;
+    font-style: normal; /* the picker's words are upright, never italic */
     text-transform: none;
     color: var(--color-accent-soft);
   }
@@ -1034,6 +1045,21 @@ const QuickCardPrompt = styled(PromptLine)`
   }
   @container entrycard (max-width: 600px) { &[data-centered] { --prompt-drop: 60px; } }
   [data-card-prompt-centered]:has(.tiptap:focus) > &[data-centered] { transform: none; }
+  /* A rule under the picker row, between the card's content edges (both themes), with a
+     little room before the writing starts */
+  &[data-ruled] { position: relative; margin-bottom: 14px; }
+  &[data-ruled]::after {
+    content: '';
+    position: absolute;
+    left: ${CARD_X};
+    right: ${CARD_X};
+    bottom: 0;
+    /* The divider tone, a step firmer than the card-edge colour: on the cream card in light
+       the card-edge colour (#eae5e1 on #f9f4ee) was too faint to see */
+    border-bottom: 1px solid var(--border-default);
+    pointer-events: none;
+  }
+  @container entrycard (max-width: 600px) { &[data-ruled]::after { left: 20px; right: 20px; } }
 `;
 
 /* The Quick entry waiting: just the question and topic picker, bare on the page (no
@@ -1979,6 +2005,22 @@ export function EntryForm({
         note={entryId === null && onSaveAndStartTimer ? 'Starting the timer saves this entry.' : undefined}
       />
     );
+  // Shared with AI, or hidden from it: one button in the tools (journal only, while an AI
+  // is on). The AI sparkle while the entry can go to AI; a slash through it once hidden.
+  // An entry whose whole topic is hidden shows the slash and can't be switched here.
+  const aiOff = aiHidden || aiHiddenByTopic;
+  const aiHideLabel = aiHiddenByTopic ? 'Hidden from AI: its topic is hidden (Settings → In-App AI)'
+    : aiHidden ? 'Hidden from AI. Share with AI again'
+    : aiPrivacy.appEnabled ? 'Shared with AI. Hide from every AI feature and the Chronicles AI app'
+    : 'Shared with AI. Hide from every AI feature';
+  const aiHideBtn = !quick && onToggleAiHidden ? (
+    <IconBtn type="button" aria-label={aiHideLabel} title={aiHiddenByTopic ? aiHideLabel : aiHidden ? 'Hidden from AI' : 'Hide from AI'}
+      aria-pressed={aiOff} disabled={aiHiddenByTopic}
+      onClick={() => { if (!aiHiddenByTopic) onToggleAiHidden(); }}
+      style={aiHiddenByTopic ? { opacity: 0.5, cursor: 'default' } : undefined}>
+      <AiMark $off={aiOff}><MaterialIcon $size={19} aria-hidden="true">auto_awesome</MaterialIcon></AiMark>
+    </IconBtn>
+  ) : null;
   const taskTools = (
     <TitleTools aria-label="Entry tools">
       <IconBtn type="button" $active={toolbarOpen} aria-label="Formatting" title="Format" aria-pressed={toolbarOpen}
@@ -2024,6 +2066,7 @@ export function EntryForm({
           <Icon name="bookmark" size={18} strokeWidth={1.7} />
         </IconBtn>
       )}
+      {aiHideBtn}
     </TitleTools>
   );
   // A topic with no text box (Exercise, Wellness…): no Format, Draw or Dictate (nothing to format) —
@@ -2059,6 +2102,7 @@ export function EntryForm({
         style={{ opacity: entryId ? 1 : 0.35, cursor: entryId ? 'pointer' : 'default' }}>
         <Icon name="bookmark" size={18} strokeWidth={1.7} />
       </IconBtn>
+      {aiHideBtn}
     </TitleTools>
   );
 
@@ -2083,19 +2127,6 @@ export function EntryForm({
       <Icon name="trash" size={17} strokeWidth={1.8} /> Delete
     </TaskDelete>
   ) : null;
-  // Hide from AI: the last field of every journal card, right above the Save
-  // row — "In-App AI  ☐ Hide" (shown while an AI is on)
-  const aiHideCheck = !quick && onToggleAiHidden ? (
-    <TaskRow data-inline>
-      <TaskRowName>In-App AI</TaskRowName>
-      <AiHideCheck title={aiHiddenByTopic ? 'Its topic is hidden from AI (Settings → In-App AI)'
-        : aiPrivacy.appEnabled ? 'Kept from every AI feature and the Chronicles AI app' : 'Kept from every AI feature'}>
-        <Checkbox checked={aiHidden || aiHiddenByTopic} disabled={aiHiddenByTopic}
-          onChange={() => { if (!aiHiddenByTopic) onToggleAiHidden(); }} label="Hide" />
-      </AiHideCheck>
-    </TaskRow>
-  ) : null;
-
   const taskBody = (
     <TaskBody>
       {imageError && <ImageErrorText>{imageError}</ImageErrorText>}
@@ -2170,7 +2201,7 @@ export function EntryForm({
           {/* The question is the card's first line — an entry's or Bill / Spending's */}
           {quickExtra && quickExtraBody ? (
             <QuickExtraBox>
-              <QuickCardPrompt data-keep-placeholder>
+              <QuickCardPrompt data-keep-placeholder data-ruled="">
                 {quickPicker}
               </QuickCardPrompt>
               <QuickExtraForm>{quickExtraBody}</QuickExtraForm>
@@ -2189,7 +2220,7 @@ export function EntryForm({
             </EntryCard>
           ) : framed ? (
             <EntryCard $quick data-quick-open="" data-framed="">
-              <TaskHead style={{ paddingLeft: CARD_X }}>
+              <TaskHead style={{ paddingLeft: CARD_X, '--head-x': CARD_X } as CSSProperties}>
                 <QuickCardPrompt data-keep-placeholder style={{ padding: 0 }}>{quickPicker}</QuickCardPrompt>
               </TaskHead>
               {renderBody()}
@@ -2201,7 +2232,7 @@ export function EntryForm({
           ) : (
             <EntryCard $quick data-quick-open="" 
               data-card-prompt-centered={promptCentered ? '' : undefined}>
-              <QuickCardPrompt data-keep-placeholder data-card-prompt="" data-centered={promptCentered ? '' : undefined}>
+              <QuickCardPrompt data-keep-placeholder data-ruled="" data-card-prompt="" data-centered={promptCentered ? '' : undefined}>
                 {quickPicker}
               </QuickCardPrompt>
               {renderBody()}
@@ -2263,8 +2294,7 @@ export function EntryForm({
               )}
             </TaskHead>
             {taskBody}
-            {aiHideCheck && <AiHideRow>{aiHideCheck}</AiHideRow>}
-            <QuickFoot style={{ marginTop: aiHideCheck ? 0 : 'auto' }}>
+            <QuickFoot style={{ marginTop: 'auto' }}>
               <FootLeft>
                 {deleteBtn}
               </FootLeft>
@@ -2285,8 +2315,7 @@ export function EntryForm({
               {headIcons}
             </TaskHead>
             {renderBody()}
-            {aiHideCheck && <AiHideRow>{aiHideCheck}</AiHideRow>}
-            <QuickFoot style={{ marginTop: aiHideCheck ? 0 : 'auto' }}>
+            <QuickFoot style={{ marginTop: 'auto' }}>
               <FootLeft>
                 {/* A topic with no text box keeps its tools here */}
                 {editorHidden && noTextTools}
@@ -2326,9 +2355,8 @@ export function EntryForm({
               )}
             </JournalHead>
             {renderBody()}
-            {aiHideCheck && <AiHideRow>{aiHideCheck}</AiHideRow>}
             {/* The tool row: Format, Draw, Dictate, images, Bookmark and ⋯ on the left; Save entry on the right */}
-            <JournalFoot style={aiHideCheck ? { marginTop: 0 } : undefined}>
+            <JournalFoot>
               <JournalTools aria-label="Entry tools">
                 <IconBtn type="button" $active={toolbarOpen} aria-label="Formatting" title="Format" aria-pressed={toolbarOpen}
                   onClick={() => setFormatOpen(!toolbarOpen)}>
@@ -2373,6 +2401,7 @@ export function EntryForm({
                   <Icon name="bookmark" size={18} strokeWidth={1.7} />
                 </IconBtn>
                 {/* ⋯ More: Share, Duplicate, Close and Delete (opens upward) */}
+                {aiHideBtn}
                 <MoreWrap ref={moreRef}>
                   <IconBtn type="button" $active={moreOpen} aria-label="More actions" title="More" aria-haspopup="menu" aria-expanded={moreOpen}
                     onClick={() => setMoreOpen(o => !o)}>

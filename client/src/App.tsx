@@ -13,6 +13,7 @@ import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
 import { RekeyOverlay } from './components/organisms/RekeyOverlay.js';
 import { usePublicShelfSync } from './hooks/usePublicShelfSync.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
+import { useEntrySync } from './hooks/useEntrySync.js';
 import { LoginView } from './views/LoginView.js';
 import { NoticeBanner } from './components/organisms/NoticeBanner.js';
 import { ErrorBoundary } from './components/atoms/ErrorBoundary.js';
@@ -95,6 +96,12 @@ function isInstalledApp(): boolean {
 }
 
 /** Tells the key holder which page shows: a keyless page (services/keyHandoff.ts) waits to ask other tabs for the key */
+/** Entries written on another device or by the Chronicles AI app reach the open tab */
+function EntrySync() {
+  useEntrySync();
+  return null;
+}
+
 function KeylessPageWatch() {
   const { pathname } = useLocation();
   const { notePage } = useEncryption();
@@ -131,65 +138,67 @@ function HomeRoute() {
 /* Light greys are darkened a step for readability on the white canvas
    (tertiary ≈ 6:1, disabled/placeholder ≈ 3.7:1). */
 const LIGHT_CSS_VARS: Record<string, string> = {
-  /* Soft light: a grey page (#f4f5f7) with near-white cards (#fbfbfc) and
-     controls (#fefefe), so nothing glares. Near-black text (#1f2128, 13:1),
-     card labels #4a505b (6.7:1), secondary text #575d68 (5.5:1), card
-     outlines #cdd1d8, dividers #bfc4cc, row rules #d3d7dd, pill / round-button
-     outlines #80868f (3:1); the journal list + rail share #dcdfe4. */
+  /* Light theme colours measured from the user's mockups (2026-11-26; colours
+     only): page #fef9f5, rail #faf5f0, cards #f9f4ee, chips / tiles #ede6e2,
+     the chosen item #ede6e2, card edges #eae5e1 / #ece7e1, row rules #f4efe9,
+     ink #231e1a, body #575350, labels / icons #5c5753, times #837e7b,
+     checkbox outlines #aca9a4. */
   /* DS semantic surfaces */
-  '--bg-app':            '#f4f5f7',
-  '--bg-surface':        '#fbfbfc',
-  '--bg-panel':          '#fbfbfc', /* report panels (Health → Reports) */
-  '--bg-elevated':       '#fefefe',
-  '--bg-sunken':         '#dcdfe4',
-  '--bg-hover':          '#eef0f3',
-  '--bg-active':         '#d3d7dd',
-  '--bg-tab-active':     '#e4e7eb',  /* the chosen sub-tab / segmented option — lighter than --bg-active so its text reads */
+  '--bg-app':            '#fef9f5',
+  '--bg-surface':        '#f9f4ee',
+  '--bg-panel':          '#f9f4ee', /* report panels (Health → Reports) */
+  '--bg-elevated':       '#fef9f5',
+  '--bg-sunken':         '#ede6e2',
+  '--bg-hover':          '#f4efe9',
+  '--bg-active':         '#ede6e2',
+  '--bg-tab-active':     '#ede6e2',  /* the chosen sub-tab / segmented option — lighter than --bg-active so its text reads */
   '--bg-inverse':        '#1b1d26',
   /* DS text */
-  '--text-primary':      '#1f2128',
-  '--text-secondary':    '#1f2128',
-  '--text-tertiary':     '#2e333b',
-  '--text-disabled':     '#6b7079',
-  '--text-tab':          '#3a3f48',  /* inactive section tabs */
-  '--text-meta':         '#575d68',  /* list-row topic + date: recede behind the entry */
-  '--text-muted':        '#575d68',  /* card subtitles, chevrons, + icons */
-  '--text-placeholder':  '#575d68',
-  '--control-border':    '#80868f',  /* unticked round checks */
-  '--border-card':       '#cdd1d8',  /* card outlines + their inner rules/boxes */
-  '--bg-row-hover':      '#e6e8ec',  /* a row lifting inside a card on hover */
-  '--text-soft':         '#4a505b',  /* toolbar text buttons, chevrons */
-  '--text-faint':        '#9a9ea7',  /* quiet + marks in empty slots */
-  '--bg-tile':           '#fbfbfc',  /* a filled tile on the canvas (menu meals) */
-  '--bg-lane':           '#eaecef',  /* planning board swim lanes */
-  '--bg-lane-over':      '#e0e3e8',  /* a lane while a card is dragged over it */
-  '--bg-lane-card':      '#fefefe',  /* cards sitting in a lane */
-  '--bg-today-col':      '#fbfbfc',  /* today's column band */
-  '--border-pop':        '#cdd1d8',  /* floating menus' outline */
-  '--border-dashed':     '#bfc4cc',  /* dashed outline of an empty slot on hover */
-  '--text-hint':         '#6a7079',  /* placeholders in big borderless fields (4.8:1) */
+  '--text-primary':      '#231e1a',
+  '--text-secondary':    '#231e1a',
+  '--text-tertiary':     '#35302b',
+  '--text-disabled':     '#837e7b',
+  '--text-tab':          '#41342b',  /* inactive section tabs */
+  '--text-meta':         '#5c5753',  /* list-row topic + date: recede behind the entry */
+  '--text-muted':        '#5c5753',  /* card subtitles, chevrons, + icons */
+  '--text-placeholder':  '#5c5753',
+  '--control-border':    '#aca9a4',  /* unticked round checks */
+  '--border-card':       '#eae5e1',  /* card outlines + their inner rules/boxes */
+  '--bg-row-hover':      '#f4efe9',  /* a row lifting inside a card on hover */
+  '--text-soft':         '#575350',  /* toolbar text buttons, chevrons */
+  '--text-faint':        '#aca9a4',  /* quiet + marks in empty slots */
+  '--bg-tile':           '#ede6e2',  /* a filled tile on the canvas (menu meals) */
+  '--bg-lane':           '#ede6e2',  /* planning board swim lanes */
+  '--bg-lane-over':      '#e6dfda',  /* a lane while a card is dragged over it: the lane's own colour (#ede6e2) a step deeper */
+  '--bg-lane-card':      '#fef9f5',  /* cards sitting in a lane */
+  '--bg-today-col':      '#f9f4ee',  /* today's column band */
+  '--border-pop':        '#eae5e1',  /* floating menus' outline */
+  '--border-dashed':     '#d9d4ce',  /* dashed outline of an empty slot on hover */
+  '--text-hint':         '#837e7b',  /* placeholders in big borderless fields (4.8:1) */
   '--text-inverse':      '#ffffff',
   /* DS borders — hairlines only */
-  '--border-subtle':     '#d3d7dd',
-  '--border-faint':      '#e6e8ec', /* the lightest hairline (topic picker) */
-  '--border-pill':       '#80868f',  /* pills, ± buttons, round controls (light only) */
-  '--focus-ring':        '#80868f',  /* keyboard focus: a neutral grey ring, never the accent (3.4:1) */
-  '--progress-track':    '#d3d7dd',  /* empty part of a progress rule */
+  '--border-subtle':     '#ece7e1',
+  '--border-faint':      '#f4efe9', /* the lightest hairline (topic picker) */
+  '--border-pill':       '#aca9a4',  /* pills, ± buttons, round controls (light only) */
+  '--focus-ring':        '#837e7b',  /* keyboard focus: a neutral grey ring, never the accent (3.4:1) */
+  '--progress-track':    '#ede6e2',  /* empty part of a progress rule or roadmap bar: the agenda's tile colour, never yellow */
   '--bg-control':        'transparent',  /* pills, chips, the topic picker, ± buttons: outlines only — never a fill */
-  '--bg-tracker':        '#fbfbfc',  /* the wellness four-square card (light only) */
-  '--border-default':    '#bfc4cc',
-  '--border-strong':     '#a9afb8',
-  '--border-field':      '#cdd1d8',  /* faint outline on styled-form boxes + nutrition panel */
+  '--bg-tracker':        '#f9f4ee',  /* the wellness four-square card (light only) */
+  '--border-default':    '#d9d4ce',
+  '--border-strong':     '#d3ccc4',
+  '--border-field':      '#eae5e1',  /* faint outline on styled-form boxes + nutrition panel */
   /* Nav rail — its own toned panel: darker logo cell, active item lifted */
-  '--bg-rail':           '#dfe2e7',
-  '--bg-rail-logo':      '#d5d9df',
-  '--bg-rail-active':    'transparent', /* the active item never changes background: accent icon + accent tab only */
+  '--bg-rail':           '#faf5f0',
+  /* The open section's row: a light step from the rail toward the tile
+     colour, worked out from the rail's own colour — never a fixed grey */
+  '--bg-rail-logo':      'color-mix(in srgb, var(--bg-rail) 30%, var(--bg-tile))', /* a lighter shade of the tile colour (#ede6e2): about #f1eae6 */
+  '--bg-rail-active':    'var(--bg-rail-logo)', /* the current page's row: the same light shade as an open section's row */
   /* Chart series — muted, same chroma as the accent presets */
   '--chart-blue':        '#4f8fd1',
   '--chart-violet':      '#8a6fd1',
   '--chart-amber':       '#c98f3e',
   '--chart-green':       '#4f9e74',
-  '--chart-ghost':       '#cfd2d9',  /* the pale comparison line on report charts */
+  '--chart-ghost':       '#d5c8b6',  /* the pale comparison line on report charts */
   /* Mood faces, very low → great (wellness check-in) */
   '--mood-1': '#cf6a62', '--mood-2': '#d48a63', '--mood-3': '#c49a45', '--mood-4': '#5c9e78', '--mood-5': '#3f9a8c',
   /* Status */
@@ -199,25 +208,25 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--color-info':        '#2f7fd8',  '--color-info-subtle':    '#e1eefb',
 
   /* DS neutral grays for light theme */
-  '--neutral-300': '#cdd1d8',
-  '--neutral-700': '#a0a0aa',
+  '--neutral-300': '#eae5e1',
+  '--neutral-700': '#aca9a4',
 
   /* ── Legacy aliases → DS values ── */
-  '--paper':             '#f4f5f7',
-  '--paper-deep':        '#dcdfe4',
-  '--paper-surface':     '#fbfbfc',
-  '--paper-well':        '#e1e4e9',
-  '--paper-hover':       '#eef0f3',
-  '--ink':               '#1f2128',
-  '--ink-2':             '#22262d',
-  '--ink-3':             '#3a3a42',
-  '--ink-4':             '#57575f',
-  '--rule':              '#cdd1d8',
-  '--rule-2':            '#cdd1d8',
-  '--btn-primary':       '#18181c',
+  '--paper':             '#fef9f5',
+  '--paper-deep':        '#ede6e2',
+  '--paper-surface':     '#f9f4ee',
+  '--paper-well':        '#ede6e2',
+  '--paper-hover':       '#f4efe9',
+  '--ink':               '#231e1a',
+  '--ink-2':             '#231e1a',
+  '--ink-3':             '#41342b',
+  '--ink-4':             '#5c5753',
+  '--rule':              '#eae5e1',
+  '--rule-2':            '#eae5e1',
+  '--btn-primary':       '#231e1a',
   '--btn-primary-ink':   '#ffffff',
-  '--btn-primary-hover': '#28282e',
-  '--accent-fill':       '#18181c',
+  '--btn-primary-hover': '#35302b',
+  '--accent-fill':       '#231e1a',
   '--accent-fill-ink':   '#ffffff',
   '--danger':            '#d8483f',
   '--success':           '#2f9e6b',
@@ -230,7 +239,9 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--shadow-lg':         '0 8px 28px rgba(20,20,30,0.14)',
   '--shadow-xl':         '0 16px 48px rgba(20,20,30,0.18)',
   /* Dashboard cards' soft shadow: even on every side, never offset to one corner */
-  '--shadow-card':       '0 0 16px rgba(0, 0, 0, 0.055)',
+  /* …with a light edge drawn round it (a 1px ring in the card-edge colour): on
+     the cream page a card set off by its shadow alone had no edge to speak of */
+  '--shadow-card':       '0 0 0 1px var(--border-card), 0 0 16px rgba(0, 0, 0, 0.055)',
 };
 
 const DARK_CSS_VARS: Record<string, string> = {
@@ -750,6 +761,7 @@ export function App() {
         <EncryptionProvider>
           <BrowserRouter>
             <KeylessPageWatch />
+            <EntrySync />
             <PageTitle />
             {/* A page's chunk on its way: nothing for a moment, then the page (its own spinner once mounted) */}
             <Suspense fallback={null}>

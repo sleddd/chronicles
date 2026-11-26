@@ -113,7 +113,9 @@ const NavRow = styled.button<{ $active: boolean; $quiet?: boolean }>`
   padding: 0 14px;
   border: none;
   border-radius: 10px;
-  background: transparent; /* the current page gets no fill — just its name a step heavier */
+  background: transparent; /* dark: the current page gets no fill — just its name a step heavier */
+  /* Light: the current page's row on the same light shade as an open section's row */
+  html[data-theme='light'] & { background: ${({ $active }) => ($active ? 'var(--bg-rail-logo)' : 'transparent')}; }
   font-family: var(--font-sans);
   font-size: 16px;
   /* Light names (Open Sans's lightest bundled weight is 300), the current page a step heavier */
@@ -178,11 +180,14 @@ const ViewList = styled.ul`
   /* A step darker than the open section's row; between rows a dark line over a faint light one */
   background: color-mix(in srgb, var(--bg-rail) 82%, #fff);
   html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 95%, #c8d4ff); } /* lifted with a cool tint, never plain white */
+  /* Light: the views sit a little lighter than the current page's row, both shades of the
+     tile colour (#ede6e2) worked out from the menu's own colour */
+  html[data-theme='light'] & { background: color-mix(in srgb, var(--bg-rail) 75%, var(--bg-tile)); }
   overflow: hidden;
   /* Lines only between rows: none above the first or below the last, so it sits right against
      the section's row and the next item */
   & > li + li { border-top: 1px solid rgba(4, 6, 14, 0.45); box-shadow: inset 0 1px 0 rgba(190, 205, 255, 0.04); }
-  html[data-theme='light'] & > li + li { border-top-color: rgba(20, 24, 32, 0.09); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45); }
+  html[data-theme='light'] & > li + li { border-top-color: color-mix(in srgb, var(--text-primary) 6%, transparent); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45); }
 `;
 
 const ViewRow = styled.button<{ $active: boolean }>`

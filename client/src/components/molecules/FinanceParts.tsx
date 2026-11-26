@@ -851,6 +851,9 @@ export const PanelCard = styled.div`
   padding: 20px 22px 22px;
   background: var(--bg-panel);
   border-radius: 12px;
+  /* Light: a light edge round the card (the cream panel alone barely shows on the cream
+     page). A ring, so nothing moves */
+  html[data-theme='light'] & { box-shadow: 0 0 0 1px var(--border-card); }
 `;
 
 export const CardTitle = styled.h3`

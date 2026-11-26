@@ -134,7 +134,8 @@ const NavIconBtn = styled.button<{ $active?: boolean; $tab?: boolean; $fullTab?:
 
 
   &:hover {
-    background: var(--bg-rail-active);
+    /* Only the current page's row is shaded (light): hovering never adds a fill */
+    background: ${({ $active }) => $active ? 'var(--bg-rail-active)' : 'transparent'};
     color: ${({ $active }) => $active ? 'var(--text-primary)' : 'var(--text-primary)'};
   }
   /* Dark: hovering brightens the icon only (no block behind it) */
@@ -230,10 +231,13 @@ const ViewList = styled.ul`
   /* A step darker than the open section's row; between rows a dark line over a faint light one */
   background: color-mix(in srgb, var(--bg-rail) 82%, #fff);
   html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 96%, #fff); }
+  /* Light: the views sit a little lighter than the current page's row, both shades of the
+     tile colour (#ede6e2) worked out from the menu's own colour */
+  html[data-theme='light'] & { background: color-mix(in srgb, var(--bg-rail) 75%, var(--bg-tile)); }
   /* Lines only between rows: none above the first or below the last, so it sits right against
      the section's row and the next item */
   & > li + li { border-top: 1px solid rgba(0, 0, 0, 0.3); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035); }
-  html[data-theme='light'] & > li + li { border-top-color: rgba(20, 24, 32, 0.09); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45); }
+  html[data-theme='light'] & > li + li { border-top-color: color-mix(in srgb, var(--text-primary) 6%, transparent); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45); }
 `;
 
 const ViewBtn = styled.button<{ $active: boolean }>`

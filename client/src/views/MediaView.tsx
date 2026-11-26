@@ -260,19 +260,15 @@ const TitleRow = styled.div`
   gap: 12px 24px;
 `;
 
-/* My shelf | Following: in light theme on the photo, smoked glass like the page's buttons — a dark
-   see-through fill with a blur, white words, the chosen one a faint white lift */
+/* My shelf | Following: in light theme on the photo, light frosted glass like the page's buttons — the
+   page's cream see-through over a blur, the theme's own dark words and chosen fill */
 const SectionSwitch = styled.div`
   display: contents;
   html[data-wallpaper][data-theme='light'] & > * {
-    background: rgba(18, 20, 26, 0.5) !important;
+    background: rgba(254, 249, 245, 0.74) !important;
     border-color: transparent !important;
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
-    --text-primary: #fff;
-    --text-secondary: rgba(255, 255, 255, 0.9);
-    --text-muted: rgba(255, 255, 255, 0.78);
-    --bg-tab-active: rgba(255, 255, 255, 0.18);
   }
 `;
 

@@ -46,20 +46,15 @@ type View = 'board' | 'list';
 
 /* ── Styles ── */
 
-/* Board | List: in light theme on the photo, smoked glass like the page's buttons — a dark
-   see-through fill with a blur, white words, the chosen one a faint white lift */
+/* Board | List: in light theme on the photo, light frosted glass like the page's buttons — the
+   page's cream see-through over a blur, the theme's own dark words and chosen fill */
 const BlurSwitch = styled.div`
   display: contents;
   html[data-wallpaper][data-theme='light'] & > * {
-    background: rgba(18, 20, 26, 0.5) !important;
+    background: rgba(254, 249, 245, 0.74) !important;
     border-color: transparent !important;
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
-    --text-primary: #fff;
-    --text-secondary: rgba(255, 255, 255, 0.9);
-    --text-muted: rgba(255, 255, 255, 0.78);
-    --text-soft: rgba(255, 255, 255, 0.85);
-    --bg-tab-active: rgba(255, 255, 255, 0.18);
   }
 `;
 
@@ -141,6 +136,14 @@ const PhotoBtn = styled.button<{ $onPhoto: boolean }>`
   color: ${({ $onPhoto }) => ($onPhoto ? '#fff' : 'var(--text-muted)')};
   cursor: pointer;
   &:hover { border-color: ${({ $onPhoto }) => ($onPhoto ? 'rgba(255, 255, 255, 0.7)' : 'var(--border-strong)')}; }
+  /* Light: on a photo, light frosted glass with a dark icon (never the dark smoked fill) */
+  ${({ $onPhoto }) => ($onPhoto ? `html[data-theme='light'] & {
+    background: rgba(254, 249, 245, 0.74);
+    border-color: transparent;
+    color: var(--text-primary);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }` : '')}
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 

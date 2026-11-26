@@ -99,6 +99,33 @@ describe('EntryForm', () => {
     saveStatus: '',
   };
 
+  it('Hide from AI is one button in the tools: the AI mark, pressed (slashed) once hidden', () => {
+    const onToggle = vi.fn();
+    const { rerender } = renderWithTheme(<EntryForm {...defaultProps} entryId={3} isEditing onToggleAiHidden={onToggle} />);
+    const shared = screen.getByRole('button', { name: /^Shared with AI\. Hide from every AI feature/ });
+    expect(shared).toHaveAttribute('aria-pressed', 'false');
+    // In with the other tools, and no "In-App AI" row or Hide checkbox any more
+    expect(shared.parentElement).toBe(screen.getByRole('button', { name: /bookmark/i }).parentElement);
+    expect(screen.queryByText('In-App AI')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Hide' })).not.toBeInTheDocument();
+    fireEvent.click(shared);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    rerender(<ThemeProvider theme={lightTheme}><EntryForm {...defaultProps} entryId={3} isEditing aiHidden onToggleAiHidden={onToggle} /></ThemeProvider>);
+    expect(screen.getByRole('button', { name: 'Hidden from AI. Share with AI again' })).toHaveAttribute('aria-pressed', 'true');
+
+    // Its whole topic is hidden: slashed, and not switched from here
+    rerender(<ThemeProvider theme={lightTheme}><EntryForm {...defaultProps} entryId={3} isEditing aiHiddenByTopic onToggleAiHidden={onToggle} /></ThemeProvider>);
+    const byTopic = screen.getByRole('button', { name: /its topic is hidden/ });
+    expect(byTopic).toBeDisabled();
+    expect(byTopic).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('there is no AI button without an AI on, or in the Quick entry', () => {
+    renderWithTheme(<EntryForm {...defaultProps} entryId={3} isEditing />);
+    expect(screen.queryByRole('button', { name: /AI/ })).not.toBeInTheDocument();
+  });
+
   it('a task opens in the task card: format switch, Priority in the title box, then Status, Contributes to, Time estimate, When and Notes', () => {
     const onChange = vi.fn();
     renderWithTheme(<EntryForm {...defaultProps} topicId={9} topics={[{ id: 9, name: 'Task', icon: null, color: null } as never]}

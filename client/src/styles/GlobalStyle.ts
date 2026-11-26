@@ -43,8 +43,14 @@ export const GlobalStyle = createGlobalStyle`
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
   }
-  html[data-wallpaper][data-theme='light'] .page-action button:not([data-solid]) { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
   html[data-wallpaper] .page-action button:not([data-solid]):hover { background: rgba(18, 20, 26, 0.66) !important; }
+  /* Light: light frosted glass with the theme's dark text (never the dark smoked fill) */
+  html[data-wallpaper][data-theme='light'] .page-action button:not([data-solid]) {
+    background: rgba(254, 249, 245, 0.74) !important;
+    color: var(--text-primary) !important;
+    text-shadow: none;
+  }
+  html[data-wallpaper][data-theme='light'] .page-action button:not([data-solid]):hover { background: rgba(254, 249, 245, 0.92) !important; }
 
   html[data-wallpaper] .view-title {
     color: #fff !important;

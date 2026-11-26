@@ -187,7 +187,7 @@ const IMPORT_BATCH = 50;
 /* Settings' section cards have no outline — the fill and a very light, even shadow
    set them off the page */
 const BorderlessCard = styled.div`
-  & > section { border: none; box-shadow: 0 0 12px rgba(0, 0, 0, 0.04); }
+  & > section { border: none; box-shadow: 0 0 0 1px var(--border-card), 0 0 12px rgba(0, 0, 0, 0.04); } /* light: a light edge with the shadow */
   html[data-theme='dark'] & > section { box-shadow: 0 0 22px rgba(0, 0, 0, 0.12); }
 `;
 

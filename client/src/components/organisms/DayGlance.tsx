@@ -102,7 +102,7 @@ const Panel = styled.section`
   box-shadow: var(--shadow-card);
   /* Light: the container is the tiles' own near-white, so its cards (events, tasks, all-day) take a
      grey a step darker to show */
-  html[data-theme='light'] & { --bg-tile: #eceef2; }
+  html[data-theme='light'] & { --bg-tile: #ede6e2; }
   @media (max-width: 760px) { padding: 30px 18px 34px; }
 `;
 

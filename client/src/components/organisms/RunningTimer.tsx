@@ -32,7 +32,7 @@ const Pill = styled.div`
   border: 1px solid var(--border-pop);
   border-radius: 999px;
   background: var(--bg-tile);
-  html[data-theme='light'] & { background: #fefefe; }
+  html[data-theme='light'] & { background: #fef9f5; }
   box-shadow: var(--shadow-lg);
   font-family: var(--font-sans);
   @media (max-width: 768px) { right: 16px; bottom: 168px; }

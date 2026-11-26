@@ -39,7 +39,7 @@ export const glassControl = css`
 `;
 
 /** Buttons on the photo (Voice, the sliders, New entry, a page's main action):
- *  a white glass pill with white text, readable on light and dark photos */
+ *  smoked glass with white text in dark; light frosted glass with dark text in light */
 export const glassPill = css`
   html[data-wallpaper] & {
     /* Smoked glass: a dark see-through fill, so the white text holds on a bright photo */
@@ -50,8 +50,13 @@ export const glassPill = css`
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
   }
-  /* Light: no glow on the words — a tight, very light drop shadow */
-  html[data-wallpaper][data-theme='light'] & { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28); }
+  /* Light: light frosted glass, never the dark smoked fill — the page's cream, see-through
+     over a blur, with the theme's own dark text and no shadow on the words */
+  html[data-wallpaper][data-theme='light'] & {
+    background: rgba(254, 249, 245, 0.74);
+    color: var(--text-primary);
+    text-shadow: none;
+  }
 `;
 
 /** Text on the photo: white, with a soft shadow so it reads on any picture */

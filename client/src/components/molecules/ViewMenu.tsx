@@ -50,7 +50,7 @@ const List = styled.div`
   min-width: 230px;
   padding: 6px;
   background: var(--bg-tile);
-  html[data-theme='light'] & { background: #fff; }
+  html[data-theme='light'] & { background: #fef9f5; }
   border: 1px solid var(--border-pop);
   border-radius: 10px;
   box-shadow: var(--shadow-lg);

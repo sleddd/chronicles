@@ -303,6 +303,7 @@ const VoiceBtn = styled.button<{ $on: boolean }>`
   /* On a wallpaper: a glass pill with white text (the accent while open) */
   ${glassPill}
   html[data-wallpaper] &[aria-expanded="true"], html[data-wallpaper] &[aria-pressed="true"] { border-color: #fff; }
+  html[data-wallpaper][data-theme='light'] &[aria-expanded="true"], html[data-wallpaper][data-theme='light'] &[aria-pressed="true"] { border-color: var(--color-accent-line); }
 `;
 
 /* View options: a round sliders button — no darker fill when open or hovered
@@ -323,6 +324,7 @@ const ViewBtn = styled.button<{ $on: boolean }>`
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   ${glassPill}
   html[data-wallpaper] &[aria-expanded="true"], html[data-wallpaper] &[aria-pressed="true"] { border-color: #fff; }
+  html[data-wallpaper][data-theme='light'] &[aria-expanded="true"], html[data-wallpaper][data-theme='light'] &[aria-pressed="true"] { border-color: var(--color-accent-line); }
 `;
 
 /* The theme switch at the top of the Theme and layout panel, at most 380px wide */
@@ -646,6 +648,8 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
   @media (max-width: 480px) { padding: 24px 22px 22px; }
   /* The cards across both columns (quote, On the menu): the panel and light shadow, no outline */
   ${({ $wide }) => ($wide ? 'border-color: transparent;' : '')}
+  /* Light: the edge is the ring drawn with the shadow (--shadow-card), on every card alike */
+  html[data-theme='light'] & { border-color: transparent; }
   /* The title row is the chevron's 30px tall, its link centred, so the link and chevron line up */
   & > section > :first-child { align-items: center; padding-right: 64px; }
   @media (max-width: 480px) { & > section > :first-child { padding-right: 58px; } }
@@ -2244,8 +2248,8 @@ const StatFig = styled.div`
   span { font-family: var(--font-sans); font-size: 15px; color: var(--text-muted); }
   @media (max-width: 480px) { b { font-size: 32px; } span { font-size: 14px; } }
   /* Light: grey, so the figures sit quietly (not near-black), the labels a step lighter */
-  html[data-theme='light'] & b { color: #858b94; }
-  html[data-theme='light'] & span { color: #959ba3; }
+  html[data-theme='light'] & b { color: #837e7b; }
+  html[data-theme='light'] & span { color: #aca9a4; }
   /* Dark: grey too, so the figures sit quietly */
   html[data-theme='dark'] & b { color: #8a8e98; }
   html[data-theme='dark'] & span { color: #6c707a; }
