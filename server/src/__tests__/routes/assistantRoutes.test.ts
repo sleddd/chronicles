@@ -18,8 +18,7 @@ vi.mock('../../db/tenantQueries.js', () => ({
   ensurePostReservations: vi.fn().mockResolvedValue(undefined),
   isAiHidden: vi.fn().mockResolvedValue(false),
   getPostUpdatedAt: vi.fn().mockResolvedValue([]),
-  assistantMayUndo: vi.fn().mockResolvedValue(false),
-  assistantOwnsVisible: vi.fn().mockResolvedValue(false),
+  reservePostIds: vi.fn().mockResolvedValue([]),
   ensureAiPrivacyTables: vi.fn().mockResolvedValue(undefined),
   assistantTopicAllowed: vi.fn().mockResolvedValue(true),
   recordAssistantTopic: vi.fn().mockResolvedValue(undefined),
@@ -66,6 +65,7 @@ vi.mock('../../db/assistantHistory.js', () => ({
   assistantNewRecordAllowed: vi.fn().mockResolvedValue(true),
   ASSISTANT_NEW_DOSES_PER_DAY: 100,
   assistantCreatePost: vi.fn(),
+  assistantMayDelete: vi.fn().mockResolvedValue(false),
   assistantMark: { entry: (...parts: Buffer[]) => Buffer.concat(parts), record: (...parts: Buffer[]) => Buffer.concat(parts), setting: () => Buffer.from('iv') },
   AssistantHistoryFull: class AssistantHistoryFull extends Error {},
   ASSISTANT_HISTORY_FULL: { error: 'The list is full' },
@@ -84,12 +84,12 @@ import financeRouter from '../../routes/finance.js';
 import topicsRouter from '../../routes/topics.js';
 import dosesRouter from '../../routes/doses.js';
 import historyRouter from '../../routes/assistantHistory.js';
-import { assistantWrite, assistantCreatePost, assistantNewRecordAllowed, AssistantHistoryFull, forgetAssistantChangesFor, listAssistantChanges, restoreAssistantChange, deleteAssistantChange, clearAssistantChanges } from '../../db/assistantHistory.js';
+import { assistantWrite, assistantCreatePost, assistantMayDelete, assistantNewRecordAllowed, AssistantHistoryFull, forgetAssistantChangesFor, listAssistantChanges, restoreAssistantChange, deleteAssistantChange, clearAssistantChanges } from '../../db/assistantHistory.js';
 import { revokeAssistantSessions } from '../../middleware/auth.js';
 import type { AiPrivacy } from '@chronicles/shared';
 import {
   getPostPage, getPost, getPostChanges, createPostCapped, updatePostCapped, deletePost, isAiHidden, getPostUpdatedAt,
-  assistantMayUndo, assistantOwnsVisible, assistantTopicAllowed, recordAssistantTopic, createTaxonomy, reserveTaxonomyIds,
+  assistantTopicAllowed, recordAssistantTopic, createTaxonomy, reserveTaxonomyIds, reservePostIds,
   updatePost, postStorageBytes, upsertDoseRecord, upsertSetting, getAllSettings, upsertSettingCapped, financeRecordBytes, upsertFinanceRecord, setAiHidden, getAllTaxonomies, deleteSetting,
 } from '../../db/tenantQueries.js';
 
@@ -197,32 +197,27 @@ describe('Entries, for the AI app', () => {
     expect(res.status).toBe(400);
   });
 
-  it('can only delete its own new entry, within the undo window', async () => {
-    (assistantMayUndo as any).mockResolvedValue(false);
+  it('deletes only what the one check allows: its own new entry or its own data, while the version there is its own', async () => {
+    (assistantMayDelete as any).mockResolvedValue(false);
     const refused = await request(smith).delete('/api/entries/5');
     expect(refused.status).toBe(403);
+    expect(assistantMayDelete).toHaveBeenCalledWith(SCHEMA, 5);
     expect(deletePost).not.toHaveBeenCalled();
 
-    (assistantMayUndo as any).mockResolvedValue(true);
-    const undone = await request(smith).delete('/api/entries/5');
-    expect(undone.status).toBe(200);
-    expect(deletePost).toHaveBeenCalledWith(SCHEMA, 5);
-  });
-
-  it('deletes its own data at any age, past the undo window; an entry it doesn’t own is still refused', async () => {
-    (assistantMayUndo as any).mockResolvedValue(false);
-    (assistantOwnsVisible as any).mockResolvedValue(false);
-    const refused = await request(smith).delete('/api/entries/5');
-    expect(refused.status).toBe(403);
-    expect(assistantOwnsVisible).toHaveBeenCalledWith(SCHEMA, 5);
-    expect(deletePost).not.toHaveBeenCalled();
-
-    (assistantOwnsVisible as any).mockResolvedValue(true);
+    (assistantMayDelete as any).mockResolvedValue(true);
     const removed = await request(smith).delete('/api/entries/5');
     expect(removed.status).toBe(200);
     // The same delete as any other: kept versions forgotten, the entry gone
     expect(forgetAssistantChangesFor).toHaveBeenCalledWith(SCHEMA, 'entry', '5');
     expect(deletePost).toHaveBeenCalledWith(SCHEMA, 5);
+  });
+
+  it('takes a few entry ids at a time, whatever it asks for; a browser gets what it asks for', async () => {
+    (reservePostIds as any).mockResolvedValue([1]);
+    await request(smith).post('/api/entries/ids').send({ count: 50 });
+    expect(reservePostIds).toHaveBeenLastCalledWith(SCHEMA, 10);
+    await request(browser).post('/api/entries/ids').send({ count: 50 });
+    expect(reservePostIds).toHaveBeenLastCalledWith(SCHEMA, 50);
   });
 
   it('edits its own data at any age, through the kept-first write (no undo window involved)', async () => {
@@ -233,14 +228,13 @@ describe('Entries, for the AI app', () => {
     const res = await request(smith).put('/api/entries/5').send(fullSave);
     expect(res.status).toBe(200);
     expect(assistantWrite).toHaveBeenCalledWith(SCHEMA, 'entry', '5', expect.any(Buffer), expect.any(Function), expect.any(Function));
-    expect(assistantMayUndo).not.toHaveBeenCalled();
+    expect(assistantMayDelete).not.toHaveBeenCalled();
   });
 
   it('a browser deletes as before, never asking whether the app owns the entry', async () => {
     const res = await request(browser).delete('/api/entries/5');
     expect(res.status).toBe(200);
-    expect(assistantMayUndo).not.toHaveBeenCalled();
-    expect(assistantOwnsVisible).not.toHaveBeenCalled();
+    expect(assistantMayDelete).not.toHaveBeenCalled();
     expect(deletePost).toHaveBeenCalledWith(SCHEMA, 5);
   });
 

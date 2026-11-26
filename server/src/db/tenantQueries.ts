@@ -579,18 +579,54 @@ export async function resealPosts(schemaName: string, posts: (EncryptedPostField
   const s = escapeSchema(schemaName);
   // Only while the entry is unchanged since the client loaded it: an edit in
   // between was saved id-bound already and must not be overwritten
+  const unchanged = `id = $5 AND is_encrypted = TRUE AND date_trunc('milliseconds', updated_at) = $6`;
   const sql = `UPDATE ${s}.posts SET content_encrypted = $1, content_iv = $2, metadata_encrypted = $3, metadata_iv = $4
-     WHERE id = $5 AND is_encrypted = TRUE AND date_trunc('milliseconds', updated_at) = $6`;
+     WHERE ${unchanged}`;
+  // A re-seal changes an entry's bytes, not who wrote it. Where the version
+  // being re-sealed is one the Chronicles AI app wrote (assistant_wrote holds
+  // its mark), the mark moves to the new bytes — otherwise a re-key would make
+  // every entry the app wrote look like the owner's: its own data would stop
+  // being its own, and its next edit of each would keep a version. Run before
+  // the update, in the same transaction, and only when the update will apply
+  const carry = `UPDATE ${s}.assistant_wrote w SET mark = sha256($2::bytea || $1::bytea || $4::bytea || $3::bytea)
+     WHERE w.kind = 'entry' AND w.ref = $5::text
+       AND w.mark = (SELECT sha256(COALESCE(content_iv, ''::bytea) || COALESCE(content_encrypted, ''::bytea)
+                                || COALESCE(metadata_iv, ''::bytea) || COALESCE(metadata_encrypted, ''::bytea))
+                     FROM ${s}.posts WHERE ${unchanged})`;
   const args = (p: (typeof posts)[number]) => [p.contentEncrypted, p.contentIv, p.metadataEncrypted, p.metadataIv, p.id, p.updatedAt];
+  const marked = await assistantHasWritten(schemaName, client);
   let counts: number[];
   if (client) {
     counts = [];
-    for (const p of posts) counts.push(await client.$executeRawUnsafe(sql, ...args(p)));
+    for (const p of posts) {
+      if (marked) await client.$executeRawUnsafe(carry, ...args(p));
+      counts.push(await client.$executeRawUnsafe(sql, ...args(p)));
+    }
   } else {
     const db = await tenantDb(schemaName);
-    counts = await db.$transaction(posts.map(p => db.$executeRawUnsafe(sql, ...args(p))));
+    const results = await db.$transaction(posts.flatMap(p => [
+      ...(marked ? [db.$executeRawUnsafe(carry, ...args(p))] : []),
+      db.$executeRawUnsafe(sql, ...args(p)),
+    ]));
+    // With the marks carried, every second result is an entry's own update
+    counts = marked ? results.filter((_, i) => i % 2 === 1) : results;
   }
   return counts.reduce((a, b) => a + b, 0);
+}
+
+/**
+ * Whether the Chronicles AI app has written any entry in this account. False
+ * for nearly every account (and when its tables were never made), so a re-seal
+ * there costs one catalog-backed read and nothing more.
+ */
+async function assistantHasWritten(schemaName: string, client?: TenantClient): Promise<boolean> {
+  const db = await clientFor(schemaName, client);
+  const s = escapeSchema(schemaName);
+  const [{ there }] = await db.$queryRawUnsafe<{ there: boolean }[]>(
+    `SELECT to_regclass($1) IS NOT NULL AS there`, `${s}.assistant_wrote`);
+  if (!there) return false;
+  const rows = await db.$queryRawUnsafe<unknown[]>(`SELECT 1 FROM ${s}.assistant_wrote WHERE kind = 'entry' LIMIT 1`);
+  return rows.length > 0;
 }
 
 export async function getPost(schemaName: string, id: number, options: { excludeAiHidden?: boolean } = {}): Promise<TenantPost | null> {
@@ -931,7 +967,8 @@ export async function ensurePostReservations(schemaName: string): Promise<void> 
  * its own creation for a short while (and nothing else). assistant_changes
  * keeps what it overwrote (db/assistantHistory.ts). assistant_owned lists the
  * entries that are the AI app's own data (its memories, letters, conversation
- * summaries): it may edit and delete those at any age. assistant_topic_creations
+ * summaries): it may edit and delete those at any age, until the owner edits
+ * one (assistantMayDelete, db/assistantHistory.ts). assistant_topic_creations
  * counts the topics it made, for its day's budget.
  */
 export function aiPrivacyStatements(s: string): string[] {
@@ -958,24 +995,29 @@ export function aiPrivacyStatements(s: string): string[] {
     // and gone with it (the foreign key), however the entry is deleted
     `CREATE TABLE IF NOT EXISTS ${s}.assistant_owned (post_id INTEGER PRIMARY KEY REFERENCES ${s}.posts(id) ON DELETE CASCADE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
     // Topics the AI app made, for its day's budget (ASSISTANT_TOPICS_PER_DAY).
-    // Last: ensureAiPrivacyTables looks for it to know they are all in place
     `CREATE TABLE IF NOT EXISTS ${s}.assistant_topic_creations (taxonomy_id INTEGER PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
   ];
 }
 
 const aiPrivacyReady = new Set<string>();
 
-/** JIT migration for the AI privacy tables: one catalog read once they're in place (it looks for the newest of them). */
+/** Every table aiPrivacyStatements makes. A new one goes here too, or older accounts never get it. */
+export const AI_PRIVACY_TABLES = [
+  'ai_hidden_posts', 'assistant_creations', 'assistant_changes', 'assistant_wrote',
+  'assistant_new_records', 'assistant_owned', 'assistant_topic_creations',
+] as const;
+
+/** JIT migration for the AI privacy tables: one catalog read once they're all in place (each is looked for by name). */
 export async function ensureAiPrivacyTables(schemaName: string): Promise<void> {
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   if (aiPrivacyReady.has(s)) return;
-  const [{ ready }] = await db.$queryRawUnsafe<{ ready: boolean }[]>(
-    `SELECT EXISTS (SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
-                    WHERE n.nspname = $1 AND t.relname = 'assistant_topic_creations') AS ready`,
-    s
+  const [{ n }] = await db.$queryRawUnsafe<{ n: number | bigint }[]>(
+    `SELECT COUNT(*) AS n FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
+     WHERE n.nspname = $1 AND t.relkind = 'r' AND t.relname = ANY($2::text[])`,
+    s, [...AI_PRIVACY_TABLES]
   );
-  if (!ready) await db.$transaction(aiPrivacyStatements(s).map(sql => db.$executeRawUnsafe(sql)));
+  if (Number(n) < AI_PRIVACY_TABLES.length) await db.$transaction(aiPrivacyStatements(s).map(sql => db.$executeRawUnsafe(sql)));
   aiPrivacyReady.add(s);
 }
 
@@ -1060,33 +1102,6 @@ export const ASSISTANT_UNDO_MS = 2 * 60 * 1000;
 
 /** How many entries the AI app may create in a day: a runaway or misled app can't fill the journal (counted and recorded by assistantCreatePost, db/assistantHistory.ts). */
 export const ASSISTANT_CREATES_PER_DAY = 300;
-
-/** Whether the AI app created this entry within the undo window. */
-export async function assistantMayUndo(schemaName: string, id: number, windowMs = ASSISTANT_UNDO_MS): Promise<boolean> {
-  await ensureAiPrivacyTables(schemaName);
-  const db = await tenantDb(schemaName);
-  const rows = await db.$queryRawUnsafe<{ post_id: number }[]>(
-    `SELECT post_id FROM ${escapeSchema(schemaName)}.assistant_creations
-     WHERE post_id = $1 AND created_at > NOW() - make_interval(secs => $2::double precision / 1000)`,
-    id, windowMs
-  );
-  return rows.length > 0;
-}
-
-/**
- * Whether the AI app may delete this entry as its own data: it is in
- * assistant_owned (any age) and not hidden from AI — what it can't see it
- * can't remove.
- */
-export async function assistantOwnsVisible(schemaName: string, id: number): Promise<boolean> {
-  await ensureAiPrivacyTables(schemaName);
-  const db = await tenantDb(schemaName);
-  const s = escapeSchema(schemaName);
-  const rows = await db.$queryRawUnsafe<{ post_id: number }[]>(
-    `SELECT post_id FROM ${s}.assistant_owned WHERE post_id = $1 AND post_id NOT IN (SELECT post_id FROM ${s}.ai_hidden_posts)`, id
-  );
-  return rows.length > 0;
-}
 
 /** How many topics the AI app may create in a day (its memories, letters and conversations need three). */
 export const ASSISTANT_TOPICS_PER_DAY = 5;

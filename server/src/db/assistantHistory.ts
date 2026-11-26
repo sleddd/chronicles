@@ -39,7 +39,7 @@ import { tenantDb } from './shards.js';
 import { escapeSchema } from './escapeSchema.js';
 import {
   ensureAiPrivacyTables, ensureFinanceTables, ensureDoseRecordsTable, ensurePostReservations, withTenantLock,
-  createPost, postStorageBytes, ASSISTANT_CREATES_PER_DAY, type CreatePostInput, type TenantClient, type TenantPost,
+  createPost, postStorageBytes, ASSISTANT_CREATES_PER_DAY, ASSISTANT_UNDO_MS, type CreatePostInput, type TenantClient, type TenantPost,
 } from './tenantQueries.js';
 
 export const ASSISTANT_HISTORY_DAYS = 14;
@@ -172,6 +172,10 @@ async function keepCurrent(tx: TenantClient, s: string, kind: AssistantChangeKin
   const [wrote] = await tx.$queryRawUnsafe<{ mark: Buffer }[]>(
     `SELECT mark FROM ${s}.assistant_wrote WHERE kind = $1 AND ref = $2`, kind, ref);
   if (wrote && now.mark && Buffer.from(wrote.mark).equals(Buffer.from(now.mark))) return;
+  // The version there is the owner's: an entry the app made as its own data
+  // (assistant_owned) is the owner's from here on, and the app's right to
+  // delete it ends (rolled back with the write if nothing is saved)
+  if (kind === 'entry') await tx.$executeRawUnsafe(`DELETE FROM ${s}.assistant_owned WHERE post_id = $1`, id);
   await tx.$executeRawUnsafe(expireSql(s));
   const [used] = await tx.$queryRawUnsafe<{ n: number | bigint; bytes: number | bigint | null }[]>(
     `SELECT COUNT(*) AS n, COALESCE(SUM(${SIZE}), 0) AS bytes FROM ${s}.assistant_changes`);
@@ -234,8 +238,9 @@ export type AssistantCreate = TenantPost | 'full' | 'limit' | null;
  *
  * With `owned`, the entry is the app's own data (a memory, a letter, a
  * conversation summary) and is recorded in assistant_owned in the same
- * transaction: the app may then edit and delete it at any age. It still comes
- * out of the day's budget.
+ * transaction: the app may then edit and delete it at any age, for as long as
+ * the version there is its own (assistantMayDelete). It still comes out of the
+ * day's budget.
  *
  * `limit`: the day's budget is spent. `full`: no room in the journal. Null:
  * the id was never reserved or is taken.
@@ -263,6 +268,41 @@ export async function assistantCreatePost(
     await rememberWrote(tx, s, 'entry', String(post.id),
       assistantMark.entry(input.contentIv, input.contentEncrypted, input.metadataIv, input.metadataEncrypted));
     return post;
+  });
+}
+
+/**
+ * Whether an AI-app session may delete this entry: one it created within the
+ * undo window, or its own data (assistant_owned) at any age — and in both
+ * cases only while
+ *  - it can see it (an entry hidden from AI is "not found" to it), and
+ *  - the version there is the one the app itself last wrote.
+ * An entry the owner has edited since (or put back from the list of changes)
+ * is the owner's: the app may not delete it, and if it was the app's own data
+ * that ends for good — the row leaves assistant_owned here, so a later write
+ * by the app can't win the right back. Read under the account's lock, like
+ * the app's writes, so the two can't cross.
+ */
+export async function assistantMayDelete(schemaName: string, id: number, undoMs: number = ASSISTANT_UNDO_MS): Promise<boolean> {
+  await ensureAiPrivacyTables(schemaName);
+  const s = escapeSchema(schemaName);
+  return withTenantLock(schemaName, async (tx) => {
+    const [now] = await tx.$queryRawUnsafe<{ mark: Buffer | null }[]>(currentMarkSql(s, 'entry'), id);
+    if (!now) return false;
+    const [wrote] = await tx.$queryRawUnsafe<{ mark: Buffer }[]>(
+      `SELECT mark FROM ${s}.assistant_wrote WHERE kind = 'entry' AND ref = $1`, String(id));
+    const appsOwn = !!wrote && !!now.mark && Buffer.from(wrote.mark).equals(Buffer.from(now.mark));
+    if (!appsOwn) {
+      await tx.$executeRawUnsafe(`DELETE FROM ${s}.assistant_owned WHERE post_id = $1`, id);
+      return false;
+    }
+    const [{ ok }] = await tx.$queryRawUnsafe<{ ok: boolean }[]>(
+      `SELECT NOT EXISTS (SELECT 1 FROM ${s}.ai_hidden_posts WHERE post_id = $1)
+          AND (EXISTS (SELECT 1 FROM ${s}.assistant_owned WHERE post_id = $1)
+            OR EXISTS (SELECT 1 FROM ${s}.assistant_creations
+                       WHERE post_id = $1 AND created_at > NOW() - make_interval(secs => $2::double precision / 1000))) AS ok`,
+      id, undoMs);
+    return !!ok;
   });
 }
 

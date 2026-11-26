@@ -12,7 +12,8 @@
  *   habits, record bill payments and change a task's status. The only deletes
  *   are undoing an entry it created itself, within ASSISTANT_UNDO_MS, and its
  *   own data: entries it created with `assistantOwned` (assistant_owned), at
- *   any age. It may create a few topics for that data (ASSISTANT_TOPICS_PER_DAY),
+ *   any age — both only while the version there is the one it last wrote. An
+ *   entry the owner has edited is the owner's (assistantMayDelete). It may create a few topics for that data (ASSISTANT_TOPICS_PER_DAY),
  *   never rename, reorder or delete one.
  * - Limited reading: entries hidden from AI are left out (routes/entries.ts),
  *   topics on the "Don't share with AI" list are left out (routes/topics.ts),

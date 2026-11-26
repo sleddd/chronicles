@@ -463,6 +463,8 @@ describe('Post queries', () => {
 
   describe('resealPosts', () => {
     it('replaces the encrypted fields of each entry without touching updated_at', async () => {
+      // The Chronicles AI app has written nothing here (its tables were never made)
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ there: false }]);
       mockExecuteRawUnsafe.mockResolvedValue(1);
       mockTransaction.mockImplementation(async (ops: Promise<number>[]) => Promise.all(ops));
       const p = { contentEncrypted: Buffer.from('a'), contentIv: Buffer.from('b'), metadataEncrypted: Buffer.from('c'), metadataIv: Buffer.from('d') };
@@ -473,6 +475,23 @@ describe('Post queries', () => {
       expect(sql).not.toContain('updated_at =');
       expect(sql).toContain("date_trunc('milliseconds', updated_at) = $6");
       expect(mockExecuteRawUnsafe.mock.calls[0][6]).toBe(at);
+      // One statement an entry: nothing extra for an account the AI app never wrote in
+      expect(mockExecuteRawUnsafe).toHaveBeenCalledTimes(2);
+    });
+
+    it('where the Chronicles AI app has written entries, its mark moves with the re-seal (so a re-key doesn’t make its entries look like the owner’s)', async () => {
+      mockQueryRawUnsafe.mockResolvedValueOnce([{ there: true }]).mockResolvedValueOnce([{ '?column?': 1 }]);
+      // carry, update, carry, update: only the updates are counted
+      mockExecuteRawUnsafe.mockResolvedValueOnce(1).mockResolvedValueOnce(1).mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+      mockTransaction.mockImplementation(async (ops: Promise<number>[]) => Promise.all(ops));
+      const p = { contentEncrypted: Buffer.from('a'), contentIv: Buffer.from('b'), metadataEncrypted: Buffer.from('c'), metadataIv: Buffer.from('d') };
+      const at = new Date('2026-10-01T10:00:00.123Z');
+      expect(await resealPosts(SCHEMA, [{ id: 1, updatedAt: at, ...p }, { id: 2, updatedAt: at, ...p }])).toBe(1);
+      const carry = mockExecuteRawUnsafe.mock.calls[0][0] as string;
+      expect(carry).toContain('UPDATE usr_1_abc123.assistant_wrote w SET mark = sha256($2::bytea || $1::bytea || $4::bytea || $3::bytea)');
+      // Only when the version being re-sealed is the one the app wrote, and the re-seal will apply
+      expect(carry).toContain("date_trunc('milliseconds', updated_at) = $6");
+      expect(mockExecuteRawUnsafe.mock.calls[1][0]).toContain('UPDATE usr_1_abc123.posts SET content_encrypted = $1');
     });
   });
 

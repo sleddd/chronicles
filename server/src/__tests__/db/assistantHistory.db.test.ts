@@ -287,6 +287,91 @@ describe.skipIf(!local)('AI app change history and hidden list (real Postgres)',
     expect((await kept()).filter(c => c.ref === String(id)).map(c => text(c.body)).sort()).toEqual(['app v2', 'owner v1', 'owner v2']);
   });
 
+  it('the app’s own data: deletable at any age while the version is its own, never once the owner has edited it', async () => {
+    const make = async (n: number) => {
+      const [id] = await q.reservePostIds(SCHEMA, 1);
+      const input = { id, contentEncrypted: bytes(`memory ${n}`), contentIv: iv(n), metadataEncrypted: bytes('meta'), metadataIv: iv(n + 100) };
+      expect(await h.assistantCreatePost(SCHEMA, input, 100, 1e9, { owned: true })).toMatchObject({ id });
+      // Long past the undo window (but not so old that the app's own cleanup of these rows drops it)
+      await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.assistant_creations SET created_at = NOW() - interval '3 hours' WHERE post_id = $1`, id);
+      return id;
+    };
+    const owned = async (id: number) =>
+      (await db.$queryRawUnsafe<unknown[]>(`SELECT 1 FROM ${SCHEMA}.assistant_owned WHERE post_id = $1`, id)).length > 0;
+
+    // Its own, at any age — and still its own after the app edits it
+    const a = await make(60);
+    expect(await h.assistantMayDelete(SCHEMA, a)).toBe(true);
+    await appSavesEntry(a, 'memory, updated by the app', 61);
+    expect(await h.assistantMayDelete(SCHEMA, a)).toBe(true);
+    // Hidden from AI: it can't see it, so it can't remove it (it stays its own)
+    await q.setAiHidden(SCHEMA, [a], true);
+    expect(await h.assistantMayDelete(SCHEMA, a)).toBe(false);
+    expect(await owned(a)).toBe(true);
+    await q.setAiHidden(SCHEMA, [a], false);
+    expect(await h.assistantMayDelete(SCHEMA, a)).toBe(true);
+
+    // The owner edits one: it is the owner's from then on, for good
+    const b = await make(62);
+    await ownerSavesEntry(b, 'rewritten by the owner', 63);
+    expect(await h.assistantMayDelete(SCHEMA, b)).toBe(false);
+    expect(await owned(b)).toBe(false);
+    // …even after the app writes over it again (the owner's version is kept first)
+    await appSavesEntry(b, 'the app writes over it', 64);
+    expect(await h.assistantMayDelete(SCHEMA, b)).toBe(false);
+    expect((await kept()).some(c => c.ref === String(b) && text(c.body) === 'rewritten by the owner')).toBe(true);
+
+    // The app writing over the owner's edit (without asking to delete first) ends it too
+    const c = await make(65);
+    await ownerSavesEntry(c, 'the owner’s words', 66);
+    await appSavesEntry(c, 'the app’s words', 67);
+    expect(await owned(c)).toBe(false);
+    expect(await h.assistantMayDelete(SCHEMA, c)).toBe(false);
+
+    // An entry that was never the app's own data: no right to delete it
+    const mine = await newEntry('the owner’s entry', 68);
+    expect(await h.assistantMayDelete(SCHEMA, mine)).toBe(false);
+
+    // Deleting the entry takes its ownership row with it
+    await q.deletePost(SCHEMA, a);
+    expect(await owned(a)).toBe(false);
+  });
+
+  it('a re-seal (a re-key) keeps the app’s entries the app’s: the mark moves with the new bytes', async () => {
+    const [id] = await q.reservePostIds(SCHEMA, 1);
+    const input = { id, contentEncrypted: bytes('memory'), contentIv: iv(70), metadataEncrypted: bytes('meta'), metadataIv: iv(170) };
+    expect(await h.assistantCreatePost(SCHEMA, input, 100, 1e9, { owned: true })).toMatchObject({ id });
+    await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.assistant_creations SET created_at = NOW() - interval '3 hours' WHERE post_id = $1`, id);
+    const post = (await q.getPost(SCHEMA, id))!;
+    const resealed = { id, updatedAt: post.updatedAt as Date, contentEncrypted: bytes('memory, new key'), contentIv: iv(71), metadataEncrypted: bytes('meta, new key'), metadataIv: iv(171) };
+    expect(await q.resealPosts(SCHEMA, [resealed])).toBe(1);
+    expect(await contentOf(id)).toBe('memory, new key');
+    expect(await h.assistantMayDelete(SCHEMA, id)).toBe(true);
+    // …and the app's next edit keeps nothing: the version it replaces is still its own
+    const before = (await kept()).length;
+    await appSavesEntry(id, 'memory, edited', 72);
+    expect((await kept()).length).toBe(before);
+
+    // The owner's entry, re-sealed, stays the owner's
+    const mine = await newEntry('owner', 73);
+    await appSavesEntry(mine, 'app', 74);
+    await ownerSavesEntry(mine, 'owner again', 75);
+    const p2 = (await q.getPost(SCHEMA, mine))!;
+    expect(await q.resealPosts(SCHEMA, [{ id: mine, updatedAt: p2.updatedAt as Date, contentEncrypted: bytes('owner again, new key'), contentIv: iv(76), metadataEncrypted: bytes('meta'), metadataIv: iv(176) }])).toBe(1);
+    await appSavesEntry(mine, 'app once more', 77);
+    expect((await kept()).some(c => c.ref === String(mine) && text(c.body) === 'owner again, new key')).toBe(true);
+  });
+
+  it('every AI privacy table is made for an older account, whichever were there before', async () => {
+    await db.$executeRawUnsafe(`DROP TABLE ${SCHEMA}.assistant_topic_creations`);
+    const { AI_PRIVACY_TABLES, aiPrivacyStatements } = q;
+    for (const sql of aiPrivacyStatements(SCHEMA)) await db.$executeRawUnsafe(sql);
+    const [{ n }] = await db.$queryRawUnsafe<{ n: bigint }[]>(
+      `SELECT COUNT(*) AS n FROM pg_class t JOIN pg_namespace ns ON ns.oid = t.relnamespace WHERE ns.nspname = $1 AND t.relname = ANY($2::text[])`,
+      SCHEMA, [...AI_PRIVACY_TABLES]);
+    expect(Number(n)).toBe(AI_PRIVACY_TABLES.length);
+  });
+
   it('the app creates under one lock: counted, undoable for a short while, and its own entry isn’t kept when it changes it', async () => {
     const [id] = await q.reservePostIds(SCHEMA, 1);
     const input = { id, contentEncrypted: bytes('made by the app'), contentIv: iv(80), metadataEncrypted: bytes('meta'), metadataIv: iv(180) };
@@ -304,10 +389,11 @@ describe.skipIf(!local)('AI app change history and hidden list (real Postgres)',
     await appSavesEntry(id, 'made by the app, ticked', 81);
     expect((await kept()).filter(c => c.ref === String(id))).toEqual([]);
 
-    expect(await q.assistantMayUndo(SCHEMA, id)).toBe(true);
+    // Undo: only inside the window, and never an entry that isn't there
+    expect(await h.assistantMayDelete(SCHEMA, id)).toBe(true);
     await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.assistant_creations SET created_at = NOW() - interval '3 minutes' WHERE post_id = $1`, id);
-    expect(await q.assistantMayUndo(SCHEMA, id)).toBe(false);
-    expect(await q.assistantMayUndo(SCHEMA, id + 12345)).toBe(false);
+    expect(await h.assistantMayDelete(SCHEMA, id)).toBe(false);
+    expect(await h.assistantMayDelete(SCHEMA, id + 12345)).toBe(false);
 
     // The day's budget
     await db.$executeRawUnsafe(

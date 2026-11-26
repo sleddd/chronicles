@@ -4,6 +4,7 @@ import { createTaxonomy, getTaxonomy, getAllTaxonomies, updateTaxonomy, deleteTa
   ensureAiPrivacyTables, assistantTopicAllowed, recordAssistantTopic, ASSISTANT_TOPICS_PER_DAY } from '../db/tenantQueries.js';
 import { createTaxonomySchema, updateTaxonomySchema, isPlaintextTopicWrite, reservePostIdsSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
+import { assistantIdLimiter } from '../middleware/rateLimiter.js';
 
 /* Topic names and icons are encrypted in the browser, bound to the topic's id;
    the server stores the payload and never sees them. Default topics are
@@ -26,6 +27,9 @@ const FULL = Symbol('full');
    ASSISTANT_TOPICS_PER_DAY in a day — it can't rename, reorder or delete one */
 const ASSISTANT_TOPICS_SPENT = { error: `The Chronicles AI app can create up to ${ASSISTANT_TOPICS_PER_DAY} topics a day — try again tomorrow` };
 const LIMIT = Symbol('limit');
+/* …and reserves one id at a time, a handful of times an hour: the account holds
+   only so many reservations, and the owner's browser needs its own */
+const assistantTopicIds = assistantIdLimiter('topic-ids', 10);
 
 const router = Router();
 
@@ -74,7 +78,7 @@ router.post('/reorder', async (req, res) => {
 });
 
 // POST /api/topics/ids — reserve ids for new topics
-router.post('/ids', async (req, res) => {
+router.post('/ids', assistantTopicIds, async (req, res) => {
   try {
     const parsed = reservePostIdsSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
@@ -94,7 +98,7 @@ router.post('/ids', async (req, res) => {
       res.status(429).json(ASSISTANT_TOPICS_SPENT);
       return;
     }
-    res.json({ ids: await reserveTaxonomyIds(req.auth!.tenantSchemaName, parsed.data.count) });
+    res.json({ ids: await reserveTaxonomyIds(req.auth!.tenantSchemaName, req.auth!.assistant ? 1 : parsed.data.count) });
   } catch (err) {
     console.error('Reserve topic ids error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to reserve topic ids' });

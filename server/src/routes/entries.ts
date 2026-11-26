@@ -7,15 +7,20 @@ import {
   // Entry sync
   ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, getPostFingerprint, getPostUpdatedAt,
   // Hidden from AI, and the Chronicles AI app
-  getAiHiddenIds, setAiHidden, pruneAiHidden, getAiVisibleIds, isAiHidden, assistantMayUndo, assistantOwnsVisible,
+  getAiHiddenIds, setAiHidden, pruneAiHidden, getAiVisibleIds, isAiHidden,
 } from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
 import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema, aiHiddenSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
+import { assistantIdLimiter } from '../middleware/rateLimiter.js';
 import { deleteSharesForEntry } from '../db/shareQueries.js';
-import { assistantWrite, assistantCreatePost, assistantMark, forgetAssistantChangesFor, expireAssistantChanges, AssistantHistoryFull, ASSISTANT_HISTORY_FULL } from '../db/assistantHistory.js';
+import { assistantWrite, assistantCreatePost, assistantMayDelete, assistantMark, forgetAssistantChangesFor, expireAssistantChanges, AssistantHistoryFull, ASSISTANT_HISTORY_FULL } from '../db/assistantHistory.js';
 
 const router = Router();
+
+/* The Chronicles AI app's id reservations: a few ids a request, so many requests an hour (browsers aren't counted) */
+const ASSISTANT_IDS_PER_REQUEST = 10;
+const assistantEntryIds = assistantIdLimiter('entry-ids', 60);
 
 // Every write is change-tracked for the browser's sync (a trigger per schema,
 // added on first use for older accounts) — in place before any route runs
@@ -202,14 +207,17 @@ router.put('/ai-hidden', async (req, res) => {
 
 // POST /api/entries/ids — Reserve ids for new entries (each entry's ciphertext
 // is bound to its id, so the client needs the id before encrypting)
-router.post('/ids', async (req, res) => {
+router.post('/ids', assistantEntryIds, async (req, res) => {
   try {
     const parsed = reservePostIdsSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.issues[0].message });
       return;
     }
-    res.json({ ids: await reservePostIds(req.auth!.tenantSchemaName, parsed.data.count) });
+    // The AI app takes a few at a time: it creates one entry at a turn, and
+    // must not push out the ids the owner's browser is holding
+    const count = req.auth!.assistant ? Math.min(parsed.data.count, ASSISTANT_IDS_PER_REQUEST) : parsed.data.count;
+    res.json({ ids: await reservePostIds(req.auth!.tenantSchemaName, count) });
   } catch (err) {
     console.error('Reserve entry ids error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to reserve entry ids' });
@@ -457,9 +465,9 @@ router.delete('/:id', async (req, res) => {
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
     // The AI app never removes anything — except undoing an entry it created
     // itself, within the undo window, and its own data (assistantOwned) at any
-    // age while it can see it
-    if (req.auth!.assistant && !(await assistantMayUndo(req.auth!.tenantSchemaName, id))
-        && !(await assistantOwnsVisible(req.auth!.tenantSchemaName, id))) {
+    // age: both only while it can see the entry and the version there is the
+    // one it last wrote. One the owner has edited since is the owner's
+    if (req.auth!.assistant && !(await assistantMayDelete(req.auth!.tenantSchemaName, id))) {
       res.status(403).json({ error: 'The Chronicles AI app can only undo what it just created, or remove its own data' });
       return;
     }

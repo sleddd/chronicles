@@ -188,6 +188,24 @@ export const aiRefusalLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
 });
 
+/**
+ * Ids the Chronicles AI app reserves for new entries and topics. An account
+ * holds only so many reservations (the oldest dropped first), so without a cap
+ * the app could push out the ones the owner's browser is holding. Browser
+ * sessions are never counted. Per account, in this instance's memory.
+ */
+export function assistantIdLimiter(name: string, perHour: number) {
+  return rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: perHour,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => !(req as Request).auth?.assistant,
+    keyGenerator: (req) => `${(req as Request).auth?.accountId}:assistant:${name}`,
+    message: { error: 'Too many requests, please try again later' },
+  });
+}
+
 /** Public bug reports (sent on to support by email): a handful an hour per IP */
 export const bugReportLimiter = rateLimit({
   store: sharedRateLimitStore('bug-report'),

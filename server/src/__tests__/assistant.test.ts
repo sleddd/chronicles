@@ -285,8 +285,7 @@ describe('Every write the AI app may make is held to its rule in the route', () 
       expect(source).toContain('recordAssistantTopic(');
     }
     if (rule.method === 'DELETE') {
-      expect(source).toContain('assistantMayUndo(');
-      expect(source).toContain('assistantOwnsVisible(');
+      expect(source).toContain('assistantMayDelete(');
     }
   });
 
@@ -302,5 +301,17 @@ describe('Every write the AI app may make is held to its rule in the route', () 
     expect(isAssistantSignOut('post', '/api/auth/logout/')).toBe(true);
     expect(isAssistantSignOut('GET', '/api/auth/logout')).toBe(false);
     expect(isAssistantSignOut('POST', '/api/entries')).toBe(false);
+  });
+});
+
+describe('The AI privacy tables', () => {
+  it('every table the statements make is on the list ensureAiPrivacyTables checks (and the other way round)', () => {
+    const source = readFileSync(new URL('../db/tenantQueries.ts', import.meta.url), 'utf8');
+    const body = source.slice(source.indexOf('export function aiPrivacyStatements'), source.indexOf('const aiPrivacyReady'));
+    const made = [...body.matchAll(/CREATE TABLE IF NOT EXISTS \$\{s\}\.([a-z_]+)/g)].map(m => m[1]).sort();
+    const listed = [...source.slice(source.indexOf('export const AI_PRIVACY_TABLES'), source.indexOf('] as const', source.indexOf('export const AI_PRIVACY_TABLES')))
+      .matchAll(/'([a-z_]+)'/g)].map(m => m[1]).sort();
+    expect(made.length).toBeGreaterThan(0);
+    expect(listed).toEqual(made);
   });
 });
