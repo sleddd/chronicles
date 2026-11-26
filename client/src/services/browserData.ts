@@ -22,7 +22,37 @@ import { KNOWN_PASSKEYS_STORE } from './passkeys.js';
 // (The finished re-key ids too: forgetting them would let a server bring an old
 // key back into use here — rekeyFinishedHere)
 const REKEY_DONE_STORE = 'chronicles.rekey-done-v1';
-const KEPT = [EGRESS_STORE, SEEN_MARKERS_STORE, SETTING_REVS_STORE, KNOWN_PASSKEYS_STORE, REKEY_DONE_STORE];
+// Marks of keys this journal has moved away from (a re-key): never installed here again
+const RETIRED_STORE = 'chronicles.owner-retired-v1';
+const KEPT = [EGRESS_STORE, SEEN_MARKERS_STORE, SETTING_REVS_STORE, KNOWN_PASSKEYS_STORE, REKEY_DONE_STORE, RETIRED_STORE];
+
+function retiredMarks(): string[] {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(RETIRED_STORE) ?? '[]');
+    return Array.isArray(raw) ? raw.filter((m): m is string => typeof m === 'string') : [];
+  } catch { return []; }
+}
+
+function retireMark(mark: string): void {
+  try {
+    const list = retiredMarks();
+    if (!list.includes(mark)) localStorage.setItem(RETIRED_STORE, JSON.stringify([...list, mark].slice(-50)));
+  } catch { /* storage unavailable */ }
+}
+
+/**
+ * The key that opened is one this journal was re-encrypted away from. A re-key
+ * is for when someone may hold the old key, and a server (or whoever can write
+ * its database) can still hand out an old wrap of it — an old passkey's, say,
+ * whose secret never changes. Installed, this browser would wipe itself as a
+ * stranger's and then seal everything new under the key that person holds.
+ */
+export class RetiredKeyError extends Error {
+  constructor() {
+    super('That sign-in opened a key your journal no longer uses. Sign in with your current password, or use your recovery key.');
+    this.name = 'RetiredKeyError';
+  }
+}
 // A re-key sent to the server whose answer hasn't been acted on yet (see noteRetagPending)
 const RETAG_STORE = 'chronicles.rekey-retag-v1';
 const OWNER_STORE = 'chronicles.owner-v1';
@@ -111,6 +141,8 @@ export async function claimBrowserFor(accountTag: string, signedIn = true): Prom
   setLegacyMigrationAllowed(false);
   await applyPendingRetag(accountTag);
   const mark = await ownerMark(accountTag);
+  // Before anything is wiped or claimed: a retired key is refused outright
+  if (retiredMarks().includes(mark)) throw new RetiredKeyError();
   let stored: string | null = null;
   let fresh: string | null = null;
   try {
@@ -145,6 +177,8 @@ export async function claimBrowserFor(accountTag: string, signedIn = true): Prom
 export async function retagBrowser(oldTag: string, newTag: string): Promise<void> {
   try {
     const [oldMark, newMark] = await Promise.all([ownerMark(oldTag), ownerMark(newTag)]);
+    // The old key is left for good (claimBrowserFor refuses it from here on)
+    retireMark(oldMark);
     if (localStorage.getItem(OWNER_STORE) === oldMark) localStorage.setItem(OWNER_STORE, newMark);
     if (localStorage.getItem(FRESH_STORE) === oldMark) localStorage.setItem(FRESH_STORE, newMark);
     for (const store of [EGRESS_STORE, SETTING_REVS_STORE]) {

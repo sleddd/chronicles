@@ -172,18 +172,26 @@ type Move = Pick<ImageRef, 'key' | 'iv' | 'thumbKey' | 'thumbIv' | 'rekeyFrom' |
  * name AND the photo's own bytes. The same bytes under the same key and IV
  * give the same ciphertext, so a repeated upload (a run cut short, another
  * browser taking over) writes the identical object and every holder's IV stays
- * right whoever wrote it last. Different bytes get a different IV: a source
- * object swapped between two runs (someone with the old key and the bucket)
- * can never make the new key seal two plaintexts under one IV, which would
- * break AES-GCM for that key.
+ * right whoever wrote it last. Different bytes get a different IV.
+ *
+ * It is keyed with `secret` — the new key's account tag, which only a holder
+ * of the NEW key can make and which never leaves the browser. Derived from
+ * public values alone (as it was), the IV could be worked out by anyone: with
+ * 96 bits, about 2^48 tries offline find two different photos that share one,
+ * and whoever holds the old key and the bucket — the very person a re-key is
+ * for — could swap the source between two runs to have the new key seal both
+ * under that IV, which breaks AES-GCM for the key. Keyed, there is nothing to
+ * search offline.
  */
-export async function movedImageIv(toKey: string, rekeyId: string, plain: ArrayBuffer): Promise<Uint8Array> {
+export async function movedImageIv(toKey: string, rekeyId: string, plain: ArrayBuffer, secret: string): Promise<Uint8Array> {
+  if (!secret) throw new Error('movedImageIv needs the new key’s account tag');
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', plain));
-  const head = new TextEncoder().encode(`chronicles:rekey:image-iv:v2:${rekeyId}:${toKey}:`);
+  const head = new TextEncoder().encode(`chronicles:rekey:image-iv:v3:${rekeyId}:${toKey}:`);
   const input = new Uint8Array(head.length + digest.length);
   input.set(head);
   input.set(digest, head.length);
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', input)).slice(0, 12);
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', key, input)).slice(0, 12);
 }
 
 /**
@@ -561,6 +569,8 @@ export async function runRekey({ newKey, oldKey, rekeyId, runner, onProgress, fe
  */
 async function moveImage(ref: ImageRef, r2: R2Config, newKey: CryptoKey, oldKey: CryptoKey, rekeyId: string, fetchFn: typeof fetch): Promise<Move | null> {
   const [key, thumbKey] = await Promise.all([movedImageKey(ref.key, rekeyId), movedImageKey(ref.thumbKey, rekeyId)]);
+  // What keys the new objects' IVs: only a holder of the new key can make it (movedImageIv)
+  const ivSecret = await encryptionService.accountTag(newKey, 'egress');
   const b64 = (iv: Uint8Array) => arrayBufferToBase64(iv.buffer as ArrayBuffer);
   const download = async (from: string): Promise<ArrayBuffer | null> => {
     const res = await fetchFn(await presignR2(r2, 'GET', from));
@@ -581,7 +591,7 @@ async function moveImage(ref: ImageRef, r2: R2Config, newKey: CryptoKey, oldKey:
       }
     }
     if (!plain) return null;
-    const toIv = await movedImageIv(to, rekeyId, plain);
+    const toIv = await movedImageIv(to, rekeyId, plain, ivSecret);
     const sealed = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv: toIv.buffer as ArrayBuffer, additionalData: new TextEncoder().encode(imageAad(to)) },
       newKey, plain,

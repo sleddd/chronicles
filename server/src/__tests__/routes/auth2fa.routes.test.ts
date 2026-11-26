@@ -219,14 +219,17 @@ describe('2FA hardening', () => {
 
     it('signs out every other session and cancels pending sign-ins, keeping this one', async () => {
       const secret = generateSecret();
-      const pending = twoFAAccount(generateSecret());
+      // The pending sign-in is for the signed-in session's own account (id 1)
+      const pending = { ...twoFAAccount(generateSecret()), id: 1 };
       const login = await pendingTokenFor(app, pending);
       (prisma.account.findUnique as any).mockResolvedValue({ id: pending.id, passwordHash: AUTH_HASH, totpEnabled: false });
 
       const res = await request(app).post('/api/auth/2fa/enable')
         .send({ secret, code: generateSync({ secret }), currentAuthSecret: SECRET });
       expect(res.status).toBe(200);
-      expect(authMw.revokeAllSessions).toHaveBeenCalledWith(pending.id, 'aabbccddee11', '2fa_enabled');
+      // (the signed-in session's own account: one step of the transaction that saves the change)
+      expect(authMw.revokeAllSessions).toHaveBeenCalledWith(expect.any(Number), 'aabbccddee11', '2fa_enabled');
+      expect(prisma.$transaction).toHaveBeenCalled();
 
       (prisma.account.findUnique as any).mockResolvedValue(pending);
       const finish = await request(app).post('/api/auth/login/2fa').send({ pendingToken: login, code: generateSync({ secret: pending.totpSecret }) });
@@ -380,6 +383,34 @@ describe('2FA hardening', () => {
       vi.setSystemTime(Date.now() + 30_000);
       expect((await code('192.0.2.1', generateSync({ secret }))).status).toBe(429);
       // …but not the owner: 198.51.100.x signed in fully above, so it's a known network
+      expect((await code('198.51.100.60', generateSync({ secret }))).status).toBe(200);
+    }, 30000);
+
+    it('a guesser who stops one short of the lock on every network is still stopped: strangers’ wrong codes add up for the account', async () => {
+      const proxied = buildApp();
+      proxied.set('trust proxy', true);
+      const secret = generateSecret();
+      const account = twoFAAccount(secret);
+      const wrong = () => generateSync({ secret }) === '000000' ? '111111' : '000000';
+      const pending = async (ip: string) => {
+        (prisma.account.findUnique as any).mockResolvedValue(account);
+        return (await request(proxied).post('/api/auth/login').set('X-Forwarded-For', ip).send({ email: account.email, authSecret: SECRET })).body.pendingToken;
+      };
+      const code = async (ip: string, c: string) => request(proxied).post('/api/auth/login/2fa').set('X-Forwarded-For', ip)
+        .send({ pendingToken: await pending(ip), code: c });
+
+      // The owner signed in from home once
+      expect((await code('198.51.100.1', generateSync({ secret }))).status).toBe(200);
+      // Nine wrong codes from each of six networks, six more from a seventh: no
+      // network ever locks (the tenth would), so no locked network is counted
+      for (let n = 1; n <= 6; n++) {
+        for (let i = 0; i < 9; i++) expect((await code(`10.${n}.0.1`, wrong())).status).toBe(401);
+      }
+      for (let i = 0; i < 6; i++) expect((await code('10.7.0.1', wrong())).status).toBe(401);
+      vi.setSystemTime(Date.now() + 30_000);
+      // 60 wrong codes in all: the account's total, so a fresh network waits, right code or not
+      expect((await code('192.0.2.1', generateSync({ secret }))).status).toBe(429);
+      // …but not the owner, on a network they have signed in from
       expect((await code('198.51.100.60', generateSync({ secret }))).status).toBe(200);
     }, 30000);
 
@@ -881,7 +912,7 @@ describe('2FA hardening', () => {
       const account = twoFAAccount(secret);
       (prisma.account.findUnique as any).mockImplementation(({ where }: { where: { id?: number } }) => (where.id ? account : null));
       await request(app).post('/api/auth/recovery-key').send({ ...recoveryBody, code: generateSync({ secret }) });
-      expect(authMw.revokeAllSessions).toHaveBeenCalledWith(account.id, expect.any(String), 'recovery_key_changed');
+      expect(authMw.revokeAllSessions).toHaveBeenCalledWith(expect.any(Number), expect.any(String), 'recovery_key_changed');
     }, 30000);
 
     it('turning 2FA off signs every other session out', async () => {
@@ -980,6 +1011,20 @@ describe('2FA hardening', () => {
       code: 'BACKUP-0001', rekey,
     };
 
+    it('refuses a re-key that keeps the same password: whoever holds the old wrap could still open it', async () => {
+      const app = buildApp();
+      const account = twoFAAccount(generateSecret(), [sha256('BACKUP-0001')]);
+      (prisma.account.findUnique as any).mockResolvedValue(account);
+      (getRekey as any).mockResolvedValue(null);
+      (prisma.$transaction as any).mockClear();
+      // Every secret "matches": the new one is the current one
+      (bcrypt.compare as any).mockResolvedValue(true);
+      const res = await request(app).post('/api/auth/change-password').send(body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/new password/i);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
     it('swaps the recovery wrap, keeps the old key sealed and removes the passkeys, all in one transaction', async () => {
       const app = buildApp();
       const account = twoFAAccount(generateSecret(), [sha256('BACKUP-0001')]);
@@ -988,6 +1033,8 @@ describe('2FA hardening', () => {
       (insertRekey as any).mockReturnValue('UPSERT_REKEY');
       (dropFinishedRekey as any).mockReturnValue('DROP_FINISHED');
       (prisma.$transaction as any).mockResolvedValue([]);
+      // The current password checks out; the new one is a different password
+      (bcrypt.compare as any).mockImplementation(async (secret: string) => secret === SECRET);
       const res = await request(app).post('/api/auth/change-password').send(body);
       expect(res.status).toBe(200);
       const [steps] = (prisma.$transaction as any).mock.calls[0];

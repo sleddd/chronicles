@@ -4,6 +4,7 @@ import { withAiHiddenKept } from '../utils/aiHiddenFlag.js';
 import { encryptionService } from '@shared/crypto/encryptionService.js';
 import { toNonExtractable } from '@shared/crypto/primitives.js';
 import { clearEntryTitleCache } from '../utils/entryTitle.js';
+import { clearStripHtmlCache } from '../utils/stripHtml.js';
 import { clearEntryOutlineCache } from '../utils/entryOutline.js';
 import { clearAllergenCache } from '../utils/aiKitchen.js';
 import { setEgressAccount, accountTagForRecords } from '../services/deviceConsent.js';
@@ -177,6 +178,7 @@ function dropDecryptedState(): void {
   setLegacyMigrationAllowed(false);
   // Entry list titles are cached keyed by the decrypted entry HTML
   clearEntryTitleCache();
+  clearStripHtmlCache();
   clearEntryOutlineCache();
   clearAllergenCache();
   // Time-tracking sessions (which entries, when) — TimeSync reopens them at the next sign-in

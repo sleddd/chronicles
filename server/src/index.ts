@@ -5,7 +5,8 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { securityHeaders, corsOriginFor, trustProxySetting, SERVICE_WORKER_PATH } from './middleware/security.js';
 import { authMiddleware, quietAuthMiddleware, cleanupSessions } from './middleware/auth.js';
-import { apiLimiter, writeGate, failedAuthLimiter } from './middleware/rateLimiter.js';
+import compression from 'compression';
+import { apiLimiter, writeGate, failedAuthLimiter, floodLimiter } from './middleware/rateLimiter.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import authRoutes, { checkStoredCredentials, sealStoredTotpSecrets } from './routes/auth.js';
 import passkeyRoutes from './routes/passkeys.js';
@@ -34,8 +35,8 @@ import { initAnalyticsTable } from './db/analyticsQueries.js';
 import { initAiChatTable } from './db/aiChatQueries.js';
 import { initSharesTable, purgeDeadShares } from './db/shareQueries.js';
 import { checkBackupLockCapacity } from './db/backupCheck.js';
-import { initShards } from './db/shards.js';
-import { initSharedState, sharedState } from './services/sharedState.js';
+import { initShards, disconnectShards } from './db/shards.js';
+import { initSharedState, sharedState, SHARED_STATE_IN_POSTGRES } from './services/sharedState.js';
 import { webauthnConfig } from './services/webauthn.js';
 import { initPasskeysTable } from './db/passkeyQueries.js';
 import { initTrustedDevicesTable, purgeExpiredTrustedDevices } from './db/trustedDeviceQueries.js';
@@ -48,6 +49,10 @@ import { prisma as mainDb } from './db/prisma.js';
 
 const app = express();
 app.disable('x-powered-by');
+// Express would hash every JSON answer for an ETag (a page of entries is tens
+// of megabytes, hashed on the event loop) that /api's no-store makes useless.
+// Static files and the public shelf set their own
+app.set('etag', false);
 const PORT = process.env.PORT || 3001;
 // Bind to loopback only outside production so the dev server is never reachable
 // from the network. In production (Render etc.) the platform needs 0.0.0.0.
@@ -109,6 +114,8 @@ if (corsOrigin === false && process.env.NODE_ENV !== 'development') {
 }
 app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(cookieParser());
+// Before anything else is done for a request: a coarse cap per address
+app.use('/api', floodLimiter);
 // Before any session lookup: an address that keeps sending bad sessions is
 // refused without one
 app.use('/api', failedAuthLimiter);
@@ -116,7 +123,7 @@ app.use('/api', failedAuthLimiter);
 // big ones), so they get a larger body limit — read only after the session
 // (and the per-account limit) checks out, so no one signed out can make the
 // server buffer 5 MB bodies. Everything else stays at 1mb.
-app.use('/api/entries', authMiddleware, apiLimiter, writeGate, express.json({ limit: '5mb' }), entriesRoutes);
+app.use('/api/entries', authMiddleware, apiLimiter, writeGate, express.json({ limit: '5mb', inflate: false }), entriesRoutes);
 // The public shelf's PUT carries up to 1,000 items with small JPEG covers:
 // its own 8 MB parser, mounted inside the route after the session check
 app.use('/api/public-shelf', publicShelfRoutes); // public GET by token; the rest use authMiddleware inline
@@ -127,13 +134,28 @@ app.use('/api/beta', betaRoutes); // public landing page: applications, waitlist
 app.use('/api/bug-report', bugReportRoutes); // public: sent on to support by email (Resend), never stored (64 KB bodies)
 // Nothing else under them: answered before any body is read
 app.use(['/api/beta', '/api/bug-report'], (_req, res) => { res.status(404).json({ error: 'Not found' }); });
-// Bodies are only ever read on /api — never for the app's pages or files
-app.use('/api', express.json({ limit: '1mb' }));
-
-// Health check
+// Health check: the process is up (answered before any body is read)
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+// Readiness: the database answers too. Point the host's health check here, so
+// an instance that can't reach its database stops being sent requests
+app.get('/api/ready', async (_req, res) => {
+  try {
+    await Promise.race([
+      mainDb.$queryRaw`SELECT 1`,
+      new Promise((_, reject) => { setTimeout(() => reject(new Error('timeout')), 2000).unref(); }),
+    ]);
+    res.json({ status: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'unavailable' });
+  }
+});
+
+// Bodies are only ever read on /api — never for the app's pages or files. A
+// compressed body is refused (no client of ours sends one): inflating would
+// let a 1 KB request cost a megabyte of parsing
+app.use('/api', express.json({ limit: '1mb', inflate: false }));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -159,7 +181,16 @@ app.use('/api', (_req, res) => { res.status(404).json({ error: 'Not found' }); }
 // Serve client static files in production
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(__dirname, '../../client/dist');
-app.use(express.static(clientDist));
+// Pages, scripts and styles go out compressed (never /api: answered above).
+// The host's edge may compress too; where it does, this costs nothing
+app.use(compression());
+// Build files carry a hash of their contents in their name, so a browser may
+// keep one for good and never ask again
+app.use('/assets', express.static(path.join(clientDist, 'assets'), { maxAge: '1y', immutable: true, fallthrough: true, etag: true }));
+// Background photos keep their names, so a week, then they are checked again
+app.use('/wallpapers', express.static(path.join(clientDist, 'wallpapers'), { maxAge: '7d', etag: true }));
+// Everything else (index.html, the service worker, the manifest) is checked every time
+app.use(express.static(clientDist, { etag: true }));
 
 // SPA fallback — serve index.html for non-API routes
 app.get('{/*path}', (req, res) => {
@@ -242,8 +273,43 @@ setInterval(() => {
   sharedState.sweep().catch(() => {});
 }, 6 * 60 * 60 * 1000);
 
-app.listen(typeof PORT === 'string' ? parseInt(PORT, 10) : PORT, HOST, () => {
+// Lockouts, single-use codes and pending sign-ins kept in this process only:
+// right for one instance, wrong the moment there are two
+if (process.env.NODE_ENV === 'production' && !SHARED_STATE_IN_POSTGRES) {
+  console.warn('SHARED_STATE=memory in production: sign-in limits and single-use codes are kept per instance. Remove it unless this is the only instance.');
+}
+
+const server = app.listen(typeof PORT === 'string' ? parseInt(PORT, 10) : PORT, HOST, () => {
   console.log(`Chronicles running on ${HOST}:${PORT}`);
+});
+// A proxy keeps its connections to us open and reuses them. Node's default (5 s)
+// closes them first, and a request sent into a closing socket is lost — a save
+// the client can't tell landed or not. Stay open longer than the proxy does
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+// A body that drips in must not hold a write slot for the default five minutes
+server.requestTimeout = 120_000;
+
+// A deploy or restart: stop taking requests, let the ones under way finish
+// (a save, an import batch, a re-key batch), close the database, then leave
+let stopping = false;
+function shutDown(signal: string): void {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal}: finishing requests under way, then stopping`);
+  const giveUp = setTimeout(() => process.exit(1), 25_000);
+  giveUp.unref();
+  server.close(() => {
+    Promise.allSettled([disconnectShards(), mainDb.$disconnect()]).then(() => process.exit(0));
+  });
+  // Connections with nothing under way go now, so close() can finish
+  server.closeIdleConnections();
+}
+process.on('SIGTERM', () => shutDown('SIGTERM'));
+process.on('SIGINT', () => shutDown('SIGINT'));
+// A promise nobody caught must not take the server down, nor pass unseen
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason instanceof Error ? reason.message : 'Unknown error');
 });
 
 export default app;

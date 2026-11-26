@@ -245,15 +245,46 @@ export async function initSharedState(): Promise<void> {
 export function sharedRateLimitStore(bucket: string): Store | undefined {
   if (!SHARED_STATE_IN_POSTGRES) return undefined;
   let windowMs = 60_000;
+  let limit = Infinity;
+  // Keys already past their limit, as this instance last saw them. A request
+  // that is going to be refused anyway is answered from here, without a write:
+  // otherwise a flood at a public address (a share link, a shelf, the sign-in
+  // page) costs a statement each on the same small pool every signed-in
+  // request needs — refused or not
+  const over = new Map<string, { count: number; resetAt: number }>();
+  const MAX_REMEMBERED = 20_000;
   return {
     localKeys: false,
     prefix: bucket,
-    init(options) { windowMs = options.windowMs; },
+    init(options) {
+      windowMs = options.windowMs;
+      const max = (options as { limit?: unknown; max?: unknown }).limit ?? (options as { max?: unknown }).max;
+      if (typeof max === 'number') limit = max;
+    },
     async increment(key): Promise<IncrementResponse> {
+      const known = over.get(key);
+      if (known) {
+        if (known.resetAt > Date.now()) {
+          known.count += 1;
+          return { totalHits: known.count, resetTime: new Date(known.resetAt) };
+        }
+        over.delete(key);
+      }
       const { count, resetAt } = await sharedState.hit(`rate:${bucket}`, key, windowMs);
+      if (count > limit) {
+        if (over.size >= MAX_REMEMBERED) over.clear();
+        over.set(key, { count, resetAt: resetAt.getTime() });
+      }
       return { totalHits: count, resetTime: resetAt };
     },
-    async decrement(key) { await sharedState.unhit(`rate:${bucket}`, key); },
-    async resetKey(key) { await sharedState.clear(`rate:${bucket}`, key); },
+    async decrement(key) {
+      // One answered from memory was never written, so there is nothing to take back
+      if (over.has(key)) return;
+      await sharedState.unhit(`rate:${bucket}`, key);
+    },
+    async resetKey(key) {
+      over.delete(key);
+      await sharedState.clear(`rate:${bucket}`, key);
+    },
   };
 }

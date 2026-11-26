@@ -70,6 +70,10 @@ export function loadAiStatus(): Promise<AiChatStatus | null> {
 export async function requireAiUserId(): Promise<string> {
   const id = status?.aiUserId ?? (await loadAiStatus())?.aiUserId;
   if (!id) throw new Error('Couldn’t reach Chronicles to check In-App AI. Try again in a moment.');
+  // The id goes to the AI provider beside what is asked, so it is only ever
+  // the anonymous code it is meant to be: whatever else the server sent (an
+  // email, an account number) stays here
+  if (!/^[0-9a-f]{32}$/.test(id)) throw new Error('Chronicles sent an In-App AI id that isn’t valid, so nothing was sent.');
   return id;
 }
 

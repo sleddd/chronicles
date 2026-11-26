@@ -108,7 +108,7 @@ const fetchFn = (async (url: string, init?: { method?: string; body?: Blob }) =>
   return new Response(null, { status: 400 });
 }) as unknown as typeof fetch;
 
-import { runRekey, movedImageKey, findImageRefs, inBatches, settingsHoldPhotos, checkPhotosReachable, RekeyError } from '@/services/rekey';
+import { runRekey, movedImageKey, movedImageIv, findImageRefs, inBatches, settingsHoldPhotos, checkPhotosReachable, RekeyError } from '@/services/rekey';
 import { imageAad } from '@/services/imageStorage';
 import { settingAad } from '@/services/settingCipher';
 
@@ -486,5 +486,31 @@ describe('inBatches', () => {
     expect(inBatches([1, 1, 1, 1, 1], n => n, 2, 100)).toEqual([[1, 1], [1, 1], [1]]);
     expect(inBatches([60, 60, 500, 10], n => n, 10, 100)).toEqual([[60], [60], [500], [10]]);
     expect(inBatches([], () => 1, 2, 2)).toEqual([]);
+  });
+});
+
+describe('movedImageIv (the IV a moved photo is sealed with)', () => {
+  const bytes = (text: string) => new TextEncoder().encode(text).buffer as ArrayBuffer;
+  const hex = (iv: Uint8Array) => Array.from(iv, b => b.toString(16).padStart(2, '0')).join('');
+
+  it('is the same for the same photo, object and re-key (a repeated move writes the identical object)', async () => {
+    const a = await movedImageIv('img/x', 'rk1', bytes('photo'), 'tag-of-the-new-key');
+    const b = await movedImageIv('img/x', 'rk1', bytes('photo'), 'tag-of-the-new-key');
+    expect(a).toHaveLength(12);
+    expect(hex(a)).toBe(hex(b));
+  });
+
+  it('differs for other bytes, another object or another re-key', async () => {
+    const base = hex(await movedImageIv('img/x', 'rk1', bytes('photo'), 'tag'));
+    expect(hex(await movedImageIv('img/x', 'rk1', bytes('other photo'), 'tag'))).not.toBe(base);
+    expect(hex(await movedImageIv('img/y', 'rk1', bytes('photo'), 'tag'))).not.toBe(base);
+    expect(hex(await movedImageIv('img/x', 'rk2', bytes('photo'), 'tag'))).not.toBe(base);
+  });
+
+  it('can’t be worked out without the new key: it is keyed with the new key’s tag, and refuses to run without one', async () => {
+    const mine = hex(await movedImageIv('img/x', 'rk1', bytes('photo'), 'tag-only-the-new-key-makes'));
+    const guess = hex(await movedImageIv('img/x', 'rk1', bytes('photo'), 'someone-else'));
+    expect(guess).not.toBe(mine);
+    await expect(movedImageIv('img/x', 'rk1', bytes('photo'), '')).rejects.toThrow();
   });
 });

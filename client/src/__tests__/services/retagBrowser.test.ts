@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { retagBrowser, ownerMark } from '@/services/browserData';
+import { retagBrowser, ownerMark, claimBrowserFor, wipeBrowserData, RetiredKeyError } from '@/services/browserData';
 import { EGRESS_STORE } from '@/services/deviceConsent';
 import { SETTING_REVS_STORE } from '@/services/settingCipher';
 
@@ -22,5 +22,33 @@ describe('retagBrowser', () => {
     localStorage.setItem('chronicles.owner-v1', await ownerMark('SOMEONE'));
     await retagBrowser('OLD', 'NEW');
     expect(localStorage.getItem('chronicles.owner-v1')).toBe(await ownerMark('SOMEONE'));
+  });
+});
+
+// A re-key is for when someone may hold the old key. A server can still hand
+// out an old wrap of it (an old passkey's secret never changes), so the old
+// key must never be installed in this browser again
+describe('a key the journal has left', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('is refused at sign-in after the re-key, before anything is wiped or claimed', async () => {
+    localStorage.setItem('chronicles.owner-v1', await ownerMark('OLD'));
+    await retagBrowser('OLD', 'NEW');
+    await expect(claimBrowserFor('OLD')).rejects.toBeInstanceOf(RetiredKeyError);
+    // Still the new key's browser: nothing was wiped, nothing re-claimed
+    expect(localStorage.getItem('chronicles.owner-v1')).toBe(await ownerMark('NEW'));
+    // The new key signs in as before
+    expect(await claimBrowserFor('NEW')).toBe(false);
+  });
+
+  it('stays refused after the browser is wiped (Sign out, or someone else signing in)', async () => {
+    localStorage.setItem('chronicles.owner-v1', await ownerMark('OLD'));
+    await retagBrowser('OLD', 'NEW');
+    await wipeBrowserData();
+    await expect(claimBrowserFor('OLD')).rejects.toBeInstanceOf(RetiredKeyError);
+  });
+
+  it('a key that was never retired is claimed as usual', async () => {
+    expect(await claimBrowserFor('FRESH')).toBe(true);
   });
 });

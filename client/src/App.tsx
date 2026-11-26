@@ -10,52 +10,16 @@ import { useIdleSignOut } from './hooks/useIdleSignOut.js';
 import { onSessionEnded } from './services/api.js';
 import { EncryptionProvider, useEncryption } from './contexts/EncryptionContext.js';
 import { ProtectedRoute } from './components/organisms/ProtectedRoute.js';
-import { BugReportView } from './views/BugReportView.js';
-import { NotFoundView } from './views/NotFoundView.js';
-import { MedHistoryView } from './views/MedHistoryView.js';
-import { MediaView } from './views/MediaView.js';
-import { PublicShelfView } from './views/PublicShelfView.js';
 import { RekeyOverlay } from './components/organisms/RekeyOverlay.js';
 import { usePublicShelfSync } from './hooks/usePublicShelfSync.js';
 import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { LoginView } from './views/LoginView.js';
-import { RegisterView } from './views/RegisterView.js';
-import { HealthPrivacyView } from './views/HealthPrivacyView.js';
-import { TermsView } from './views/TermsView.js';
-import { LicenseView } from './views/LicenseView.js';
 import { NoticeBanner } from './components/organisms/NoticeBanner.js';
 import { ErrorBoundary } from './components/atoms/ErrorBoundary.js';
-import { RecoverView } from './views/RecoverView.js';
 import { JournalView } from './views/JournalView.js';
-import { SettingsView } from './views/SettingsView.js';
-import { SharedEntryView } from './views/SharedEntryView.js';
-import { TopicsView } from './views/TopicsView.js';
-import { TopicDetailView } from './views/TopicDetailView.js';
-import { CalendarView } from './views/CalendarView.js';
-import { GoalsView } from './views/GoalsView.js';
-import { FinanceBudgetView } from './views/FinanceBudgetView.js';
-import { FinanceGoalsView } from './views/FinanceGoalsView.js';
-import { FinanceSavingsView } from './views/FinanceSavingsView.js';
-import { FinanceDebtsView } from './views/FinanceDebtsView.js';
-import { FinanceReportsView } from './views/FinanceReportsView.js';
-import { PlannerFilterView } from './views/PlannerFilterView.js';
-import { PlanRoadmapView } from './views/PlanRoadmapView.js';
-import { PlanningOverviewView } from './views/PlanningOverviewView.js';
-import { PlannerView } from './views/PlannerView.js';
-import { HabitsView } from './views/HabitsView.js';
 import { useHabitStore } from './stores/habitStore.js';
-import { TopicEntriesView } from './views/TopicEntriesView.js';
-import { HealthView } from './views/HealthView.js';
-import { TrainingView } from './views/TrainingView.js';
-import { ExerciseHistoryView } from './views/ExerciseHistoryView.js';
-import { SymptomHistoryView } from './views/SymptomHistoryView.js';
-import { ExerciseScheduleView } from './views/ExerciseScheduleView.js';
-import { HealthDashboardView } from './views/HealthDashboardView.js';
-import { MealsLogView } from './views/MealsLogView.js';
-import { KitchenDashboardView } from './views/KitchenDashboardView.js';
 import { RecipeFromIngredientsButton } from './components/organisms/AiRecipeFromIngredients.js';
 import { DashboardView } from './views/DashboardView.js';
-import { AiChat } from './components/organisms/AiChat.js';
 import { useAiChatEnabled } from './hooks/useAiReady.js';
 import { FlashNotice } from './components/organisms/FlashNotice.js';
 import { UpdatePrompt } from './components/organisms/UpdatePrompt.js';
@@ -63,9 +27,6 @@ import { pageTitleFor } from './utils/pageTitle.js';
 import { IdleWarning } from './components/organisms/IdleWarning.js';
 import { KITCHEN_TITLE, MealsTabBar } from './components/molecules/MealsTabBar.js';
 import { RECIPE_COLUMNS, recipeNote } from './components/organisms/kitchenTables.js';
-import { HealthReportingView } from './views/HealthReportingView.js';
-import { MenuView } from './views/MenuView.js';
-import { ShoppingListsView } from './views/ShoppingListsView.js';
 import { autoThemeFor, PAGE_COLOR } from './utils/autoTheme.js';
 import { DEFAULT_ACCENT_COLOR } from './styles/accent.js';
 import { useEncryptedSetting } from './hooks/useEncryptedSetting.js';
@@ -81,6 +42,52 @@ import { NotificationBell } from './components/organisms/NotificationBell.js';
    installed app (display-mode: standalone) goes straight to the dashboard and
    never downloads it, and the service worker doesn't precache it */
 const LandingView = lazy(() => import('./views/LandingView.js').then(m => ({ default: m.LandingView })));
+
+/* Every page but the dashboard, the journal and sign-in is a chunk of its own,
+   loaded the first time it is opened (the service worker precaches them all, so
+   an installed app has them offline). One script for the whole app meant every
+   visitor — to the landing page, the sign-in page, a public shelf — downloaded
+   Settings, Finance, Planning, the reports and the chat before anything showed.
+   A chunk that fails to load reloads the page once (vite:preloadError, main.tsx) */
+const BugReportView = lazy(() => import('./views/BugReportView.js').then(m => ({ default: m.BugReportView })));
+const NotFoundView = lazy(() => import('./views/NotFoundView.js').then(m => ({ default: m.NotFoundView })));
+const MedHistoryView = lazy(() => import('./views/MedHistoryView.js').then(m => ({ default: m.MedHistoryView })));
+const MediaView = lazy(() => import('./views/MediaView.js').then(m => ({ default: m.MediaView })));
+const PublicShelfView = lazy(() => import('./views/PublicShelfView.js').then(m => ({ default: m.PublicShelfView })));
+const RegisterView = lazy(() => import('./views/RegisterView.js').then(m => ({ default: m.RegisterView })));
+const HealthPrivacyView = lazy(() => import('./views/HealthPrivacyView.js').then(m => ({ default: m.HealthPrivacyView })));
+const TermsView = lazy(() => import('./views/TermsView.js').then(m => ({ default: m.TermsView })));
+const LicenseView = lazy(() => import('./views/LicenseView.js').then(m => ({ default: m.LicenseView })));
+const RecoverView = lazy(() => import('./views/RecoverView.js').then(m => ({ default: m.RecoverView })));
+const SettingsView = lazy(() => import('./views/SettingsView.js').then(m => ({ default: m.SettingsView })));
+const SharedEntryView = lazy(() => import('./views/SharedEntryView.js').then(m => ({ default: m.SharedEntryView })));
+const TopicsView = lazy(() => import('./views/TopicsView.js').then(m => ({ default: m.TopicsView })));
+const TopicDetailView = lazy(() => import('./views/TopicDetailView.js').then(m => ({ default: m.TopicDetailView })));
+const CalendarView = lazy(() => import('./views/CalendarView.js').then(m => ({ default: m.CalendarView })));
+const GoalsView = lazy(() => import('./views/GoalsView.js').then(m => ({ default: m.GoalsView })));
+const FinanceBudgetView = lazy(() => import('./views/FinanceBudgetView.js').then(m => ({ default: m.FinanceBudgetView })));
+const FinanceGoalsView = lazy(() => import('./views/FinanceGoalsView.js').then(m => ({ default: m.FinanceGoalsView })));
+const FinanceSavingsView = lazy(() => import('./views/FinanceSavingsView.js').then(m => ({ default: m.FinanceSavingsView })));
+const FinanceDebtsView = lazy(() => import('./views/FinanceDebtsView.js').then(m => ({ default: m.FinanceDebtsView })));
+const FinanceReportsView = lazy(() => import('./views/FinanceReportsView.js').then(m => ({ default: m.FinanceReportsView })));
+const PlannerFilterView = lazy(() => import('./views/PlannerFilterView.js').then(m => ({ default: m.PlannerFilterView })));
+const PlanRoadmapView = lazy(() => import('./views/PlanRoadmapView.js').then(m => ({ default: m.PlanRoadmapView })));
+const PlanningOverviewView = lazy(() => import('./views/PlanningOverviewView.js').then(m => ({ default: m.PlanningOverviewView })));
+const PlannerView = lazy(() => import('./views/PlannerView.js').then(m => ({ default: m.PlannerView })));
+const HabitsView = lazy(() => import('./views/HabitsView.js').then(m => ({ default: m.HabitsView })));
+const TopicEntriesView = lazy(() => import('./views/TopicEntriesView.js').then(m => ({ default: m.TopicEntriesView })));
+const HealthView = lazy(() => import('./views/HealthView.js').then(m => ({ default: m.HealthView })));
+const TrainingView = lazy(() => import('./views/TrainingView.js').then(m => ({ default: m.TrainingView })));
+const ExerciseHistoryView = lazy(() => import('./views/ExerciseHistoryView.js').then(m => ({ default: m.ExerciseHistoryView })));
+const SymptomHistoryView = lazy(() => import('./views/SymptomHistoryView.js').then(m => ({ default: m.SymptomHistoryView })));
+const ExerciseScheduleView = lazy(() => import('./views/ExerciseScheduleView.js').then(m => ({ default: m.ExerciseScheduleView })));
+const HealthDashboardView = lazy(() => import('./views/HealthDashboardView.js').then(m => ({ default: m.HealthDashboardView })));
+const MealsLogView = lazy(() => import('./views/MealsLogView.js').then(m => ({ default: m.MealsLogView })));
+const KitchenDashboardView = lazy(() => import('./views/KitchenDashboardView.js').then(m => ({ default: m.KitchenDashboardView })));
+const HealthReportingView = lazy(() => import('./views/HealthReportingView.js').then(m => ({ default: m.HealthReportingView })));
+const MenuView = lazy(() => import('./views/MenuView.js').then(m => ({ default: m.MenuView })));
+const ShoppingListsView = lazy(() => import('./views/ShoppingListsView.js').then(m => ({ default: m.ShoppingListsView })));
+const AiChat = lazy(() => import('./components/organisms/AiChat.js').then(m => ({ default: m.AiChat })));
 
 function isInstalledApp(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -540,7 +547,7 @@ function ChatGate() {
 /** The chat shows only once it's switched on in Settings → In-App AI */
 function ChatWhenOn() {
   const chatOn = useAiChatEnabled();
-  return chatOn ? <ErrorBoundary fallback="none"><AiChat /></ErrorBoundary> : null;
+  return chatOn ? <ErrorBoundary fallback="none"><Suspense fallback={null}><AiChat /></Suspense></ErrorBoundary> : null;
 }
 
 /** The saved wallpaper (the sealed `wallpaper` setting) into the store once
@@ -744,6 +751,8 @@ export function App() {
           <BrowserRouter>
             <KeylessPageWatch />
             <PageTitle />
+            {/* A page's chunk on its way: nothing for a moment, then the page (its own spinner once mounted) */}
+            <Suspense fallback={null}>
             <Routes>
               {/* Public */}
               <Route path="/login" element={<LoginView />} />
@@ -813,6 +822,7 @@ export function App() {
               {/* Anything else: sign-in when signed out, else a 404 page */}
               <Route path="*" element={<NotFoundView />} />
             </Routes>
+            </Suspense>
             <RekeyOverlay />
             <SessionEndedGate />
             <IdleGate />

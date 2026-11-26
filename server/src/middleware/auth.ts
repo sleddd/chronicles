@@ -162,7 +162,14 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   if (assistant) {
     try {
       // Still on the list of accounts that may use it (taken off the list, its sessions stop working)
-      const account = await prisma.account.findUnique({ where: { id: session.accountId }, select: { email: true } });
+      // The three things checked for every AI-app request, asked for together
+      // (each is read fresh, never cached): three trips one after another
+      // tripled the wait of every small call a syncing app makes
+      const [account, rekeying, privacy] = await Promise.all([
+        prisma.account.findUnique({ where: { id: session.accountId }, select: { email: true } }),
+        getRekey(session.accountId),
+        loadAiPrivacy(session.tenantSchemaName),
+      ]);
       if (!account || !assistantAllowedForEmail(account.email)) {
         // Ended for good: back on the list later, it signs in again
         await revokeSession(session.selector, 'assistant_off').catch(() => { /* refused either way */ });
@@ -174,13 +181,12 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       // the work): the AI app waits, so it neither reads records half under
       // the old key nor has a version sealed with the old key kept for it.
       // Signing out is the one thing it can still do
-      if (!isAssistantSignOut(req.method, path) && await getRekey(session.accountId)) {
+      if (!isAssistantSignOut(req.method, path) && rekeying) {
         // Waiting for the move to finish is not being refused
         noteActivity();
         res.status(409).json({ error: 'Chronicles is moving your journal to a new key. Try again once it has finished.' });
         return;
       }
-      const privacy = await loadAiPrivacy(session.tenantSchemaName);
       // Switched off: a session that outlived the switch (a sign-in that was on
       // its way, a revoke that failed) ends here, so switching the app on
       // again always needs a new sign-in
@@ -271,8 +277,10 @@ export async function revokeSession(selector: string, reason: string): Promise<v
 /**
  * Revoke all sessions for an account except the current one
  */
-export async function revokeAllSessions(accountId: number, exceptSelector?: string, reason = 'password_change'): Promise<void> {
-  await prisma.session.updateMany({
+// Not async: it hands back Prisma's own promise, so it can be one step of a
+// transaction with the change that calls for it (awaiting it alone works too)
+export function revokeAllSessions(accountId: number, exceptSelector?: string, reason = 'password_change') {
+  return prisma.session.updateMany({
     where: {
       accountId,
       revokedAt: null,

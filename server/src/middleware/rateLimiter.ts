@@ -95,6 +95,22 @@ export const failedAuthLimiter = rateLimit({
 });
 
 /**
+ * A coarse cap per address on everything under /api, in this instance's memory,
+ * before any body is read: the 1 MB JSON parser runs for requests no other
+ * limiter counts (an unknown path, the health check — answered 404 or 200,
+ * never the 401 failedAuthLimiter counts), so without it a stranger could keep
+ * the event loop busy parsing. Far above what a page does (a full load is a
+ * few dozen requests) or an office behind one address.
+ */
+export const floodLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 1200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+});
+
+/**
  * ICS feed rate limiter — public calendar feed fetches. Apple fetches every
  * subscriber's feed from a few shared servers, so a per-IP limit meant one busy
  * fetcher locked everyone's feed out. The real limit is per feed: 60 fetches /

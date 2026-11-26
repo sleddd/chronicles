@@ -48,6 +48,9 @@ export async function initSharesTable(): Promise<void> {
       END IF;
     END $$
   `;
+  // Every entry delete looks its shares up by account and entry, twice, and
+  // the cap counts an account's links: without this, each scans every account's
+  await prisma.$executeRaw`CREATE INDEX IF NOT EXISTS shares_account_entry ON public.shares (account_id, entry_id)`;
 }
 
 interface NewShare {

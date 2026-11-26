@@ -81,7 +81,7 @@ describe('constantTimeDelay', () => {
     // Verify the function exists
     expect(authContent).toContain('async function constantTimeDelay');
     // Verify it's used in /recovery-params endpoint
-    const recoverySection = authContent.split("router.get('/recovery-params'")[1]?.split('router.')[0] || '';
+    const recoverySection = authContent.split('const recoveryParams = async')[1]?.split('router.')[0] || '';
     expect(recoverySection).toContain('constantTimeDelay(startTime)');
     // Verify it's used in /recover endpoint
     const recoverSection = authContent.split("router.post('/recover'")[1]?.split('router.')[0] || '';
@@ -536,7 +536,11 @@ describe('Middleware order (index.ts)', () => {
     expect(headers).toBeGreaterThan(-1);
     expect(headers).toBeLessThan(content.indexOf('express.json('));
     // The write gate runs before the 5 MB body is read, so queued writes can't pile up bodies
-    expect(content).toMatch(/app\.use\('\/api\/entries', authMiddleware, apiLimiter, writeGate, express\.json\(\{ limit: '5mb' \}\), entriesRoutes\)/);
+    expect(content).toMatch(/app\.use\('\/api\/entries', authMiddleware, apiLimiter, writeGate, express\.json\(\{ limit: '5mb', inflate: false \}\), entriesRoutes\)/);
+    // No body is read before the per-address cap, and a compressed body is never inflated
+    expect(content.indexOf("app.use('/api', floodLimiter)")).toBeGreaterThan(-1);
+    expect(content.indexOf("app.use('/api', floodLimiter)")).toBeLessThan(content.indexOf('express.json('));
+    expect(content.match(/express\.json\(\{[^}]*\}\)/g)!.every(p => p.includes('inflate: false'))).toBe(true);
     expect(content).not.toContain("'http://localhost:5173'");
   });
 });

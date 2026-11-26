@@ -40,8 +40,15 @@ describe('idle sign-out', () => {
   it('is not in the encryption context any more, and nothing there locks a hidden tab', () => {
     const content = readSrc('contexts/EncryptionContext.tsx');
     expect(content).not.toContain('INACTIVITY_TIMEOUT_MS');
-    expect(content).not.toContain('visibilitychange');
     expect(content).not.toContain('document.hidden');
+    // The one thing that looks when the tab is shown again is the check for a
+    // key the journal has left (a re-key made elsewhere), which drops a stale
+    // key. It never locks a tab for being hidden
+    const listeners = content.split('\n').filter(line => line.includes('visibilitychange'));
+    expect(listeners.map(l => l.trim())).toEqual([
+      "document.addEventListener('visibilitychange', check);",
+      "document.removeEventListener('visibilitychange', check);",
+    ]);
   });
 });
 

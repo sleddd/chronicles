@@ -359,7 +359,8 @@ export const auth = {
 
   /** The salt for the recovery proof — all an email alone gets */
   getRecoveryParams: (email: string) =>
-    request<{ recoveryKeySalt: string | null }>('/auth/recovery-params', { params: { email } }),
+    // In the body, never the address: a host's access log would name who is recovering
+    request<{ recoveryKeySalt: string | null }>('/auth/recovery-params', { method: 'POST', body: { email } }),
 
   /** The recovery key's wrap of the master key, for a proof of that key (and a
    *  2FA code when the account has 2FA). `recoveryToken` then stands in for the

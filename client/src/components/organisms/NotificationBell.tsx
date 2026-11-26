@@ -276,15 +276,18 @@ function Bell({ variant, trigger }: { variant: 'rail' | 'bar' | 'corner'; trigge
       const meta = (e.metadata ?? {}) as Record<string, unknown>;
       const tid = meta._taxonomyId as number;
       const cf = (meta._customFields ?? {}) as Record<string, unknown>;
-      const name = (builtinEntryName(cf) || stripHtml(e.content).trim()).slice(0, 80) || 'Untitled';
+      // Worked out only for the entries that are listed (an event, a meeting,
+      // a task with a deadline): done for every entry in the journal, this
+      // parsed each one's text on every save, on every page
+      const name = () => (builtinEntryName(cf) || stripHtml(e.content).trim()).slice(0, 80) || 'Untitled';
       if (eventIds.has(tid) || meetingIds.has(tid)) {
         if (!occurrencesBetween(String(cf.startDate ?? ''), repeatRuleOf(cf), today, today).length) continue;
         const kind = meetingIds.has(tid) ? 'meeting' : 'event';
         const time = cf.allDay ? null : (typeof cf.startTime === 'string' && cf.startTime) || null;
         const detail = [kind === 'meeting' ? 'Meeting' : 'Event', typeof cf.location === 'string' ? cf.location : ''].filter(Boolean).join(' · ');
-        ev.push({ id: e.id, name, kind, time, detail });
+        ev.push({ id: e.id, name: name(), kind, time, detail });
       } else if (taskIds.has(tid) && !cf.isCompleted && typeof cf.deadline === 'string' && cf.deadline) {
-        tk.push({ id: e.id, entryId: e.id, name, deadline: cf.deadline });
+        tk.push({ id: e.id, entryId: e.id, name: name(), deadline: cf.deadline });
       }
     }
     return { events: ev, tasks: tk };

@@ -231,15 +231,18 @@ describe('auth', () => {
     expect(init.method).toBe('POST');
   });
 
-  it('getRecoveryParams sends email as query param', async () => {
+  it('getRecoveryParams sends the email in the body, never the address (a host’s access log would name who is recovering)', async () => {
     fetchSpy = mockFetchResponse({ recoveryKeySalt: 'd'.repeat(32) });
     vi.stubGlobal('fetch', fetchSpy);
 
     await auth.getRecoveryParams('a@b.com');
 
-    const [url] = fetchSpy.mock.calls[0];
+    const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toContain('/api/auth/recovery-params');
-    expect(url).toContain('email=a%40b.com');
+    expect(url).not.toContain('a%40b.com');
+    expect(url).not.toContain('email=');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ email: 'a@b.com' });
   });
 
   it('recoveryWrap posts the proof (never the key) and gets the wrap with its token', async () => {

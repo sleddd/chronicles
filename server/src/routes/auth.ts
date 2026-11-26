@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { Router, type Request, type Response } from 'express';
 import { ASSISTANT_DEVICE, assistantAllowedForEmail, loadAiPrivacy } from '../services/assistant.js';
 import { PENDING_2FA, beginSignIn, cancelSignIns, forgetPendingAssistant, forgetPendingPasskey, pendingIsAssistant, pendingPasskeyOf, rememberPendingAssistant, rememberPendingPasskey, signInStillWanted } from './authState.js';
@@ -46,6 +47,9 @@ const LOGIN_NET_LOCKS = 'netlock_pw';
 const LOGIN_NET_SEEN = 'netseen_pw';
 const TWO_FA_NET_LOCKS = 'netlock_2fa';
 const TWO_FA_NET_SEEN = 'netseen_2fa';
+// …and every stranger's wrong password / code today, whichever network it came from
+const LOGIN_STRANGER_FAILS = 'strangerfail_pw';
+const TWO_FA_STRANGER_FAILS = 'strangerfail_2fa';
 // Networks the account has fully signed in from: they still get past the brake
 const KNOWN_NETWORKS = 'known_net';
 
@@ -146,6 +150,15 @@ async function countTwoFAFailure(accountId: number, bucket: string): Promise<boo
  * that first lock (`hit` never extends it) and nothing is counted while the
  * brake holds, so it can't be renewed forever.
  *
+ * Locks alone can be dodged: a guesser who stops one short of the cap on each
+ * network (9 in a window, 29 in a day) never locks a bucket, and so never
+ * counted toward the brake at all — 29 guesses a day from each of thousands
+ * of networks. So every stranger's wrong guess also counts toward one total
+ * for the email / account (`fails`, the same day's window), and the brake
+ * engages at `maxFails` whether or not any network ever locked: a little more
+ * than the networks it takes would have spent locking (so a guesser who does
+ * lock is stopped by the locks, as before, and logged once).
+ *
  * The brake never stops the owner: known devices and signed-in sessions keep
  * their own buckets, and a network the account has fully signed in from in the
  * last 90 days (`knownNetwork`) is let through to its usual per-network limit —
@@ -160,16 +173,29 @@ interface Brake {
   seen: string;
   /** How many networks engage it */
   networks: number;
+  /** Every stranger's wrong guess today, per scope */
+  fails: string;
+  /** How many of those engage it, however they are spread */
+  maxFails: number;
   /** For the security log */
   name: string;
 }
-const LOGIN_BRAKE: Brake = { locks: LOGIN_NET_LOCKS, seen: LOGIN_NET_SEEN, networks: 20, name: 'password' };
+const LOGIN_BRAKE: Brake = { locks: LOGIN_NET_LOCKS, seen: LOGIN_NET_SEEN, networks: 20, fails: LOGIN_STRANGER_FAILS, maxFails: 240, name: 'password' };
 // Lower for codes: a stranger at the code screen already has the password
-const TWO_FA_BRAKE: Brake = { locks: TWO_FA_NET_LOCKS, seen: TWO_FA_NET_SEEN, networks: 5, name: '2fa' };
+const TWO_FA_BRAKE: Brake = { locks: TWO_FA_NET_LOCKS, seen: TWO_FA_NET_SEEN, networks: 5, fails: TWO_FA_STRANGER_FAILS, maxFails: 60, name: '2fa' };
 
 /** The brake is engaged for this scope (an email, or an account id for 2FA). */
-function brakeEngaged(brake: Brake, scope: string): Promise<boolean> {
-  return sharedState.locked(brake.locks, scope, brake.networks);
+async function brakeEngaged(brake: Brake, scope: string): Promise<boolean> {
+  return (await sharedState.locked(brake.locks, scope, brake.networks))
+    || sharedState.locked(brake.fails, scope, brake.maxFails);
+}
+
+/** A stranger's wrong guess: counted toward the scope's total for the day, whichever network it came from. */
+async function noteStrangerFailure(brake: Brake, scope: string, accountId: number | null): Promise<void> {
+  const { count } = await sharedState.hit(brake.fails, scope, BRAKE_WINDOW_MS);
+  if (count === brake.maxFails) {
+    logSecurityEvent('signin_brake_engaged', { ...(accountId !== null && { accountId }), details: { brake: brake.name, failures: count } });
+  }
 }
 
 /** A stranger's network bucket just locked: count the network (once a day) toward the brake. */
@@ -288,6 +314,7 @@ async function clearTwoFAState(accountId: number): Promise<void> {
     sharedState.clearForAccount(TWO_FA_LONG_LOCK, accountId),
     sharedState.clearForAccount(TWO_FA_DAILY, accountId),
     sharedState.clear(TWO_FA_NET_LOCKS, String(accountId)),
+    sharedState.clear(TWO_FA_STRANGER_FAILS, String(accountId)),
     sharedState.clearForAccount(TWO_FA_NET_SEEN, accountId),
   ]);
 }
@@ -368,6 +395,7 @@ async function claimLoginAttempt(bucket: LoginBucket): Promise<number | null> {
 
 async function loginFailed(bucket: LoginBucket, n: number, accountId: number | null): Promise<void> {
   const locked = await passwordFailed(LOGIN_FAILURES, bucket.key, n, LOGIN_MAX_FAILURES);
+  if (bucket.net) await noteStrangerFailure(LOGIN_BRAKE, bucket.email, accountId);
   if (locked && bucket.net) await noteNetworkLock(LOGIN_BRAKE, bucket.email, bucket.net, accountId);
 }
 
@@ -427,6 +455,7 @@ async function verifySecondFactor(
       locked = true;
     }
     const stranger = strangerTwoFAScope(bucket);
+    if (stranger) await noteStrangerFailure(TWO_FA_BRAKE, String(stranger.accountId), stranger.accountId);
     if (locked && stranger) await noteNetworkLock(TWO_FA_BRAKE, String(stranger.accountId), stranger.net, stranger.accountId);
   }
   return factor;
@@ -1034,6 +1063,27 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * A change to how the account is signed in to (email, 2FA, recovery key), with
+ * what must go with it: every trusted browser forgotten, then every other
+ * session signed out in one transaction with the change. Done one after another, a
+ * failure after the account row was saved answered 500 with the change made
+ * and the other sessions still alive. Sign-ins under way are cancelled first,
+ * so none finishes afterwards (routes/authState.ts).
+ */
+async function changeSignInAndSignOutOthers(
+  accountId: number, keepSelector: string, reason: string, data: Prisma.AccountUpdateInput,
+): Promise<void> {
+  await cancelSignIns(accountId);
+  // Trusts go first: if what follows fails, the account is unchanged and a
+  // browser is merely asked for its code again — never the other way round
+  await forgetAllTrustedDevices(accountId);
+  await prisma.$transaction([
+    prisma.account.update({ where: { id: accountId }, data }),
+    revokeAllSessions(accountId, keepSelector, reason),
+  ]);
+}
+
 /** The signed-in user as /me and the sign-in answers give it. */
 function signedInUser(account: { id: number; email: string; username: string; totpEnabled: boolean }) {
   return {
@@ -1247,6 +1297,13 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
 
     if (!(await confirmIdentity(req, res, account, { authSecret: currentAuthSecret, code, confirmToken }, 'change-password', 'password_change_failed'))) return;
 
+    // A new key is for when someone may know the password: keeping the
+    // password would leave them able to open whatever wrap they still hold
+    if (rekey && await checkAuthSecret(account.passwordHash, newAuthSecret)) {
+      res.status(400).json({ error: 'Choose a new password to re-encrypt your journal under a new key' });
+      return;
+    }
+
     const passwordHash = await hashAuthSecret(newAuthSecret);
 
     // Sign-ins under way are cancelled before the sessions are revoked, so none
@@ -1446,15 +1503,10 @@ router.post('/change-email', strictLimiter, authMiddleware, confirmGate, async (
 
     // The sign-in secret is salted with the email, so it's replaced too
     const passwordHash = await hashAuthSecret(parsed.data.newAuthSecret);
-    await prisma.account.update({
-      where: { id: req.auth!.accountId },
-      data: { email: normalizedEmail, passwordHash },
-    });
-    // Like a password change: pending sign-ins are cancelled, then every other session is signed out; this one stays
-    await cancelSignIns(account.id);
-    await revokeAllSessions(account.id, req.auth!.selector, 'email_change');
-    // The sign-in secret changed with the email: every trust was earned under the old one
-    await forgetAllTrustedDevices(account.id);
+    // Like a password change: pending sign-ins are cancelled, every other
+    // session is signed out (this one stays) and every trust goes — it was
+    // earned under the old sign-in secret. One transaction with the change
+    await changeSignInAndSignOutOthers(req.auth!.accountId, req.auth!.selector, 'email_change', { email: normalizedEmail, passwordHash });
     clearTrustCookie(res);
 
     logSecurityEvent('email_changed', { accountId: req.auth!.accountId, ip: req.ip });
@@ -1789,7 +1841,26 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
+    // "Don't ask for a code on this browser for 30 days": only after the
+    // authenticator's own code — a backup code is for when the phone is gone.
+    // The same whether this sign-in started with the password or a passkey.
+    // Made BEFORE the pending token is spent: "Sign out everywhere" (and the
+    // changes that sign out likewise) cancel pending tokens first and forget
+    // trusts last, so a trust made here is either swept by one that is under
+    // way, or this sign-in finds its token gone below and takes the trust back.
+    // Made after, a trust could outlive the sweep that ended its session
+    let trust: string | null = null;
+    if (trustBrowser && factor === 'totp' && !assistant) {
+      try {
+        trust = await trustDevice(account.id, browserLabel(req.headers['user-agent']));
+      } catch (err) {
+        // The sign-in stands; the next one asks for a code as usual
+        console.error('Trust browser error:', err instanceof Error ? err.message : 'Unknown error');
+      }
+    }
+    const dropTrust = async () => { if (trust) await forgetTrustToken(trust).catch(() => { /* swept already */ }); };
     if ((await sharedState.takeToken(PENDING_2FA, pendingToken)) !== account.id) {
+      await dropTrust();
       try { await revokeSession(token.slice(0, 12), 'credentials_changed'); } catch { /* already gone */ }
       logSecurityEvent('login_superseded', { accountId: account.id });
       res.status(401).json({ error: 'Verification session expired. Please log in again.' });
@@ -1803,6 +1874,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       await forgetPendingPasskey(pendingToken);
       const passkey = await findAccountPasskey(pendingPasskeyId, account.id);
       if (!passkey) {
+        await dropTrust();
         try { await revokeSession(token.slice(0, 12), 'credentials_changed'); } catch { /* already gone */ }
         logSecurityEvent('login_superseded', { accountId: account.id });
         res.status(401).json({ error: 'Verification session expired. Please log in again.' });
@@ -1815,18 +1887,9 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       };
     }
 
-    // "Don't ask for a code on this browser for 30 days": only after the
-    // authenticator's own code — a backup code is for when the phone is gone.
-    // The same whether this sign-in started with the password or a passkey
-    if (trustBrowser && factor === 'totp' && !assistant) {
-      try {
-        const trust = await trustDevice(account.id, browserLabel(req.headers['user-agent']));
-        res.cookie(TRUST_COOKIE, trust, TRUST_COOKIE_OPTIONS);
-        logSecurityEvent('browser_trusted', { accountId: account.id, ip: req.ip });
-      } catch (err) {
-        // The sign-in stands; the next one asks for a code as usual
-        console.error('Trust browser error:', err instanceof Error ? err.message : 'Unknown error');
-      }
+    if (trust) {
+      res.cookie(TRUST_COOKIE, trust, TRUST_COOKIE_OPTIONS);
+      logSecurityEvent('browser_trusted', { accountId: account.id, ip: req.ip });
     }
 
     logSecurityEvent(assistant ? 'assistant_login_success' : 'login_success', { accountId: account.id, ip: req.ip, details: passkeyWrap ? { method: 'passkey' } : undefined });
@@ -1924,19 +1987,14 @@ router.post('/2fa/enable', strictLimiter, authMiddleware, confirmGate, async (re
     }
 
     const sealedSecret = sealTotpSecret(secret, req.auth!.accountId);
-    await prisma.account.update({
-      where: { id: req.auth!.accountId },
-      data: { totpSecret: sealedSecret, totpEnabled: true, totpBackupCodes: hashedCodes },
-    });
+    // Like a password change: pending sign-ins are cancelled and every other
+    // session is signed out, in one transaction with the change; this one stays
+    await changeSignInAndSignOutOthers(req.auth!.accountId, req.auth!.selector, '2fa_enabled',
+      { totpSecret: sealedSecret, totpEnabled: true, totpBackupCodes: hashedCodes });
     // A fresh count, then the enabling code's step marked used, so that same
     // code can't then finish a sign-in (replay)
     await clearTwoFAState(account.id);
     await sharedState.advance(TOTP_STEP, String(account.id), step, TOTP_STEP_TTL_MS);
-    // Like a password change: pending sign-ins are cancelled, then every
-    // other session is signed out; this one stays
-    await cancelSignIns(account.id);
-    await revokeAllSessions(account.id, req.auth!.selector, '2fa_enabled');
-    await forgetAllTrustedDevices(account.id);
     clearTrustCookie(res);
 
     // Every known-device cookie from before is void now (they needed only the
@@ -1974,15 +2032,11 @@ router.delete('/2fa', strictLimiter, authMiddleware, confirmGate, async (req, re
 
     if (!(await confirmIdentity(req, res, account, { authSecret: parsed.data.authSecret, code: parsed.data.code, confirmToken: parsed.data.confirmToken }, '2fa-disable', '2fa_disable_failed', { wrongPassword: 'Incorrect password' }))) return;
 
-    await prisma.account.update({
-      where: { id: req.auth!.accountId },
-      data: { totpSecret: null, totpEnabled: false, totpBackupCodes: [] },
-    });
+    // Like turning it on: every other session is signed out, so one that was
+    // let in before stays out (this one stays) — one transaction with the change
+    await changeSignInAndSignOutOthers(req.auth!.accountId, req.auth!.selector, '2fa_disabled',
+      { totpSecret: null, totpEnabled: false, totpBackupCodes: [] });
     await clearTwoFAState(req.auth!.accountId);
-    await cancelSignIns(req.auth!.accountId);
-    // Like turning it on: every other session is signed out, so one that was let in before stays out; this one stays
-    await revokeAllSessions(req.auth!.accountId, req.auth!.selector, '2fa_disabled');
-    await forgetAllTrustedDevices(req.auth!.accountId);
     clearTrustCookie(res);
 
     rememberKnownDevice(res, { id: account.id, email: account.email, passwordHash: account.passwordHash, totpEnabled: false, totpSecret: null });
@@ -2034,12 +2088,16 @@ router.delete('/account', strictLimiter, authMiddleware, confirmGate, async (req
 });
 
 // =============================================================================
-// GET /api/auth/recovery-params — Get recovery key params for password reset
+// POST /api/auth/recovery-params — Get recovery key params for password reset
 // =============================================================================
-router.get('/recovery-params', authLimiter, async (req, res) => {
+// The email goes in the body: in the address it would land in the host's
+// access log, naming who is recovering (the invite code moved behind # for the
+// same reason). GET, with the email in the query, still answers for a tab on
+// the build before
+const recoveryParams = async (req: Request, res: Response): Promise<void> => {
   const startTime = Date.now();
   try {
-    const rawEmail = req.query.email as string;
+    const rawEmail = (req.method === 'POST' ? (req.body as { email?: unknown } | undefined)?.email : req.query.email) as string;
     if (!rawEmail || typeof rawEmail !== 'string' || rawEmail.length > 254) {
       res.status(400).json({ error: 'Email required' });
       return;
@@ -2069,7 +2127,9 @@ router.get('/recovery-params', authLimiter, async (req, res) => {
     console.error('Recovery params error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch recovery params' });
   }
-});
+};
+router.post('/recovery-params', authLimiter, recoveryParams);
+router.get('/recovery-params', authLimiter, recoveryParams);
 
 // =============================================================================
 // POST /api/auth/recovery-key — Generate / regenerate recovery key (authenticated)
@@ -2096,21 +2156,14 @@ router.post('/recovery-key', strictLimiter, authMiddleware, confirmGate, async (
     }
     if (!(await confirmIdentity(req, res, account, { authSecret: currentAuthSecret, code, confirmToken }, 'recovery-key', 'recovery_key_regenerate_failed'))) return;
 
-    await prisma.account.update({
-      where: { id: req.auth!.accountId },
-      data: {
-        recoveryWrappedMK: new Uint8Array(Buffer.from(recoveryWrappedMK, 'base64')),
-        recoveryWrapIv: new Uint8Array(Buffer.from(recoveryWrapIv, 'base64')),
-        recoveryKeyHash: sealRecoveryProof(recoveryKeyHash),
-        recoveryKeySalt,
-      },
-    });
-
     // Whoever held the old key may be the reason for replacing it: every other
-    // session is signed out, this one stays
-    await cancelSignIns(account.id);
-    await revokeAllSessions(account.id, req.auth!.selector, 'recovery_key_changed');
-    await forgetAllTrustedDevices(account.id);
+    // session is signed out (this one stays), in one transaction with the change
+    await changeSignInAndSignOutOthers(req.auth!.accountId, req.auth!.selector, 'recovery_key_changed', {
+      recoveryWrappedMK: new Uint8Array(Buffer.from(recoveryWrappedMK, 'base64')),
+      recoveryWrapIv: new Uint8Array(Buffer.from(recoveryWrapIv, 'base64')),
+      recoveryKeyHash: sealRecoveryProof(recoveryKeyHash),
+      recoveryKeySalt,
+    });
     clearTrustCookie(res);
     logSecurityEvent('recovery_key_regenerated', { accountId: req.auth!.accountId, ip: req.ip });
     res.json({ success: true });
