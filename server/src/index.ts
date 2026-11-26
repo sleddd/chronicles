@@ -18,6 +18,7 @@ import publicShelfRoutes from './routes/publicShelf.js';
 import { initPublicShelvesTable } from './db/publicShelfQueries.js';
 import dosesRoutes from './routes/doses.js';
 import financeRoutes from './routes/finance.js';
+import assistantHistoryRoutes from './routes/assistantHistory.js';
 import calendarRoutes from './routes/calendar.js';
 import analyticsRoutes from './routes/analytics.js';
 import aiChatRoutes from './routes/aiChat.js';
@@ -142,6 +143,8 @@ app.use('/api/settings', authMiddleware, apiLimiter, writeGate, settingsRoutes);
 app.use('/api/sessions', authMiddleware, apiLimiter, sessionsRoutes);
 app.use('/api/doses', authMiddleware, apiLimiter, writeGate, dosesRoutes);
 app.use('/api/finance', authMiddleware, apiLimiter, writeGate, financeRoutes);
+// What the Chronicles AI app overwrote, for the owner to put back (never for the AI app itself)
+app.use('/api/assistant-changes', authMiddleware, apiLimiter, writeGate, assistantHistoryRoutes);
 app.use('/api/ai-chat', authMiddleware, apiLimiter, aiChatRoutes);
 app.use('/api/consent', authMiddleware, apiLimiter, consentRoutes);
 app.use('/api/notice', authMiddleware, apiLimiter, noticeRoutes);

@@ -38,7 +38,7 @@ export function useSaveCommand() {
       let cf = extraFields ? { ...shaped.customFields, ...extraFields } : shaped.customFields;
       if (estimateNutrition && topic.name.toLowerCase() === 'meals') {
         try {
-          const filled = await autoNutritionOnSave(String(cf.mealDescription ?? ''), cf);
+          const filled = await autoNutritionOnSave(String(cf.mealDescription ?? ''), cf, metadata);
           if (filled) { cf = filled; estimated = true; }
         } catch (err) {
           console.warn('Nutrient estimate failed:', err);

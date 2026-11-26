@@ -10,6 +10,7 @@
  */
 
 import { isBedrockRegion } from '@shared/validation/awsRegions.js';
+import { isHiddenFromAi } from './aiPrivacy.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
 import { isSealed, openSetting, sealSetting, seenRevision } from './settingCipher.js';
 import {
@@ -645,8 +646,11 @@ export async function estimateEntryCalories(
  */
 export async function autoCaloriesOnSave(
   kind: 'food' | 'exercise', text: string, cf: Record<string, unknown>,
+  /** The entry's metadata (at least its topic): an entry hidden from AI is never sent. Required, so no caller can leave the check out */
+  meta: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
-  if (kind === 'food') return autoNutritionOnSave(text, cf);
+  if (isHiddenFromAi(meta)) return null;
+  if (kind === 'food') return autoNutritionOnSave(text, cf, meta);
   if (!isAiReady() || !hasEstimateInputs(kind, text, cf)) return null;
   const blank = !String(cf.calories ?? '').trim();
   const staleAi = cf.caloriesSource === 'ai' && cf.calorieBasis !== calorieBasis(kind, text, cf);
@@ -717,7 +721,9 @@ export async function estimateEntryNutrition(
 }
 
 /** On save: fill blank nutrients and refresh stale AI ones. Null when AI is off or nothing changes. */
-export async function autoNutritionOnSave(text: string, cf: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+export async function autoNutritionOnSave(text: string, cf: Record<string, unknown>, meta: Record<string, unknown>): Promise<Record<string, unknown> | null> {
   if (!isAiReady()) return null;
+  // Hidden from AI (its own switch or its topic): never sent for an estimate
+  if (isHiddenFromAi(meta)) return null;
   return estimateEntryNutrition(text, cf);
 }

@@ -760,6 +760,10 @@ export const topics = {
 export const settings = {
   getAll: () => request<{ key: string; value: unknown; updatedAt: string }[]>('/settings'),
 
+  /** Just these settings, read again (an older server sends them all: the caller picks its own out). */
+  getSome: (keys: string[]) =>
+    request<{ key: string; value: unknown; updatedAt: string }[]>('/settings', { params: { keys: keys.join(',') } }),
+
   upsert: (key: string, value: unknown) =>
     request<{ key: string; value: unknown; updatedAt: string }>('/settings', { method: 'PUT', body: { key, value } }),
 
@@ -1240,3 +1244,52 @@ export function retryDelayMs(err: unknown, attempt: number): number {
   }
   return Math.min(10_000 * 2 ** attempt, 60_000);
 }
+
+// =============================================================================
+// Hidden from AI (Settings → In-App AI; see services/aiPrivacy.ts)
+// =============================================================================
+
+export const aiHidden = {
+  /** When each of these entries was last saved (up to 100), without downloading them. */
+  updatedAt: (ids: number[]) =>
+    request<{ entries: { id: number; updatedAt: string }[] }>('/entries/updated-at', { params: { ids: ids.join(',') } }),
+  /** The entries hidden from AI, as the server enforces them for the Chronicles AI app. */
+  list: () => request<{ ids: number[] }>('/entries/ai-hidden'),
+  /** Hide entries from AI, or share them again. */
+  set: (ids: number[], hidden: boolean) =>
+    request<{ success: boolean }>('/entries/ai-hidden', { method: 'PUT', body: { ids, hidden } }),
+};
+
+// =============================================================================
+// What the Chronicles AI app changed (the earlier versions, kept for the owner)
+// =============================================================================
+
+export type AssistantChangeKind = 'entry' | 'dose' | 'bill' | 'setting';
+
+/** The version of something as it was before the AI app overwrote it, still encrypted. */
+export interface AssistantChangeWire {
+  id: number;
+  kind: AssistantChangeKind;
+  /** The entry id, the dose record's or bill's uuid, or the setting's key */
+  ref: string;
+  savedAt: string;
+  body: string | null;
+  bodyIv: string | null;
+  meta: string | null;
+  metaIv: string | null;
+  extra: Record<string, unknown> | null;
+}
+
+export const assistantChanges = {
+  /** Newest first, a page at a time (`before`: the last id of the page before). */
+  list: (before?: number) =>
+    request<{ changes: AssistantChangeWire[]; more: boolean }>('/assistant-changes', before ? { params: { before: String(before) } } : {}),
+  /** Put that version back. What is there now takes its place in the list. */
+  restore: async (id: number) => {
+    const { restored } = await request<{ restored: AssistantChangeWire }>(`/assistant-changes/${id}/restore`, { method: 'POST' });
+    if (restored.kind === 'dose') forgetAllDoses();
+    return restored;
+  },
+  remove: (id: number) => request<{ success: boolean }>(`/assistant-changes/${id}`, { method: 'DELETE' }),
+  clear: () => request<{ success: boolean }>('/assistant-changes', { method: 'DELETE' }),
+};

@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
-import { PENDING_2FA, beginSignIn, cancelSignIns, forgetPendingPasskey, pendingPasskeyOf, rememberPendingPasskey, signInStillWanted } from './authState.js';
+import { ASSISTANT_DEVICE, assistantAllowedForEmail, loadAiPrivacy } from '../services/assistant.js';
+import { PENDING_2FA, beginSignIn, cancelSignIns, forgetPendingAssistant, forgetPendingPasskey, pendingIsAssistant, pendingPasskeyOf, rememberPendingAssistant, rememberPendingPasskey, signInStillWanted } from './authState.js';
 import bcrypt, { HasherBusyError } from '../services/passwordHasher.js';
 import crypto from 'crypto';
 import { promisify } from 'util';
@@ -21,6 +22,7 @@ import { logSecurityEvent } from '../utils/securityLogger.js';
 import { previewField } from '../services/previews.js';
 import { networkKey } from '../services/networkKey.js';
 import { findAccountPasskey } from '../db/passkeyQueries.js';
+import { clearAssistantChanges } from '../db/assistantHistory.js';
 import { insertRekey, getRekey, dropFinishedRekey, finishRekey, claimRekey } from '../db/rekeyQueries.js';
 
 // Sign-in state every instance shares (services/sharedState.ts: Postgres by
@@ -795,9 +797,10 @@ export async function trustedForSignIn(req: Request, accountId: number): Promise
  * token /login/2fa takes. A passkey sign-in records which passkey, so the
  * session made after the code hands back that passkey's wrap.
  */
-export async function beginPending2FA(accountId: number, passkeyId?: number): Promise<string> {
+export async function beginPending2FA(accountId: number, passkeyId?: number, assistant = false): Promise<string> {
   const pendingToken = crypto.randomBytes(32).toString('hex');
   if (passkeyId !== undefined) await rememberPendingPasskey(pendingToken, passkeyId, PENDING_2FA_TTL_MS);
+  if (assistant) await rememberPendingAssistant(pendingToken, accountId, PENDING_2FA_TTL_MS);
   await sharedState.putToken(PENDING_2FA, pendingToken, accountId, PENDING_2FA_TTL_MS);
   return pendingToken;
 }
@@ -1024,12 +1027,34 @@ router.get('/me', authMiddleware, async (req, res) => {
       return;
     }
 
-    res.json({ user: { ...previewField(req.auth!.accountId), email: account.email, username: account.username, totpEnabled: account.totpEnabled } });
+    res.json({ user: signedInUser({ id: req.auth!.accountId, ...account }) });
   } catch (err) {
     console.error('Me error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
+
+/** The signed-in user as /me and the sign-in answers give it. */
+function signedInUser(account: { id: number; email: string; username: string; totpEnabled: boolean }) {
+  return {
+    ...previewField(account.id), email: account.email, username: account.username, totpEnabled: account.totpEnabled,
+    // Whether Settings → In-App AI offers the Chronicles AI app switch
+    ...(assistantAllowedForEmail(account.email) && { assistantAvailable: true }),
+  };
+}
+
+/**
+ * May this account sign in to the Chronicles AI app? Only accounts on the
+ * ASSISTANT_CLIENT_EMAILS list (while it's being tried), and only while the
+ * account has the app switched on (Settings → In-App AI). Asked after the
+ * password checked out, so it tells a stranger nothing.
+ */
+async function assistantSignInRefusal(account: { email: string; tenantSchemaName: string }): Promise<string | null> {
+  if (!assistantAllowedForEmail(account.email)) return 'The Chronicles AI app isn’t available for this account';
+  const privacy = await loadAiPrivacy(account.tenantSchemaName);
+  if (!privacy.appEnabled) return 'Turn on the Chronicles AI app in Chronicles: Settings → In-App AI';
+  return null;
+}
 
 // =============================================================================
 // POST /api/auth/login
@@ -1043,7 +1068,8 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
 
-    const { email, authSecret } = parsed.data;
+    const { email, authSecret, client } = parsed.data;
+    const assistant = client === 'smith';
 
     const normalizedEmail = normalizeEmail(email);
     const failureKey = await loginFailureKey(req, normalizedEmail);
@@ -1081,13 +1107,26 @@ router.post('/login', authLimiter, async (req, res) => {
 
     await sharedState.clear(LOGIN_FAILURES, failureKey.key);
 
+    // The AI app, where it isn't available or isn't switched on. With 2FA on
+    // this is said only after the code (in /login/2fa): a password alone
+    // doesn't learn whether the account uses the app
+    if (assistant && !account.totpEnabled) {
+      const refusal = await assistantSignInRefusal(account);
+      if (refusal) {
+        logSecurityEvent('assistant_login_refused', { accountId: account.id, ip: req.ip });
+        res.status(403).json({ error: refusal });
+        return;
+      }
+    }
+
     // 2FA check — if enabled, return a pending token instead of a session.
     // Unless this browser is trusted for this account: looked at only now,
-    // after the password checked out, so a wrong password learns nothing of it
-    const trusted = account.totpEnabled && await trustedForSignIn(req, account.id);
+    // after the password checked out, so a wrong password learns nothing of it.
+    // The AI app always gives the code (it has no browser to trust)
+    const trusted = !assistant && account.totpEnabled && await trustedForSignIn(req, account.id);
     if (trusted) logSecurityEvent('login_trusted_browser', { accountId: account.id, ip: req.ip });
     if (account.totpEnabled && !trusted) {
-      const pendingToken = await beginPending2FA(account.id);
+      const pendingToken = await beginPending2FA(account.id, undefined, assistant);
       logSecurityEvent('login_2fa_required', { accountId: account.id, ip: req.ip });
       res.json({ requires2FA: true, pendingToken });
       return;
@@ -1096,7 +1135,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
-      deviceInfo: trusted ? 'trusted' : 'password',
+      deviceInfo: assistant ? ASSISTANT_DEVICE : trusted ? 'trusted' : 'password',
     });
     // A trust ended while the password was being checked (a password or 2FA
     // change, Sign out everywhere) must not leave this session behind either
@@ -1107,15 +1146,19 @@ router.post('/login', authLimiter, async (req, res) => {
       return;
     }
 
-    logSecurityEvent('login_success', { accountId: account.id, ip: req.ip });
+    logSecurityEvent(assistant ? 'assistant_login_success' : 'login_success', { accountId: account.id, ip: req.ip });
     rememberSignInNetwork(req, account.id);
+    const user = signedInUser(account);
+    if (assistant) {
+      // An app can't read an HttpOnly cookie: it gets its (assistant) session
+      // token in the answer and sends it as a Bearer token. No cookies are set
+      res.json({ user, encryption: buildEncryptionResponse(account), token });
+      return;
+    }
     try { await revokeBrowserSession(req); } catch { /* best effort: the new session works either way */ }
     rememberKnownDevice(res, account);
     setSessionCookie(res, token);
-    res.json({
-      user: { ...previewField(account.id), email: account.email, username: account.username, totpEnabled: account.totpEnabled },
-      encryption: buildEncryptionResponse(account),
-    });
+    res.json({ user, encryption: buildEncryptionResponse(account) });
   } catch (err) {
     if (sendIfHasherBusy(err, res)) return;
     console.error('Login error:', err instanceof Error ? err.message : 'Unknown error');
@@ -1248,6 +1291,14 @@ router.post('/change-password', strictLimiter, authMiddleware, confirmGate, asyn
         prisma.$executeRaw`DELETE FROM public.passkeys WHERE account_id = ${account.id}`,
       ] : []),
     ]);
+    // Versions kept of what the AI app overwrote are sealed with the old key:
+    // they couldn't be opened again, so they go. Best effort here — the
+    // browser's re-key job clears them again before it finishes, and never
+    // finishes until that worked (client services/rekey.ts)
+    if (rekey) {
+      await clearAssistantChanges(account.tenantSchemaName).catch(e =>
+        console.error('Assistant changes clear error:', e instanceof Error ? e.message : 'Unknown error'));
+    }
     } catch (err) {
       // Two re-keys sent at once: the other one's row is there, and this whole
       // change was rolled back (nothing of it was saved)
@@ -1649,7 +1700,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       return;
     }
 
-    const { pendingToken, code, trustBrowser } = parsed.data;
+    const { pendingToken, code, trustBrowser, client } = parsed.data;
 
     const pendingAccountId = await sharedState.getToken(PENDING_2FA, pendingToken);
     if (pendingAccountId === null) {
@@ -1659,6 +1710,13 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     // A passkey sign-in on a 2FA account: the passkey stood in for the
     // password, the code is still needed, and its wrap is handed back after
     const pendingPasskeyId = await pendingPasskeyOf(pendingToken);
+    // Finished the way it began: a sign-in started as the Chronicles AI app's
+    // ends as one, and a browser's can't be turned into the app's half way
+    const assistant = await pendingIsAssistant(pendingToken);
+    if (assistant !== (client === 'smith')) {
+      res.status(400).json({ error: 'Start the sign-in again' });
+      return;
+    }
 
     // The pending token survives a wrong code so the user can retry (the
     // 10-wrong-codes lock, the 5-minute expiry and authLimiter bound guessing);
@@ -1689,7 +1747,6 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
-
     const bucket = twoFABucket(req, account);
     const lock = await twoFALock(bucket);
     if (lock) {
@@ -1707,11 +1764,23 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     if (factor === 'backup') {
       logSecurityEvent('login_2fa_backup_code_used', { accountId: account.id, ip: req.ip });
     }
+    // The AI app: password sign-ins only (a passkey's wrap is for its browser),
+    // and only where it's on. Said now the code has checked out, never before
+    if (assistant) {
+      const refusal = pendingPasskeyId !== null ? 'Sign in to the Chronicles AI app with your password' : await assistantSignInRefusal(account);
+      if (refusal) {
+        await sharedState.deleteToken(PENDING_2FA, pendingToken);
+        await forgetPendingAssistant(pendingToken);
+        logSecurityEvent('assistant_login_refused', { accountId: account.id, ip: req.ip });
+        res.status(403).json({ error: refusal });
+        return;
+      }
+    }
 
     const token = await createSession(account.id, account.tenantSchemaName, {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
-      deviceInfo: pendingPasskeyId !== null ? 'passkey' : 'password',
+      deviceInfo: assistant ? ASSISTANT_DEVICE : pendingPasskeyId !== null ? 'passkey' : 'password',
     });
     // Accepted — the pending token is spent, now that the session exists: one
     // cancelled meanwhile ("Sign out everywhere") is gone, and so is this sign-in
@@ -1726,6 +1795,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       res.status(401).json({ error: 'Verification session expired. Please log in again.' });
       return;
     }
+    if (assistant) await forgetPendingAssistant(pendingToken);
     // The passkey must still be on the account now the session exists ("Remove
     // all passkeys" after a lost device may have landed meanwhile)
     let passkeyWrap: { credentialId: string; wrappedMK: string; wrapIv: string } | null = null;
@@ -1748,7 +1818,7 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
     // "Don't ask for a code on this browser for 30 days": only after the
     // authenticator's own code — a backup code is for when the phone is gone.
     // The same whether this sign-in started with the password or a passkey
-    if (trustBrowser && factor === 'totp') {
+    if (trustBrowser && factor === 'totp' && !assistant) {
       try {
         const trust = await trustDevice(account.id, browserLabel(req.headers['user-agent']));
         res.cookie(TRUST_COOKIE, trust, TRUST_COOKIE_OPTIONS);
@@ -1759,12 +1829,16 @@ router.post('/login/2fa', authLimiter, async (req, res) => {
       }
     }
 
-    logSecurityEvent('login_success', { accountId: account.id, ip: req.ip, details: passkeyWrap ? { method: 'passkey' } : undefined });
+    logSecurityEvent(assistant ? 'assistant_login_success' : 'login_success', { accountId: account.id, ip: req.ip, details: passkeyWrap ? { method: 'passkey' } : undefined });
     rememberSignInNetwork(req, account.id);
+    const user = signedInUser(account);
+    if (assistant) {
+      res.json({ user, encryption: buildEncryptionResponse(account), token });
+      return;
+    }
     try { await revokeBrowserSession(req); } catch { /* best effort: the new session works either way */ }
     rememberKnownDevice(res, account);
     setSessionCookie(res, token);
-    const user = { ...previewField(account.id), email: account.email, username: account.username, totpEnabled: account.totpEnabled };
     // A passkey sign-in gets that passkey's wrap, never the password wrap
     res.json(passkeyWrap ? { user, passkey: passkeyWrap } : { user, encryption: buildEncryptionResponse(account) });
   } catch (err) {

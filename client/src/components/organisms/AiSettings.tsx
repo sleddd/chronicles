@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { AiPrivacySettings } from './AiPrivacySettings.js';
 import styled from 'styled-components';
 import {
   SettingsGroup, SettingsGroupRow, SettingsActionRow, SettingsNotice, SettingsStatusRow,
@@ -332,6 +333,9 @@ export function AiSettings(_props: { themeMode?: 'light' | 'dark' }) {
           );
         })}
       </SettingsGroup>
+
+      {/* The Chronicles AI app, and what no AI may see */}
+      <AiPrivacySettings inAppAiOn={cfg.enabled} />
 
       {cfg.enabled && (
         <>

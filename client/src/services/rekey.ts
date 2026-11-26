@@ -1,7 +1,7 @@
 import { encryptionService } from '@shared/crypto/encryptionService.js';
 import { arrayBufferToBase64, base64ToArrayBuffer } from '@shared/crypto/encoding.js';
 import type { EncryptedPost } from '@shared/crypto/types.js';
-import { auth as authApi, entries as entriesApi, finance as financeApi, settings as settingsApi, rekeyRecords, type FinanceKind } from './api.js';
+import { ApiError, assistantChanges as assistantChangesApi, auth as authApi, entries as entriesApi, finance as financeApi, settings as settingsApi, rekeyRecords, type FinanceKind } from './api.js';
 import { isSealed, settingAad } from './settingCipher.js';
 import { presignR2, type R2Config } from './r2Signer.js';
 import { imageAad, testR2Connection } from './imageStorage.js';
@@ -531,6 +531,16 @@ export async function runRekey({ newKey, oldKey, rekeyId, runner, onProgress, fe
       } catch { console.warn('Couldn’t reach R2 to delete an old photo object'); }
       progress('cleanup', ++n, toDelete.size);
     }
+  }
+
+  // Versions kept of what the Chronicles AI app overwrote are sealed with the
+  // old key, so they go before the old key does. If that fails the job stops
+  // here without finishing (Try again carries on). A server from before the
+  // feature has none to clear (404)
+  try {
+    await assistantChangesApi.clear();
+  } catch (err) {
+    if (!(err instanceof ApiError && err.status === 404)) throw err;
   }
 
   await guard();

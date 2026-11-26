@@ -76,7 +76,7 @@ export function QuickEntry() {
     try {
       const effectiveTopicId = topicId ?? await getOrCreateJournalTopic();
       const topicName = useEntriesStore.getState().allTopics.find(t => t.id === effectiveTopicId)?.name.toLowerCase();
-      const prepared = await prepareEntryForSave(content, customFields, topicName, userFieldDefs);
+      const prepared = await prepareEntryForSave(content, customFields, topicName, userFieldDefs, null, { _taxonomyId: effectiveTopicId });
       // Tasks attached to a milestone before it had an id: joined to it after it's made (not saved in it)
       const { _attachTasks: held, ...savedFields } = prepared.customFields as Record<string, unknown>;
       prepared.customFields = savedFields;

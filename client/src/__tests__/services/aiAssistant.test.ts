@@ -17,9 +17,14 @@ import { isAiOnButNotHere, loadAiConfig, encryptAiConfig, chatReply } from '../.
 import { encryptBytes as rawEncryptBytes, decryptBytes as rawDecryptBytes, generateMasterKey } from '@shared/crypto/primitives.js';
 import { SETTING_REVS_STORE } from '../../services/settingCipher.js';
 import { beforeEach } from 'vitest';
+import { loadAiPrivacy } from '../../services/aiPrivacy.js';
+
+// An entry of a topic that isn't kept from AI (the choices are read in beforeEach: until then everything counts as hidden)
+const META = { _taxonomyId: 1 };
 
 // AI is used only where this browser turned it on (deviceConsent.ts)
 beforeEach(() => {
+  loadAiPrivacy(undefined, {}, false);
   localStorage.clear();
   setEgressAccount('tag-a');
   recordAiChoice(true);
@@ -118,14 +123,14 @@ describe('estimateEntryCalories', () => {
 describe('autoCaloriesOnSave', () => {
   it('does nothing when AI is off', async () => {
     const fetchSpy = mockOpenAI(100);
-    expect(await autoCaloriesOnSave('food', 'Toast', { calories: '' })).toBeNull();
+    expect(await autoCaloriesOnSave('food', 'Toast', { calories: '' }, META)).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('fills every blank nutrient on a food entry', async () => {
     setAiConfig(openai, null);
     mockOpenAIJson(FULL);
-    const out = await autoCaloriesOnSave('food', 'Toast with jam', { mealType: 'breakfast', calories: '' });
+    const out = await autoCaloriesOnSave('food', 'Toast with jam', { mealType: 'breakfast', calories: '' }, META);
     expect(out).toMatchObject({ calories: '250', protein: '4', carbs: '30', fat: '9', iron: '1.5', vitaminD: '0.4', vitaminB12: '0.9', vitaminC: '12' });
     expect(out?.nutrientSource).toEqual({ calories: 'ai', protein: 'ai', carbs: 'ai', fat: 'ai', iron: 'ai', vitaminD: 'ai', vitaminB12: 'ai', vitaminC: 'ai' });
   });
@@ -135,8 +140,8 @@ describe('autoCaloriesOnSave', () => {
     mockOpenAI(300);
     const first = await estimateEntryCalories('exercise', '', { exerciseType: 'running', duration: '30' });
     const fetchSpy = mockOpenAI(450);
-    expect(await autoCaloriesOnSave('exercise', '', first)).toBeNull();
-    const changed = await autoCaloriesOnSave('exercise', '', { ...first, duration: '45' });
+    expect(await autoCaloriesOnSave('exercise', '', first, META)).toBeNull();
+    const changed = await autoCaloriesOnSave('exercise', '', { ...first, duration: '45' }, META);
     expect(changed?.calories).toBe('450');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
@@ -144,7 +149,7 @@ describe('autoCaloriesOnSave', () => {
   it('skips exercise with no duration or distance', async () => {
     setAiConfig(openai, null);
     const fetchSpy = mockOpenAI(100);
-    expect(await autoCaloriesOnSave('exercise', 'Stretching', { calories: '' })).toBeNull();
+    expect(await autoCaloriesOnSave('exercise', 'Stretching', { calories: '' }, META)).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
@@ -153,7 +158,7 @@ describe('food nutrition', () => {
   it('asks only for missing nutrients and keeps typed calories', async () => {
     setAiConfig(openai, null);
     const spy = mockOpenAIJson({ protein: 1.7, carbs: 26, fat: 0.5, iron: 0.5, vitaminD: 0, vitaminB12: 0, vitaminC: 120 });
-    const out = await autoNutritionOnSave('Orange juice, 1 cup', { calories: '112', caloriesSource: 'manual' });
+    const out = await autoNutritionOnSave('Orange juice, 1 cup', { calories: '112', caloriesSource: 'manual' }, META);
     expect(promptOf(spy)).toContain('protein (g), carbs (g), fat (g), iron (mg), vitaminD (mcg), vitaminB12 (mcg), vitaminC (mg)');
     expect(promptOf(spy)).not.toContain('calories (kcal)');
     expect(out).toMatchObject({ calories: '112', caloriesSource: 'manual', iron: '0.5', vitaminC: '120' });
@@ -164,20 +169,20 @@ describe('food nutrition', () => {
     const spy = mockOpenAIJson(FULL);
     const cf = { calories: '1', protein: '1', carbs: '1', fat: '1', iron: '1', vitaminD: '1', vitaminB12: '1', vitaminC: '1',
       nutrientSource: { calories: 'manual', protein: 'manual', carbs: 'manual', fat: 'manual', iron: 'manual', vitaminD: 'manual', vitaminB12: 'manual', vitaminC: 'manual' } };
-    expect(await autoNutritionOnSave('Toast', cf)).toBeNull();
+    expect(await autoNutritionOnSave('Toast', cf, META)).toBeNull();
     expect(spy).not.toHaveBeenCalled();
   });
 
   it('refreshes AI values when the description changes, never typed ones', async () => {
     setAiConfig(openai, null);
     mockOpenAIJson(FULL);
-    const first = (await autoNutritionOnSave('Toast', { mealDescription: 'Toast' }))!;
+    const first = (await autoNutritionOnSave('Toast', { mealDescription: 'Toast' }, META))!;
     const edited = { ...first, iron: '9', nutrientSource: { ...(first.nutrientSource as object), iron: 'manual' } };
     const unchanged = mockOpenAIJson(FULL);
-    expect(await autoNutritionOnSave('Toast', edited)).toBeNull();
+    expect(await autoNutritionOnSave('Toast', edited, META)).toBeNull();
     expect(unchanged).not.toHaveBeenCalled();
     const spy = mockOpenAIJson({ calories: 400, protein: 5, carbs: 40, fat: 20, vitaminD: 1, vitaminB12: 1, vitaminC: 1 });
-    const out = await autoNutritionOnSave('Toast with butter', { ...edited, mealDescription: 'Toast with butter' });
+    const out = await autoNutritionOnSave('Toast with butter', { ...edited, mealDescription: 'Toast with butter' }, META);
     expect(promptOf(spy)).not.toContain('iron (mg)');
     expect(out).toMatchObject({ calories: '400', iron: '9' });
   });
@@ -205,8 +210,8 @@ describe('AI is used only where this browser turned it on (a sealed config can b
     const spy = mockOpenAI(100);
     expect(isAiReady()).toBe(false);
     expect(isAiOnButNotHere()).toBe(true);
-    expect(await autoCaloriesOnSave('food', 'An apple', {})).toBeNull();
-    expect(await autoNutritionOnSave('An apple', {})).toBeNull();
+    expect(await autoCaloriesOnSave('food', 'An apple', {}, META)).toBeNull();
+    expect(await autoNutritionOnSave('An apple', {}, META)).toBeNull();
     await expect(chatReply('sys', [{ role: 'user', content: 'hi' }])).rejects.toThrow(/this browser/);
     expect(spy).not.toHaveBeenCalled();
   });

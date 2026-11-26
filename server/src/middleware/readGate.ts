@@ -16,13 +16,15 @@ import { releaseWhenSettled } from './slot.js';
  * holds up the topics. The app asks for each list once at a time (identical
  * GETs share one request), so real use stays at one or two per lane.
  */
+// (An AI-app session counts apart from the account's browsers.)
 const inFlight = new Map<string, number>();
 
 export function readGate(lane: string, max: number) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const accountId = req.auth?.accountId;
-    if (accountId === undefined) return next();
-    const key = `${accountId}:${lane}`;
+    if (!req.auth) return next();
+    // The Chronicles AI app has lanes of its own (like apiLimiter and
+    // writeGate): its reads never hold up the owner's pages
+    const key = `${req.auth.accountId}${req.auth.assistant ? ':assistant' : ''}:${lane}`;
     const n = inFlight.get(key) ?? 0;
     if (n >= max) {
       res.set('Retry-After', '2');

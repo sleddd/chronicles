@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { visibleToAi, isHiddenFromAi, featureHiddenFromAi } from '../../services/aiPrivacy.js';
+import { useAiPrivacy } from '../../hooks/useAiPrivacy.js';
 import styled from 'styled-components';
 import { Modal } from '../atoms/Modal.js';
 import { PillButton } from '../atoms/PillButton.js';
@@ -166,8 +168,13 @@ function changeLines(
 
 export function AiPlanReview({ onClose }: { onClose: () => void }) {
   const { goals, milestones, tasks } = usePlanData();
-  const entries = useEntriesStore(s => s.decryptedEntries);
+  const allEntries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
+  // What AI task planning may send: never an entry hidden from AI
+  const privacy = useAiPrivacy();
+  const entries = useMemo(() => visibleToAi(allEntries, privacy), [allEntries, privacy]);
+  const keepVision = featureHiddenFromAi('vision', privacy);
+  const hiddenIds = useMemo(() => new Set(allEntries.filter(e => isHiddenFromAi(e.metadata as Record<string, unknown> | null, privacy)).map(e => e.id)), [allEntries, privacy]);
   const [savedCategories, , categoriesLoaded] = useEncryptedSetting<GoalCategoryConfig>('goalCategories', EMPTY_GOAL_CATEGORIES);
   const [savedOrder, , orderLoaded] = useEncryptedSetting<PlanOrder>('planningOrder', NO_ORDER);
   const [savedTaskTypes, , typesLoaded] = useEncryptedSetting<string[]>('taskTypes', NO_TYPES);
@@ -188,12 +195,12 @@ export function AiPlanReview({ onClose }: { onClose: () => void }) {
     const today = toDateStr(now);
     const days = Array.from({ length: PLAN_DAYS }, (_, i) => addDays(today, i));
     const last = days[days.length - 1];
-    const facts = tasks.map(t => ({ ...t, ...plannerFacts(t.id, t.fields, t.created) }));
+    const facts = tasks.filter(t => !hiddenIds.has(t.id)).map(t => ({ ...t, ...plannerFacts(t.id, t.fields, t.created) }));
     const left = unscheduled(facts, today);
     const overdue = new Set(left.overdue.map(t => t.id));
     const config = parseGoalCategories(savedCategories);
     const openByMilestone = new Map<number, number>();
-    for (const t of tasks) if (!t.completed && t.milestoneId) openByMilestone.set(t.milestoneId, (openByMilestone.get(t.milestoneId) ?? 0) + 1);
+    for (const t of tasks) if (!hiddenIds.has(t.id) && !t.completed && t.milestoneId) openByMilestone.set(t.milestoneId, (openByMilestone.get(t.milestoneId) ?? 0) + 1);
     return buildPlanRequest({
       days,
       nowMinutes: now.getHours() * 60 + now.getMinutes(),
@@ -207,20 +214,21 @@ export function AiPlanReview({ onClose }: { onClose: () => void }) {
         .sort((a, b) => a.scheduled.localeCompare(b.scheduled) || (a.at ?? 0) - (b.at ?? 0))
         .map(t => ({ id: t.id, title: t.title, day: t.scheduled, start: t.at, hours: t.hours, goalId: t.goalId, milestoneId: t.milestoneId })),
       // In the person's own order on the boards: the top card is the most important
-      goals: inOrder(goals.filter(g => g.status !== 'completed'), savedOrder?.goals).map(g => ({
-        id: g.id, title: g.title, category: g.category, status: g.status,
+      goals: inOrder(goals.filter(g => g.status !== 'completed' && !hiddenIds.has(g.id)), savedOrder?.goals).map(g => ({
+        id: g.id, title: g.title, category: keepVision ? '' : g.category, status: g.status,
         startOn: text(g.fields.startOn), targetDate: text(g.fields.targetDate), notes: text(g.fields.notes),
       })),
-      milestones: inOrder(milestones.filter(m => !m.completed), savedOrder?.milestones).map(m => ({
+      milestones: inOrder(milestones.filter(m => !m.completed && !hiddenIds.has(m.id)), savedOrder?.milestones).map(m => ({
         id: m.id, title: m.title, goalId: m.goalId,
         status: m.fields.milestoneStatus === 'in_progress' ? 'in_progress' as const : 'not_started' as const,
         startOn: text(m.fields.startOn), targetDate: text(m.fields.targetDate), notes: text(m.fields.notes), openTasks: openByMilestone.get(m.id) ?? 0,
       })),
-      categories: goalCategoryList(config),
+      // The vision kept from AI: neither it nor the goal categories are sent (the switch names both)
+      categories: keepVision ? [] : goalCategoryList(config),
       taskTypes: taskTypeList(Array.isArray(savedTaskTypes) ? savedTaskTypes.filter((t): t is string => typeof t === 'string') : NO_TYPES),
       visions: {
-        overall: config.vision ?? '',
-        areas: goalCategoryList(config).map(name => ({ name, vision: areaInfo(config, name).vision ?? '' })),
+        overall: keepVision ? '' : config.vision ?? '',
+        areas: keepVision ? [] : goalCategoryList(config).map(name => ({ name, vision: areaInfo(config, name).vision ?? '' })),
       },
       // Events and meetings: what each is and when — not its notes, place or people
       events: eventOccurrences(entries, allTopics, days[0], last)

@@ -1,4 +1,8 @@
 import { useSealedDraft } from '../hooks/useSealedDraft.js';
+import { useAiIsOn, useAiPrivacy } from '../hooks/useAiPrivacy.js';
+import { AI_HIDDEN_META, loadAiPrivacy, reconcileAfterLoad, sealedCopyStored } from '../services/aiPrivacy.js';
+import { showFlash } from '../services/flashNotice.js';
+import { stampAiHidden } from '../utils/aiHiddenFlag.js';
 import { QUICK_FINANCE_CHOICES, QuickFinance, type QuickFinanceKind } from '../components/organisms/QuickFinance.js';
 import { DraftNote } from '../components/molecules/DraftNote.js';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
@@ -250,6 +254,13 @@ export function JournalView() {
   const [widgetType, setWidgetType] = useState<string | null>(null);
   const [entryImages, setEntryImages] = useState<EntryImage[]>([]);
   const [featuredKey, setFeaturedKey] = useState<string | null>(null);
+  // "Hide from AI" (the In-App AI row's checkbox), only offered while an AI is on
+  const [aiHidden, setAiHidden] = useState(false);
+  // Unticked in this editor, for the entry it shows. Only then does a save say
+  // "shared again": an editor left open must not undo a Hide made on another device
+  const aiHiddenTouchedRef = useRef(false);
+  const aiIsOn = useAiIsOn();
+  const aiPrivacy = useAiPrivacy();
   const [imageUploading, setImageUploading] = useState(false);
   const [imageError, setImageError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -398,6 +409,7 @@ export function JournalView() {
       metadata._images = entryImages;
       if (featuredKey) metadata._featuredKey = featuredKey;
     }
+    stampAiHidden(metadata, aiHidden, aiHiddenTouchedRef.current);
     const hasText = !!stripHtml(editorContent).trim();
     let finalContent = editorContent;
     if (!hasText) {
@@ -508,6 +520,7 @@ export function JournalView() {
       metadata._images = entryImages;
       if (featuredKey) metadata._featuredKey = featuredKey;
     }
+    stampAiHidden(metadata, aiHidden, aiHiddenTouchedRef.current);
     try {
       const encrypted = selectedEntryId
         ? { ...(await encryptPost(selectedEntryId, contentToSave, metadata)), id: selectedEntryId }
@@ -550,7 +563,7 @@ export function JournalView() {
     }, 3000);
     autoSaveTimerRef.current = timer;
     return () => clearTimeout(timer);
-  }, [editorContent, customFields, entryImages, featuredKey, runSave]);
+  }, [editorContent, customFields, entryImages, featuredKey, aiHidden, runSave]);
 
   /* × / Escape on the full-width editor: in edit view (opened from another
      page) it closes the entry and returns there, like Save; in the plain
@@ -656,6 +669,8 @@ export function JournalView() {
           .catch(() => setImagesConfigured(false));
         // AI provider credentials — also a master-key-encrypted setting
         void loadAiConfig(sealed('aiConfig'), decryptBytes);
+        // What AI may not see (this loader runs instead of useInitializeData when the journal is the first page)
+        loadAiPrivacy(settingsMap.aiPrivacySealed, settingsMap.aiPrivacy, sealedCopyStored(settingsData));
         // Feature flags (must be set before setTopics so filtering works);
         // never-saved flags default to enabled, same as useInitializeData
         setFeatureFlags(featureFlagsFrom(settingsMap));
@@ -680,6 +695,7 @@ export function JournalView() {
         const decrypted = await decryptEntriesInBatches(encrypted, decryptPosts, () => cancelled);
         if (!decrypted) return;
         setDecryptedEntries(decrypted);
+        reconcileAfterLoad(decrypted);
         // Once per account: re-save older entries bound to their id, then mark it done
         const resealed = olderEntriesAllowed()
           ? resealOlderEntries(decrypted, encryptPost, encryptBytes)
@@ -718,6 +734,8 @@ export function JournalView() {
     setWidgetType(null);
     setEntryImages([]);
     setFeaturedKey(null);
+    setAiHidden(false);
+    aiHiddenTouchedRef.current = false;
     setImageError('');
     // A preset (board column status) isn't an edit — nothing to save yet
     loadedStateRef.current = { content: '', customFields: JSON.stringify(fields ?? {}), images: imagesSig([], null) };
@@ -765,6 +783,8 @@ export function JournalView() {
     setWidgetType(entry ? (meta._widgetType as string | null ?? null) : null);
     setEntryImages(imgs);
     setFeaturedKey(feat);
+    setAiHidden(meta[AI_HIDDEN_META] === true);
+    aiHiddenTouchedRef.current = false;
     setImageError('');
     setShowMobileEditor(true);
     // What is saved is the entry as it stands (or nothing): the restored writing counts as unsaved, so it autosaves
@@ -794,6 +814,8 @@ export function JournalView() {
         setWidgetType(meta?._widgetType as string | null ?? null);
         setEntryImages(imgs);
         setFeaturedKey(feat);
+        setAiHidden(meta?.[AI_HIDDEN_META] === true);
+        aiHiddenTouchedRef.current = false;
         setImageError('');
         setShowMobileEditor(true);
         loadedStateRef.current = { content: entry.content, customFields: JSON.stringify(cf), images: imagesSig(imgs, feat) };
@@ -836,7 +858,8 @@ export function JournalView() {
       // blocks the save.
       // (dated shopping-list title, fields-only summary, AI calories — utils/entrySave)
       const topicName = topics.find(t => t.id === effectiveTopicId)?.name.toLowerCase();
-      const prepared = await prepareEntryForSave(editorContent, customFields, topicName, userFieldDefs, savedFieldsOf(selectedEntryId));
+      const prepared = await prepareEntryForSave(editorContent, customFields, topicName, userFieldDefs, savedFieldsOf(selectedEntryId),
+        { _taxonomyId: effectiveTopicId, ...(aiHidden && { _aiHidden: true }) });
       const finalContent = prepared.content;
       const fieldsToSave = prepared.customFields;
       if (finalContent !== editorContent) setEditorContent(finalContent);
@@ -850,6 +873,7 @@ export function JournalView() {
         metadata._images = entryImages;
         if (featuredKey) metadata._featuredKey = featuredKey;
       }
+      stampAiHidden(metadata, aiHidden, aiHiddenTouchedRef.current);
       const encrypted = selectedEntryId
         ? { ...(await encryptPost(selectedEntryId, finalContent, metadata)), id: selectedEntryId }
         : await encryptNewPost(finalContent, pendingEntryDate ? { ...metadata, _createdAt: new Date(pendingEntryDate + 'T12:00:00').toISOString() } : metadata);
@@ -887,7 +911,40 @@ export function JournalView() {
     } catch (err) { console.error('Save failed:', err); setSaveStatus('Save failed'); }
     finally { setIsSaving(false); }
     });
-  }, [editorContent, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, pendingEntryDate, encryptPost, encryptNewPost, setSelectedEntryId, setShowMobileEditor, originPath, navigate, runSave, showBlankEntry]);
+  }, [editorContent, editorTopicId, widgetType, customFields, topics, topicCustomFields, entryImages, featuredKey, aiHidden, pendingEntryDate, encryptPost, encryptNewPost, setSelectedEntryId, setShowMobileEditor, originPath, navigate, runSave, showBlankEntry]);
+
+  /** "Hide from AI" on or off: saved into a saved entry's encrypted metadata at
+   *  once (rebuilt from the store entry, like persistImages); a new entry just
+   *  carries it into its first save. It takes its turn in the save queue, so a
+   *  save already on its way can't land after it and undo it. The server's list
+   *  is brought in line by the encrypt step (markHiddenOnSave). */
+  const toggleAiHidden = useCallback(async () => {
+    const next = !aiHidden;
+    setAiHidden(next);
+    aiHiddenTouchedRef.current = true;
+    const entryId = entryIdRef.current;
+    if (!entryId) return;
+    const session = editSessionRef.current;
+    await runSave(async () => {
+      const entry = useEntriesStore.getState().decryptedEntries.find(e => e.id === entryId);
+      if (!entry) return;
+      const meta: Record<string, unknown> = { ...(entry.metadata as Record<string, unknown>), [AI_HIDDEN_META]: next };
+      try {
+        const encrypted = await encryptPost(entryId, entry.content, meta);
+        await entriesApi.update(entryId, {
+          contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
+          metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,
+          taxonomyIds: meta._taxonomyId ? [meta._taxonomyId as number] : [],
+        });
+        updateDecryptedEntry(entryId, { metadata: meta });
+      } catch (err) {
+        console.error('Hide from AI save failed:', err);
+        // Only if the editor still shows that entry
+        if (editSessionRef.current === session) setAiHidden(!next);
+        showFlash('That didn’t save. Try again.');
+      }
+    });
+  }, [aiHidden, encryptPost, updateDecryptedEntry, runSave]);
 
   /** Persist the image set into an existing entry's encrypted metadata.
    *  Rebuilds from the store entry (mirrors handleBookmark) so it is safe to
@@ -1120,9 +1177,11 @@ export function JournalView() {
     setPendingNewTopicId(topic);
     setPendingNewFields(fields);
     showBlankEntry(topic, fields);
+    // A copy of an entry hidden from AI starts hidden too
+    setAiHidden(aiHidden);
     setEditorContent(content);
     setShowMobileEditor(true);
-  }, [editorContent, editorTopicId, customFields, runSave, setSelectedEntryId, showBlankEntry]);
+  }, [editorContent, editorTopicId, customFields, aiHidden, runSave, setSelectedEntryId, showBlankEntry]);
 
   const handleBookmark = useCallback(async () => {
     if (!selectedEntryId) return;
@@ -1293,6 +1352,9 @@ export function JournalView() {
               dictationControlRef={dictationControlRef}
               images={entryImages}
               featuredKey={featuredKey}
+              aiHidden={aiHidden}
+              aiHiddenByTopic={editorTopicId != null && aiPrivacy.hiddenTopicIds.includes(editorTopicId)}
+              onToggleAiHidden={aiIsOn ? () => { void toggleAiHidden(); } : undefined}
               onImagesSelected={handleImagesSelected}
               onExistingImagesSelected={handleExistingImagesSelected}
               onImageRemoved={handleImageRemoved}

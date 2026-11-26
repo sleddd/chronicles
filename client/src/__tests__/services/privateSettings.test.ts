@@ -61,6 +61,25 @@ describe('settings sealing', () => {
     expect(settingAad('icsIncludeDetails')).toBe('chronicles:setting:v2:icsIncludeDetails');
   });
 
+  // The "Don't share with AI" choices as this browser believes them: the
+  // server's own copy may only add to what is hidden, so a readable value
+  // passed off as the sealed copy is never taken
+  it('never takes the sealed AI privacy choices readable', async () => {
+    const map: Record<string, unknown> = {
+      aiPrivacySealed: { appEnabled: true, hiddenTopicIds: [], hiddenFeatures: [] },
+      aiPrivacy: { appEnabled: true, hiddenTopicIds: [], hiddenFeatures: [] },
+    };
+    await openSettingsMap(map, decryptBytes);
+    expect(map.aiPrivacySealed).toBeUndefined();
+    // The server's readable copy is kept as it is (services/aiPrivacy decides what it may do)
+    expect(map.aiPrivacy).toEqual({ appEnabled: true, hiddenTopicIds: [], hiddenFeatures: [] });
+
+    const sealed = await sealSetting('aiPrivacySealed', { appEnabled: false, hiddenTopicIds: [7], hiddenFeatures: [] }, encryptBytes);
+    const opened: Record<string, unknown> = { aiPrivacySealed: sealed };
+    await openSettingsMap(opened, decryptBytes);
+    expect(opened.aiPrivacySealed).toEqual({ appEnabled: false, hiddenTopicIds: [7], hiddenFeatures: [] });
+  });
+
   it('drops a value that will not decrypt so callers fall back to defaults', async () => {
     const map: Record<string, unknown> = { timezone: { ciphertext: 'AAAA', iv: 'AAAAAAAAAAAAAAAA', v: 2 } };
     await openSettingsMap(map, decryptBytes);

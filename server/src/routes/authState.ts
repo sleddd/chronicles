@@ -28,6 +28,23 @@ export function forgetPendingPasskey(pendingToken: string): Promise<void> {
   return sharedState.deleteToken(PENDING_2FA_PASSKEY, pendingToken);
 }
 
+/* A sign-in that began as the Chronicles AI app's (`client: 'smith'`) can only
+   be finished as one, and a browser's can't be finished as the app's: the
+   pending token remembers which it was, so the two steps always agree. */
+const PENDING_2FA_ASSISTANT = 'pending_2fa_assistant';
+
+export function rememberPendingAssistant(pendingToken: string, accountId: number, ttlMs: number): Promise<void> {
+  return sharedState.putToken(PENDING_2FA_ASSISTANT, pendingToken, accountId, ttlMs);
+}
+
+export async function pendingIsAssistant(pendingToken: string): Promise<boolean> {
+  return (await sharedState.getToken(PENDING_2FA_ASSISTANT, pendingToken)) !== null;
+}
+
+export function forgetPendingAssistant(pendingToken: string): Promise<void> {
+  return sharedState.deleteToken(PENDING_2FA_ASSISTANT, pendingToken);
+}
+
 /*
  * Sign-ins in flight. A sign-in checks who is asking, then makes its session a
  * moment later. "Sign out everywhere" (and the other changes that sign out

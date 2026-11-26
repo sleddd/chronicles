@@ -593,11 +593,12 @@ export async function resealPosts(schemaName: string, posts: (EncryptedPostField
   return counts.reduce((a, b) => a + b, 0);
 }
 
-export async function getPost(schemaName: string, id: number): Promise<TenantPost | null> {
+export async function getPost(schemaName: string, id: number, options: { excludeAiHidden?: boolean } = {}): Promise<TenantPost | null> {
+  if (options.excludeAiHidden) await ensureAiPrivacyTables(schemaName);
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
   const result = await db.$queryRawUnsafe<TenantPost[]>(
-    `SELECT ${POST_SELECT} FROM ${s}.posts WHERE id = $1`,
+    `SELECT ${POST_SELECT} FROM ${s}.posts WHERE id = $1${options.excludeAiHidden ? ` AND ${NOT_AI_HIDDEN(s)}` : ''}`,
     id
   );
   return result[0] || null;
@@ -621,13 +622,15 @@ const POST_BYTES = `COALESCE(octet_length(content_encrypted), 0) + COALESCE(octe
  */
 export async function getPostPage(
   schemaName: string,
-  options: { limit: number; offset: number; maxBytes: number },
+  options: { limit: number; offset: number; maxBytes: number; excludeAiHidden?: boolean },
 ): Promise<{ posts: TenantPost[]; more: boolean }> {
+  if (options.excludeAiHidden) await ensureAiPrivacyTables(schemaName);
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
+  const where = options.excludeAiHidden ? `WHERE ${NOT_AI_HIDDEN(s)}` : '';
   // Sizes first (no ciphertext read), to see how many rows fit
   const sizes = await db.$queryRawUnsafe<{ n: number | bigint }[]>(
-    `SELECT ${POST_BYTES} AS n FROM ${s}.posts ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
+    `SELECT ${POST_BYTES} AS n FROM ${s}.posts ${where} ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
     options.limit, options.offset
   );
   let take = 0;
@@ -640,7 +643,7 @@ export async function getPostPage(
   }
   if (take === 0) return { posts: [], more: false };
   const posts = await db.$queryRawUnsafe<TenantPost[]>(
-    `SELECT ${POST_SELECT} FROM ${s}.posts ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
+    `SELECT ${POST_SELECT} FROM ${s}.posts ${where} ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`,
     take, options.offset
   );
   return { posts, more: take < sizes.length || sizes.length === options.limit };
@@ -912,6 +915,154 @@ export async function ensurePostReservations(schemaName: string): Promise<void> 
   reservationsReady.add(s);
 }
 
+// =============================================================================
+// Hidden from AI, and what the AI app made (the Chronicles AI app, Smith)
+// =============================================================================
+
+/**
+ * Entries hidden from AI: by the entry's own "Hide from AI" switch or because
+ * its topic is on the "Don't share with AI" list. The topic and the switch are
+ * encrypted, so the browser that holds the key keeps this list for the server
+ * to enforce: an AI-app session never receives these entries. Ids only, no
+ * foreign key (an id can be marked before its entry is created, so it is never
+ * visible, even for a moment; a deleted entry's row is pruned on the next set).
+ *
+ * assistant_creations records each entry the AI app created, so it can undo
+ * its own creation for a short while (and nothing else). assistant_changes
+ * keeps what it overwrote (db/assistantHistory.ts).
+ */
+export function aiPrivacyStatements(s: string): string[] {
+  return [
+    `CREATE TABLE IF NOT EXISTS ${s}.ai_hidden_posts (post_id INTEGER PRIMARY KEY)`,
+    `CREATE TABLE IF NOT EXISTS ${s}.assistant_creations (post_id INTEGER PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`,
+    // The version of anything the AI app overwrote, still encrypted, for the owner to put back (db/assistantHistory.ts)
+    `CREATE TABLE IF NOT EXISTS ${s}.assistant_changes (
+      id BIGSERIAL PRIMARY KEY,
+      kind TEXT NOT NULL,
+      ref TEXT NOT NULL,
+      saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      body BYTEA, body_iv BYTEA, meta BYTEA, meta_iv BYTEA, extra JSONB
+    )`,
+    // The IVs of the version the AI app last wrote to each record: a version it
+    // wrote itself isn't kept again (db/assistantHistory.ts)
+    `CREATE TABLE IF NOT EXISTS ${s}.assistant_wrote (kind TEXT NOT NULL, ref TEXT NOT NULL, mark BYTEA NOT NULL, PRIMARY KEY (kind, ref))`,
+    // Records other than entries that the AI app made new (a dose record), for
+    // its day's budget: it can't delete them, and there is no earlier version
+    // to put back (assistantNewRecordAllowed, db/assistantHistory.ts)
+    `CREATE TABLE IF NOT EXISTS ${s}.assistant_new_records (kind TEXT NOT NULL, ref TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (kind, ref))`,
+  ];
+}
+
+const aiPrivacyReady = new Set<string>();
+
+/** JIT migration for the AI privacy tables: one catalog read once they're in place (it looks for the newest of them). */
+export async function ensureAiPrivacyTables(schemaName: string): Promise<void> {
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  if (aiPrivacyReady.has(s)) return;
+  const [{ ready }] = await db.$queryRawUnsafe<{ ready: boolean }[]>(
+    `SELECT EXISTS (SELECT 1 FROM pg_class t JOIN pg_namespace n ON n.oid = t.relnamespace
+                    WHERE n.nspname = $1 AND t.relname = 'assistant_new_records') AS ready`,
+    s
+  );
+  if (!ready) await db.$transaction(aiPrivacyStatements(s).map(sql => db.$executeRawUnsafe(sql)));
+  aiPrivacyReady.add(s);
+}
+
+/** SQL that leaves out hidden entries (for an AI-app session). */
+const NOT_AI_HIDDEN = (s: string) => `id NOT IN (SELECT post_id FROM ${s}.ai_hidden_posts)`;
+
+export async function getAiHiddenIds(schemaName: string): Promise<number[]> {
+  await ensureAiPrivacyTables(schemaName);
+  const db = await tenantDb(schemaName);
+  const rows = await db.$queryRawUnsafe<{ post_id: number }[]>(
+    `SELECT post_id FROM ${escapeSchema(schemaName)}.ai_hidden_posts ORDER BY post_id`
+  );
+  return rows.map(r => r.post_id);
+}
+
+/**
+ * Mark entries hidden from AI, or not. Only ids that are an entry or a
+ * reserved id (an entry on its way) are marked, so the table can't grow past
+ * the account's entries.
+ */
+export async function setAiHidden(schemaName: string, ids: number[], hidden: boolean): Promise<void> {
+  await ensureAiPrivacyTables(schemaName);
+  await ensurePostReservations(schemaName);
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  if (hidden) {
+    await db.$executeRawUnsafe(
+      `INSERT INTO ${s}.ai_hidden_posts (post_id)
+       SELECT i FROM unnest($1::int[]) AS i
+       WHERE EXISTS (SELECT 1 FROM ${s}.posts p WHERE p.id = i)
+          OR EXISTS (SELECT 1 FROM ${s}.post_id_reservations r WHERE r.id = i)
+       ON CONFLICT DO NOTHING`, ids);
+  } else {
+    await db.$executeRawUnsafe(`DELETE FROM ${s}.ai_hidden_posts WHERE post_id = ANY($1::int[])`, ids);
+  }
+}
+
+/** Drop rows for entries that no longer exist. Reserved-but-not-yet-created ids stay (the entry may be on its way). */
+export async function pruneAiHidden(schemaName: string): Promise<void> {
+  await ensureAiPrivacyTables(schemaName);
+  await ensurePostReservations(schemaName);
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  await db.$executeRawUnsafe(
+    `DELETE FROM ${s}.ai_hidden_posts h WHERE NOT EXISTS (SELECT 1 FROM ${s}.posts p WHERE p.id = h.post_id)
+       AND NOT EXISTS (SELECT 1 FROM ${s}.post_id_reservations r WHERE r.id = h.post_id)`
+  );
+}
+
+/** With `client`: inside that transaction (the tables are then already in place: assistantWrite sees to it). */
+export async function isAiHidden(schemaName: string, id: number, client?: TenantClient): Promise<boolean> {
+  if (!client) await ensureAiPrivacyTables(schemaName);
+  const db = await clientFor(schemaName, client);
+  const rows = await db.$queryRawUnsafe<{ post_id: number }[]>(
+    `SELECT post_id FROM ${escapeSchema(schemaName)}.ai_hidden_posts WHERE post_id = $1`, id
+  );
+  return rows.length > 0;
+}
+
+/** Every entry id an AI-app session may see (so it can drop what was hidden since). */
+export async function getAiVisibleIds(schemaName: string): Promise<number[]> {
+  await ensureAiPrivacyTables(schemaName);
+  const db = await tenantDb(schemaName);
+  const s = escapeSchema(schemaName);
+  const rows = await db.$queryRawUnsafe<{ id: number }[]>(`SELECT id FROM ${s}.posts WHERE ${NOT_AI_HIDDEN(s)} ORDER BY id`);
+  return rows.map(r => r.id);
+}
+
+/**
+ * When each of these entries was last saved (ids that aren't entries are left
+ * out). For a browser checking a few entries against its own copy without
+ * downloading them.
+ */
+export async function getPostUpdatedAt(schemaName: string, ids: number[]): Promise<{ id: number; updatedAt: Date }[]> {
+  const db = await tenantDb(schemaName);
+  return db.$queryRawUnsafe<{ id: number; updatedAt: Date }[]>(
+    `SELECT id, updated_at AS "updatedAt" FROM ${escapeSchema(schemaName)}.posts WHERE id = ANY($1::int[]) ORDER BY id`, ids);
+}
+
+/** How long the AI app may undo an entry it created. */
+export const ASSISTANT_UNDO_MS = 2 * 60 * 1000;
+
+/** How many entries the AI app may create in a day: a runaway or misled app can't fill the journal (counted and recorded by assistantCreatePost, db/assistantHistory.ts). */
+export const ASSISTANT_CREATES_PER_DAY = 300;
+
+/** Whether the AI app created this entry within the undo window. */
+export async function assistantMayUndo(schemaName: string, id: number, windowMs = ASSISTANT_UNDO_MS): Promise<boolean> {
+  await ensureAiPrivacyTables(schemaName);
+  const db = await tenantDb(schemaName);
+  const rows = await db.$queryRawUnsafe<{ post_id: number }[]>(
+    `SELECT post_id FROM ${escapeSchema(schemaName)}.assistant_creations
+     WHERE post_id = $1 AND created_at > NOW() - make_interval(secs => $2::double precision / 1000)`,
+    id, windowMs
+  );
+  return rows.length > 0;
+}
+
 /** A cursor taken before reading: every transaction below it has finished. */
 export async function getSyncCursor(schemaName: string): Promise<string> {
   const db = await tenantDb(schemaName);
@@ -944,9 +1095,11 @@ export type PostChanges =
  * changes or `maxBytes` of them, or a cursor from the future (the database
  * was restored).
  */
-export async function getPostChanges(schemaName: string, since: string, limit = 5000, maxBytes = Infinity): Promise<PostChanges> {
+export async function getPostChanges(schemaName: string, since: string, limit = 5000, maxBytes = Infinity, options: { excludeAiHidden?: boolean } = {}): Promise<PostChanges> {
+  if (options.excludeAiHidden) await ensureAiPrivacyTables(schemaName);
   const db = await tenantDb(schemaName);
   const s = escapeSchema(schemaName);
+  const visible = options.excludeAiHidden ? ` AND ${NOT_AI_HIDDEN(s)}` : '';
   const [{ cursor, future }] = await db.$queryRawUnsafe<{ cursor: string; future: boolean }[]>(
     `SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS cursor,
             $1::xid8 > pg_snapshot_xmax(pg_current_snapshot()) AS future`,
@@ -962,7 +1115,7 @@ export async function getPostChanges(schemaName: string, since: string, limit = 
     if (Number(n) > maxBytes) return { reset: true };
   }
   const entries = await db.$queryRawUnsafe<TenantPost[]>(
-    `SELECT ${POST_SELECT} FROM ${s}.posts WHERE change_xid >= $1::xid8 ORDER BY change_xid, id LIMIT $2`,
+    `SELECT ${POST_SELECT} FROM ${s}.posts WHERE change_xid >= $1::xid8${visible} ORDER BY change_xid, id LIMIT $2`,
     since, limit + 1
   );
   if (entries.length > limit) return { reset: true };

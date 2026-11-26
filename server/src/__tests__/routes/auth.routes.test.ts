@@ -65,6 +65,12 @@ vi.mock('../../middleware/rateLimiter.js', () => ({
   registerLimiter: (_req: any, _res: any, next: any) => next(),
 }));
 
+// The Chronicles AI app's switch (read from the account's settings)
+vi.mock('../../services/assistant.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/assistant.js')>()),
+  loadAiPrivacy: vi.fn(),
+}));
+
 // Mock security logger
 vi.mock('../../utils/securityLogger.js', () => ({
   logSecurityEvent: vi.fn(),
@@ -88,6 +94,8 @@ vi.mock('../../services/passwordHasher.js', () => ({
 import authRouter, { checkStoredCredentials, resetAuthStateForTests } from '../../routes/auth.js';
 import * as authMw from '../../middleware/auth.js';
 import bcryptMock from '../../services/passwordHasher.js';
+import { loadAiPrivacy } from '../../services/assistant.js';
+import { generateSecret, generateSync } from 'otplib';
 import { prisma } from '../../db/prisma.js';
 import { registerTenant } from '../../db/schemaManager.js';
 import { isApproved, onBetaList, spendInvite } from '../../db/betaQueries.js';
@@ -1188,5 +1196,139 @@ describe('Auth Routes', () => {
   it('no longer serves the key-wrap upgrade endpoint', async () => {
     const res = await request(app).post('/api/auth/key-wrap').send({});
     expect(res.status).toBe(404);
+  });
+});
+
+
+// =============================================================================
+// The Chronicles AI app (Smith) signing in: an assistant session, token in the body
+// =============================================================================
+describe('Assistant sign-in (client: smith)', () => {
+  let app: express.Express;
+  const account = {
+    id: 1, email: 'test@example.com', username: 'testuser', passwordHash: AUTH_HASH, tenantSchemaName: 'usr_1_a1b2c3',
+    encryptionEnabled: true, kekSalt: Buffer.from('salt'), encryptedMasterKey: Buffer.from('key'), kekWrapIv: Buffer.from('iv'),
+    kekIterations: 600000, totpEnabled: false, totpSecret: null,
+  };
+  const on = { appEnabled: true, hiddenTopicIds: [], hiddenFeatures: [] };
+
+  beforeEach(() => {
+    applyMockDefaults();
+    resetAuthStateForTests();
+    app = buildApp();
+    process.env.ASSISTANT_CLIENT_EMAILS = 'test@example.com';
+    (prisma.account.findUnique as any).mockResolvedValue(account);
+    (bcrypt.compare as any).mockResolvedValue(true);
+    (loadAiPrivacy as any).mockResolvedValue(on);
+  });
+  afterEach(() => { delete process.env.ASSISTANT_CLIENT_EMAILS; });
+
+  it('makes an assistant session and returns its token in the body, with no cookies', async () => {
+    const res = await request(app).post('/api/auth/login').send({ ...validLoginBody, client: 'smith' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBe('aabbccddee11' + 'verifier1234567890123456789012');
+    expect(res.body.encryption.encryptedMasterKey).toBe(Buffer.from('key').toString('base64'));
+    expect(createSession).toHaveBeenCalledWith(1, 'usr_1_a1b2c3', expect.objectContaining({ deviceInfo: 'assistant' }));
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(revokeBrowserSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses accounts not on the list, after the password checked out', async () => {
+    process.env.ASSISTANT_CLIENT_EMAILS = 'someone@else.com';
+    const res = await request(app).post('/api/auth/login').send({ ...validLoginBody, client: 'smith' });
+
+    expect(res.status).toBe(403);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses while the app is switched off in Chronicles', async () => {
+    (loadAiPrivacy as any).mockResolvedValue({ ...on, appEnabled: false });
+    const res = await request(app).post('/api/auth/login').send({ ...validLoginBody, client: 'smith' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/In-App AI/);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  describe('with 2FA: the two steps must agree', () => {
+    beforeEach(() => {
+      (prisma.account.findUnique as any).mockResolvedValue({ ...account, totpEnabled: true, totpSecret: 'S' });
+    });
+
+    it('a sign-in begun in a browser can’t be finished as the AI app', async () => {
+      const first = await request(app).post('/api/auth/login').send(validLoginBody);
+      expect(first.body.requires2FA).toBe(true);
+      const res = await request(app).post('/api/auth/login/2fa').send({ pendingToken: first.body.pendingToken, code: '123456', client: 'smith' });
+      expect(res.status).toBe(400);
+      expect(createSession).not.toHaveBeenCalled();
+    });
+
+    it('a sign-in begun as the AI app can’t be finished as a browser (no cookie session from it)', async () => {
+      const first = await request(app).post('/api/auth/login').send({ ...validLoginBody, client: 'smith' });
+      expect(first.body.requires2FA).toBe(true);
+      const res = await request(app).post('/api/auth/login/2fa').send({ pendingToken: first.body.pendingToken, code: '123456' });
+      expect(res.status).toBe(400);
+      expect(createSession).not.toHaveBeenCalled();
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+  });
+
+  // A password alone must not learn whether the account uses the AI app:
+  // with 2FA on, "not available" / "switched off" is said only after the code
+  describe('with 2FA: a refusal waits for the code', () => {
+    const secret = generateSecret();
+    beforeEach(() => {
+      (prisma.account.findUnique as any).mockResolvedValue({ ...account, totpEnabled: true, totpSecret: secret, totpBackupCodes: [] });
+      (loadAiPrivacy as any).mockResolvedValue({ ...on, appEnabled: false });
+    });
+
+    it('the password step asks for the code and says nothing about the app', async () => {
+      const first = await request(app).post('/api/auth/login').send({ ...validLoginBody, client: 'smith' });
+      expect(first.status).toBe(200);
+      expect(first.body.requires2FA).toBe(true);
+      expect(loadAiPrivacy).not.toHaveBeenCalled();
+    });
+
+    it('a wrong code is just a wrong code', async () => {
+      const first = await request(app).post('/api/auth/login').send({ ...validLoginBody, client: 'smith' });
+      const res = await request(app).post('/api/auth/login/2fa').send({ pendingToken: first.body.pendingToken, code: '000000', client: 'smith' });
+      expect(res.status).toBe(401);
+      expect(loadAiPrivacy).not.toHaveBeenCalled();
+    });
+
+    it('the right code is told the app is off, and gets no session', async () => {
+      const first = await request(app).post('/api/auth/login').send({ ...validLoginBody, client: 'smith' });
+      const res = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: first.body.pendingToken, code: generateSync({ secret }), client: 'smith' });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/In-App AI/);
+      expect(createSession).not.toHaveBeenCalled();
+      // The pending sign-in is over: it can't be tried again with another code
+      const again = await request(app).post('/api/auth/login/2fa')
+        .send({ pendingToken: first.body.pendingToken, code: generateSync({ secret }), client: 'smith' });
+      expect(again.status).toBe(401);
+    });
+  });
+
+  it('a wrong password is still just a wrong password', async () => {
+    (bcrypt.compare as any).mockResolvedValue(false);
+    const res = await request(app).post('/api/auth/login').send({ ...validLoginBody, client: 'smith' });
+
+    expect(res.status).toBe(401);
+    expect(loadAiPrivacy).not.toHaveBeenCalled();
+  });
+
+  it('rejects any other client name', async () => {
+    const res = await request(app).post('/api/auth/login').send({ ...validLoginBody, client: 'other' });
+    expect(res.status).toBe(400);
+  });
+
+  it('a normal sign-in is unchanged: a cookie, no token in the body', async () => {
+    const res = await request(app).post('/api/auth/login').send(validLoginBody);
+
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeUndefined();
+    expect(createSession).toHaveBeenCalledWith(1, 'usr_1_a1b2c3', expect.objectContaining({ deviceInfo: 'password' }));
   });
 });

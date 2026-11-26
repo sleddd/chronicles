@@ -2,6 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createTestApp, TEST_AUTH } from './testHelper.js';
 
+// Versions kept of what the AI app overwrote (its own tests: assistantRoutes.test.ts)
+vi.mock('../../db/assistantHistory.js', () => ({
+  // Runs the route's write on a stand-in transaction (the real one: assistantHistory.db.test.ts)
+  assistantWrite: vi.fn(async (_schema: string, _kind: string, _ref: string, _mark: Buffer, write: (tx: unknown) => unknown) => write('TX')),
+  assistantNewRecordAllowed: vi.fn().mockResolvedValue(true),
+  ASSISTANT_NEW_DOSES_PER_DAY: 100,
+  assistantMark: { entry: (a: Buffer, b: Buffer) => Buffer.concat([a, b]), record: (iv: Buffer) => iv, setting: () => Buffer.from('iv') },
+  AssistantHistoryFull: class AssistantHistoryFull extends Error {},
+  ASSISTANT_HISTORY_FULL: { error: 'The list is full' },
+  expireAssistantChanges: vi.fn().mockResolvedValue(undefined),
+  forgetAssistantChangesFor: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('../../db/tenantQueries.js', () => ({
   ensureDoseRecordsTable: vi.fn().mockResolvedValue(undefined),
   getDoseRecords: vi.fn(),

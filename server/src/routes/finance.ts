@@ -1,3 +1,4 @@
+import { assistantWrite, assistantMark, forgetAssistantChangesFor, AssistantHistoryFull, ASSISTANT_HISTORY_FULL } from '../db/assistantHistory.js';
 import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
 import {
@@ -12,6 +13,7 @@ import {
   FINANCE_TABLES,
   type FinanceTableKind,
   type FinanceRecordRow,
+  type TenantClient,
 } from '../db/tenantQueries.js';
 import { financeRecordIdSchema, putFinanceRecordSchema, resealFinanceRecordsSchema } from '@chronicles/shared';
 import { FINANCE_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
@@ -126,17 +128,32 @@ router.put('/:kind/:id', async (req, res) => {
     await ensureFinanceTables(req.auth!.tenantSchemaName);
     const payload = Buffer.from(body.data.payload, 'base64');
     const schema = req.auth!.tenantSchemaName;
+    const iv = Buffer.from(body.data.iv, 'base64');
     // Check and write under the account's lock, so parallel saves can't both fit
-    const row = await withTenantLock(schema, async (tx) => {
+    const write = async (tx: TenantClient) => {
+      // The Chronicles AI app records a payment on an existing bill; it never
+      // creates one (the route is bills-only for it: services/assistant.ts).
+      // Looked up under the lock, so a bill deleted a moment ago isn't made again
+      if (req.auth!.assistant && (await financeRecordBytes(schema, kind, [id.data], tx)) === 0) return 'missing' as const;
       if (await financeStorageBytes(schema, { kind, id: id.data }, tx) + payload.length + ROW_OVERHEAD_BYTES > FINANCE_STORAGE_LIMIT_BYTES) return null;
-      return upsertFinanceRecord(schema, kind, id.data, payload, Buffer.from(body.data.iv, 'base64'), tx);
-    });
+      return upsertFinanceRecord(schema, kind, id.data, payload, iv, tx);
+    };
+    const row = req.auth!.assistant
+      // …and the bill as it was is kept under the same lock, for the owner to
+      // put back (a full list refuses the save)
+      ? await assistantWrite(schema, 'bill', id.data, assistantMark.record(iv, payload), write, saved => saved !== null && saved !== 'missing')
+      : await withTenantLock(schema, write);
+    if (row === 'missing') {
+      res.status(404).json({ error: 'Bill not found' });
+      return;
+    }
     if (!row) {
       res.status(413).json({ error: 'Finance storage is full — delete some old records to make room' });
       return;
     }
     res.json({ record: serialize(row) });
   } catch (err) {
+    if (err instanceof AssistantHistoryFull) { res.status(429).json(ASSISTANT_HISTORY_FULL); return; }
     console.error('Save finance record error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to save record' });
   }
@@ -156,7 +173,11 @@ router.delete('/:kind/:id', async (req, res) => {
   }
   try {
     await ensureFinanceTables(req.auth!.tenantSchemaName);
+    // Earlier versions kept from the AI app's changes go with it (it only ever changes bills)
+    if (kind === 'bills') await forgetAssistantChangesFor(req.auth!.tenantSchemaName, 'bill', id.data);
     const deleted = await deleteFinanceRecord(req.auth!.tenantSchemaName, kind, id.data);
+    // Again: a write by the AI app that landed between the two would leave a version of a bill that is gone
+    if (kind === 'bills') await forgetAssistantChangesFor(req.auth!.tenantSchemaName, 'bill', id.data);
     if (!deleted) {
       res.status(404).json({ error: 'Record not found' });
       return;

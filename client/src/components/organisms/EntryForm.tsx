@@ -9,6 +9,9 @@ import { EntryTagsField } from '../molecules/fields/EntryTagsField.js';
 import { tagsInUse, tagsOf } from '../../utils/entryTags.js';
 import { topicKind } from '../../utils/topicKind.js';
 import { TitleField } from '../molecules/fields/TitleInput.js';
+import { Checkbox } from '../atoms/core/Checkbox.jsx';
+import { isHiddenFromAi } from '../../services/aiPrivacy.js';
+import { useAiPrivacy } from '../../hooks/useAiPrivacy.js';
 import { NAME_FIELD_BY_TYPE, NAME_MAX, NAME_PLACEHOLDER_BY_TYPE, contentWithName, nameFromContent } from '../../utils/nameFields.js';
 import { stripHtml, summarizeUserFields, builtinEntryName } from '../../utils/stripHtml.js';
 import { fieldLedSummary, generatedEntryText } from '../../utils/entryText.js';
@@ -458,6 +461,23 @@ const FootLeft = styled.div`
   align-items: center;
   gap: 10px;
   min-width: 0;
+`;
+
+/* Hide from AI: the core checkbox, on a row of its own — the last field, right
+   above the Save row (it takes over the foot's "push to the bottom") */
+const AiHideCheck = styled.span`
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
+  color: var(--text-soft);
+  white-space: nowrap;
+`;
+
+/* …and the row that holds it, pushed to the card's foot (36px: the card's side padding, CARD_X) */
+const AiHideRow = styled.div`
+  margin-top: auto;
+  padding: 4px 24px 6px 36px;
+  @media (max-width: 640px) { padding: 10px 20px; }
 `;
 
 /* Delete at the foot's left: the trash and the word, in the danger colour */
@@ -1195,6 +1215,12 @@ interface EntryFormProps {
   onShare?: () => void;
   /** Duplicate: open a copy as a new entry (⋯ More) */
   onDuplicate?: () => void;
+  /** Hidden from AI (the In-App AI row's Hide checkbox; only offered while an AI is on) */
+  aiHidden?: boolean;
+  /** Present only while an AI is on (In-App AI or the Chronicles AI app) */
+  onToggleAiHidden?: () => void;
+  /** The entry's topic is on the "Don't share with AI" list (it's hidden whatever its own switch says) */
+  aiHiddenByTopic?: boolean;
   onBack?: () => void;
   /** Recipe view actions (injected by JournalView) */
   /** Full-screen editor toggle in the toolbar (journal only — other views open expanded) */
@@ -1241,7 +1267,7 @@ interface EntryFormProps {
 export function EntryForm({
   entryId, content, onContentChange, topicId, onTopicChange, topics,
   customFields, onCustomFieldsChange, onSave, onSaveAndStartTimer, onAutoSave, onDelete, onNew,
-  onBookmark, onShare, onDuplicate, onBack, expanded, fullWidth = expanded, onToggleExpand, onClose,
+  onBookmark, onShare, onDuplicate, aiHidden = false, onToggleAiHidden, aiHiddenByTopic = false, onBack, expanded, fullWidth = expanded, onToggleExpand, onClose,
   isEditing, isSaving, saveStatus, lastSavedAt, placeholder = 'Start writing...',
   dictationControlRef,
   images = [], featuredKey = null, onImagesSelected, onExistingImagesSelected, onImageRemoved, onSetFeatured, onImageFocus,
@@ -1402,9 +1428,13 @@ export function EntryForm({
     return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }, [entries, customType]);
   const aiReady = useAiReady();
+  // Hidden from AI (its own switch or its topic): no Estimate button and no AI
+  // fill of a media item's details. Nothing of it is sent, even on request
+  const aiPrivacy = useAiPrivacy();
+  const hiddenFromAi = isHiddenFromAi({ _taxonomyId: topicId, _aiHidden: aiHidden }, aiPrivacy);
   const calorieEstimate = useCalorieEstimate(
     customType === 'food' || customType === 'exercise' ? customType : null,
-    content, customFields, onCustomFieldsChange,
+    content, customFields, onCustomFieldsChange, hiddenFromAi,
   );
 
   // Build goal options for milestone linking
@@ -1860,7 +1890,7 @@ export function EntryForm({
               {customType === 'wins' && <WinsFields values={{ wins: [], ...(customFields as Partial<WinsFieldValues>) } as WinsFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'priorities' && <PrioritiesFields values={{ priorities: [], ...(customFields as Partial<PrioritiesFieldValues>) } as PrioritiesFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'wellness' && <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} cycleTrackingEnabled={cycleTrackingEnabled} onAutoSave={onAutoSave} />}
-              {customType === 'media' && <MediaFieldsWithTags values={{ ...MEDIA_DEFAULTS, ...customFields } as MediaFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onAiDetails={aiReady ? aiMediaDetails : undefined} allTags={mediaTagOptions} entryId={entryId} />}
+              {customType === 'media' && <MediaFieldsWithTags values={{ ...MEDIA_DEFAULTS, ...customFields } as MediaFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onAiDetails={aiReady && !hiddenFromAi ? aiMediaDetails : undefined} allTags={mediaTagOptions} entryId={entryId} />}
               {customType === 'time_tracking' && <TimeTrackingFields values={{ activityName: '', notes: '', ...customFields } as TimeTrackingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType && !['exercise', 'routine', 'goal', 'milestone'].includes(customType) && TIME_TRACKED_TYPES.has(customType) && quick && onSaveAndStartTimer && (
                 <div style={{ marginTop: 32 }}>
@@ -2053,6 +2083,18 @@ export function EntryForm({
       <Icon name="trash" size={17} strokeWidth={1.8} /> Delete
     </TaskDelete>
   ) : null;
+  // Hide from AI: the last field of every journal card, right above the Save
+  // row — "In-App AI  ☐ Hide" (shown while an AI is on)
+  const aiHideCheck = !quick && onToggleAiHidden ? (
+    <TaskRow data-inline>
+      <TaskRowName>In-App AI</TaskRowName>
+      <AiHideCheck title={aiHiddenByTopic ? 'Its topic is hidden from AI (Settings → In-App AI)'
+        : aiPrivacy.appEnabled ? 'Kept from every AI feature and the Chronicles AI app' : 'Kept from every AI feature'}>
+        <Checkbox checked={aiHidden || aiHiddenByTopic} disabled={aiHiddenByTopic}
+          onChange={() => { if (!aiHiddenByTopic) onToggleAiHidden(); }} label="Hide" />
+      </AiHideCheck>
+    </TaskRow>
+  ) : null;
 
   const taskBody = (
     <TaskBody>
@@ -2221,12 +2263,11 @@ export function EntryForm({
               )}
             </TaskHead>
             {taskBody}
-            <QuickFoot style={{ marginTop: 'auto' }}>
-              {entryId && onDelete ? (
-                <TaskDelete type="button" onClick={onDelete}>
-                  <Icon name="trash" size={17} strokeWidth={1.8} /> Delete
-                </TaskDelete>
-              ) : <span />}
+            {aiHideCheck && <AiHideRow>{aiHideCheck}</AiHideRow>}
+            <QuickFoot style={{ marginTop: aiHideCheck ? 0 : 'auto' }}>
+              <FootLeft>
+                {deleteBtn}
+              </FootLeft>
               <JournalSaveSide>
                 {saveStatusNode && <StatusSlot $failed={saveStatus === 'Save failed'}>{saveStatusNode}</StatusSlot>}
                 {saveButton}
@@ -2244,7 +2285,8 @@ export function EntryForm({
               {headIcons}
             </TaskHead>
             {renderBody()}
-            <QuickFoot style={{ marginTop: 'auto' }}>
+            {aiHideCheck && <AiHideRow>{aiHideCheck}</AiHideRow>}
+            <QuickFoot style={{ marginTop: aiHideCheck ? 0 : 'auto' }}>
               <FootLeft>
                 {/* A topic with no text box keeps its tools here */}
                 {editorHidden && noTextTools}
@@ -2284,8 +2326,9 @@ export function EntryForm({
               )}
             </JournalHead>
             {renderBody()}
+            {aiHideCheck && <AiHideRow>{aiHideCheck}</AiHideRow>}
             {/* The tool row: Format, Draw, Dictate, images, Bookmark and ⋯ on the left; Save entry on the right */}
-            <JournalFoot>
+            <JournalFoot style={aiHideCheck ? { marginTop: 0 } : undefined}>
               <JournalTools aria-label="Entry tools">
                 <IconBtn type="button" $active={toolbarOpen} aria-label="Formatting" title="Format" aria-pressed={toolbarOpen}
                   onClick={() => setFormatOpen(!toolbarOpen)}>

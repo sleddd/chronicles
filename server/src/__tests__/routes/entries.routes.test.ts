@@ -3,6 +3,16 @@ import request from 'supertest';
 import { createTestApp, TEST_AUTH } from './testHelper.js';
 
 // Mock tenantQueries
+// Versions kept of what the AI app overwrote (its own tests: assistantRoutes.test.ts)
+vi.mock('../../db/assistantHistory.js', () => ({
+  // Runs the route's write on a stand-in transaction (the real one: assistantHistory.db.test.ts)
+  assistantWrite: vi.fn(async (_schema: string, _kind: string, _ref: string, _mark: Buffer, write: (tx: unknown) => unknown) => write('TX')),
+  assistantMark: { entry: (a: Buffer, b: Buffer) => Buffer.concat([a, b]), record: (iv: Buffer) => iv, setting: () => Buffer.from('iv') },
+  AssistantHistoryFull: class AssistantHistoryFull extends Error {},
+  ASSISTANT_HISTORY_FULL: { error: 'The list is full' },
+  expireAssistantChanges: vi.fn().mockResolvedValue(undefined),
+  forgetAssistantChangesFor: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('../../db/tenantQueries.js', () => ({
   getPostPage: vi.fn(),
   getPost: vi.fn(),
@@ -81,7 +91,7 @@ describe('Entry Routes', () => {
       expect(res.body[0].contentIv).toBe(Buffer.from('iv12345678ab').toString('base64'));
       // Default is large on purpose — the client keeps every entry in its store;
       // each page is also capped by bytes
-      expect(getPostPage).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 5000, offset: 0, maxBytes: 16 * 1024 * 1024 });
+      expect(getPostPage).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, { limit: 5000, offset: 0, maxBytes: 16 * 1024 * 1024, excludeAiHidden: false });
     });
 
     it('answers { entries, more } to ?v=2', async () => {
@@ -366,7 +376,7 @@ describe('Entry Routes', () => {
         deleted: [2, 3],
       });
       const res = await request(app).get('/api/entries/changes?since=1234');
-      expect(getPostChanges).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, '1234', 5000, 16 * 1024 * 1024);
+      expect(getPostChanges).toHaveBeenCalledWith(TEST_AUTH.tenantSchemaName, '1234', 5000, 16 * 1024 * 1024, { excludeAiHidden: false });
       expect(res.body).toMatchObject({ reset: false, cursor: '1300', deleted: [2, 3] });
       expect(res.body.entries[0].contentEncrypted).toBe(Buffer.from('c').toString('base64'));
     });

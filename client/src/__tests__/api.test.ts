@@ -9,6 +9,7 @@ import { DEFAULT_TOPICS } from '../utils/defaultTopics.js';
    payload opened with the wrong kind or id fails like real AES-GCM would. */
 const fakeCipher = {
   encryptBytes: async (data: ArrayBuffer) => ({ ciphertext: data, iv: 'aXY=' }),
+  decryptBytes: async (ciphertext: ArrayBuffer) => ciphertext,
   encrypt: async (kind: string, id: string, record: unknown) =>
     ({ payload: btoa(JSON.stringify({ kind, id, record })), iv: 'iv' }),
   decrypt: async <T,>(kind: string, id: string, payload: string): Promise<T> => {

@@ -262,7 +262,9 @@ export function MilestoneCard({ milestone, tasks, goalTitle, goalOptions, accent
     setSaving(true); setStatus('');
     try {
       const cf = { ...milestone.customFields, ...editFields };
-      const metadata: Record<string, unknown> = { _taxonomyId: milestone.taxonomyId, _customFields: cf };
+      // Built on the entry's own metadata: "Hide from AI", its photos and the rest stay
+      const existing = useEntriesStore.getState().decryptedEntries.find(e => e.id === milestone.id)?.metadata as Record<string, unknown> | null | undefined;
+      const metadata: Record<string, unknown> = { ...(existing ?? {}), _taxonomyId: milestone.taxonomyId, _customFields: cf };
       const encrypted = await encryptPost(milestone.id, editContent, metadata);
       await entriesApi.update(milestone.id, {
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,

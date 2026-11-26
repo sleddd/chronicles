@@ -20,6 +20,7 @@ import { mealForNow, nowTime } from '../../utils/foodLog.js';
 import { useAiReady } from '../../hooks/useAiReady.js';
 import { useNewEntryInJournal } from '../../hooks/useOpenInJournal.js';
 import { estimateEntryCalories } from '../../services/aiAssistant.js';
+import { isHiddenFromAi } from '../../services/aiPrivacy.js';
 import { exerciseSummary, EXERCISE_TYPES } from '../../utils/exerciseSummary.js';
 import { useFoodLogActions } from './FoodLog.js';
 import { PillButton } from '../atoms/PillButton.js';
@@ -448,12 +449,13 @@ function ExerciseQuick() {
       }
       let f = fields();
       let note = '';
-      if (aiReady) {
+      const topicId = await getOrCreateTopicId('Exercise', 'dumbbell');
+      // An Exercise topic kept from AI: nothing is sent for an estimate
+      if (aiReady && !isHiddenFromAi({ _taxonomyId: topicId })) {
         setStatus('Calculating calories burned…');
         try { f = await estimateEntryCalories('exercise', v.notes.trim(), f); }
         catch (err) { note = ` — calories not calculated (${err instanceof Error ? err.message : 'error'})`; }
       }
-      const topicId = await getOrCreateTopicId('Exercise', 'dumbbell');
       await createEntry(topicId, `<p>${escapeHtml(exerciseSummary(f))}</p>`, f);
       setV(blank());
       setStatus(f.calories ? `Logged · ${String(f.calories)} cal burned` : `Logged${note}`);

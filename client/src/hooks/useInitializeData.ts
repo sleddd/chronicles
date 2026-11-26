@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { loadAiPrivacy, reconcileAfterLoad, sealedCopyStored } from '../services/aiPrivacy.js';
 import { validEntryRows } from '../utils/entryRows.js';
 import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
@@ -92,6 +93,8 @@ export function useInitializeData() {
           .catch(() => setImagesConfigured(false));
         // AI provider credentials — also a master-key-encrypted setting
         void loadAiConfig(sealed('aiConfig'), decryptBytes);
+        // What AI may not see: the sealed copy this browser believes, and the readable one the server enforces
+        loadAiPrivacy(settingsMap.aiPrivacySealed, settingsMap.aiPrivacy, sealedCopyStored(settingsData));
         if (typeof settingsMap.calendarSyncEnabled === 'boolean') setCalendarSyncEnabled(settingsMap.calendarSyncEnabled);
         if (typeof settingsMap.googleCalendarId === 'string') setGoogleCalendarId(settingsMap.googleCalendarId);
         if (typeof settingsMap.googleSyncToken === 'string') setGoogleSyncToken(settingsMap.googleSyncToken);
@@ -123,6 +126,8 @@ export function useInitializeData() {
         if (cancelled) return;
         step(`${decrypted.length} entries decrypted`);
         setDecryptedEntries(decrypted);
+        // Keep the server's hidden-from-AI list in step (only accounts that use it)
+        reconcileAfterLoad(decrypted);
         // Once per account: re-save older entries bound to their id, then mark it done
         const resealed = olderEntriesAllowed()
           ? resealOlderEntries(decrypted, encryptPost, encryptBytes)

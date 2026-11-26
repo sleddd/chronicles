@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { loadAiPrivacy } from '../../services/aiPrivacy.js';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithTheme } from '../testUtils';
 import { AiPlanReview } from '@/components/organisms/AiPlanReview';
@@ -32,6 +33,8 @@ const tomorrow = addDays(toDateStr(new Date()), 1);
 
 describe('AiPlanReview', () => {
   beforeEach(() => {
+    // The "Don't share with AI" choices have been read (until then everything is kept from AI)
+    loadAiPrivacy({}, {}, true);
     ai.aiFeatureJson.mockReset();
     saves.saveFields.mockReset().mockResolvedValue(true);
     saves.createEntry.mockReset().mockResolvedValue(99);
@@ -68,6 +71,16 @@ describe('AiPlanReview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(ai.aiFeatureJson).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  // The switch reads "Your vision and goal categories": with it on, AI plan gets neither
+  it('with the vision kept from AI, neither the visions nor the goal categories are on the list', () => {
+    loadAiPrivacy({ hiddenFeatures: ['vision'] }, { hiddenFeatures: ['vision'] }, true);
+    renderWithTheme(<AiPlanReview onClose={vi.fn()} />);
+    expect(screen.getByText('2 goals, with notes, in your priority order')).toBeInTheDocument();
+    expect(screen.queryByText(/^Your vision/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/area vision/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/goal categor/i)).not.toBeInTheDocument();
   });
 
   it('shows the plan for review and saves only what stays ticked, through the usual saves', async () => {

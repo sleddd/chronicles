@@ -31,6 +31,8 @@ interface User {
   totpEnabled: boolean;
   /** Features this account sees while they're tried out (the server's PREVIEW_ACCOUNT_IDS) */
   previews?: string[];
+  /** The Chronicles AI app can be switched on for this account (Settings → In-App AI) */
+  assistantAvailable?: boolean;
 }
 
 interface EncryptionData {

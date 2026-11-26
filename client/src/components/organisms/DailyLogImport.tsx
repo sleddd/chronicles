@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { flushAiMarks, newAiMarkBatch } from '../../services/aiPrivacy.js';
 import { SettingsRow } from '../molecules/SettingsCard.js';
 import { ActionButton, RowLink } from '../atoms/SettingsAtoms.js';
 import { downloadDailyLogExample } from '../../utils/importExamples.js';
@@ -72,7 +73,10 @@ export function DailyLogImport() {
       // Saved IMPORT_BATCH at a time (one request each), so a big log doesn't
       // run into the per-account request limit
       let pending: { payload: Parameters<typeof entriesApi.createMany>[0][number]; item: PlannedEntry; metadata: Record<string, unknown> }[] = [];
+      const aiMarks = newAiMarkBatch();
       const flush = async () => {
+        // Entries hidden from AI are marked first, all at once (services/aiPrivacy)
+        await flushAiMarks(aiMarks);
         const created = await entriesApi.createMany(pending.map(p => p.payload));
         created.forEach((res, k) => {
           const { item, metadata } = pending[k];
@@ -92,7 +96,7 @@ export function DailyLogImport() {
         const metadata: Record<string, unknown> = { _taxonomyId: tid, _importKey: item.importKey };
         if (Object.keys(item.customFields).length) metadata._customFields = item.customFields;
         if (item.createdAt) metadata._createdAt = item.createdAt;
-        const encrypted = await encryptNewPost(item.content, metadata);
+        const encrypted = await encryptNewPost(item.content, metadata, { aiMarks });
         pending.push({ item, metadata, payload: { id: encrypted.id,
           contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,
           metadataEncrypted: encrypted.metadataEncrypted, metadataIv: encrypted.metadataIv,

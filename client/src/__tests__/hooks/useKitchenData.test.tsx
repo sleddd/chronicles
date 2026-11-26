@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
+import { loadAiPrivacy } from '../../services/aiPrivacy.js';
 import { renderHook, act } from '@testing-library/react';
 import { useKitchenData } from '@/hooks/useKitchenData';
 import { useEntriesStore } from '@/stores/entriesStore';
@@ -9,6 +10,8 @@ const entry = (id: number, topic: number, fields: Record<string, unknown>) => ({
 }) as any;
 
 describe('useKitchenData', () => {
+  // The "Don't share with AI" choices have been read (until then everything is kept from AI)
+  beforeEach(() => { loadAiPrivacy({}, {}, true); });
   it('reads allergies and recipes, and redoes nothing when another topic changes', () => {
     act(() => {
       useEntriesStore.getState().setTopics([

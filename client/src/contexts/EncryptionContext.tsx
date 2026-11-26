@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
+import { clearAiPrivacy, markHiddenBeforeCreate, markHiddenOnSave, type AiMarkBatch } from '../services/aiPrivacy.js';
+import { withAiHiddenKept } from '../utils/aiHiddenFlag.js';
 import { encryptionService } from '@shared/crypto/encryptionService.js';
 import { toNonExtractable } from '@shared/crypto/primitives.js';
 import { clearEntryTitleCache } from '../utils/entryTitle.js';
@@ -70,7 +72,8 @@ interface EncryptionContextValue {
   /** Encrypt an existing entry, bound to its id */
   encryptPost: (id: number, content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData>;
   /** Encrypt a new entry: reserves its id first; pass `id` to entries.create */
-  encryptNewPost: (content: string, metadata: Record<string, unknown>) => Promise<EncryptedPostData & { id: number }>;
+  /** `aiMarks` (imports): a hidden entry's mark waits in the batch, which the caller flushes before it creates the entries (services/aiPrivacy) */
+  encryptNewPost: (content: string, metadata: Record<string, unknown>, options?: { aiMarks?: AiMarkBatch }) => Promise<EncryptedPostData & { id: number }>;
   decryptPost: (post: EncryptedPost) => Promise<DecryptedPost>;
   decryptPosts: (posts: EncryptedPost[]) => Promise<DecryptedPost[]>;
   /** Optional `aad` binds the ciphertext to what it is (a setting's key, an image's object key) */
@@ -148,6 +151,7 @@ function dropDecryptedState(): void {
   clearImageCache();
   // Drop the decrypted AI provider credentials too
   clearAiConfig();
+  clearAiPrivacy();
   clearRecordCipher();
   // And the decrypted Finance records
   clearFinanceCache();
@@ -468,20 +472,30 @@ export function EncryptionProvider({ children }: { children: ReactNode }) {
   // server — whose created_at is readable — can't re-date it; a save that
   // rebuilds the metadata keeps the one the entry already has
   const encryptPost = useCallback(async (id: number, content: string, metadata: Record<string, unknown>) => {
-    let meta = metadata;
+    // First: while there is no key nothing is saved, so the server is told nothing either
+    const key = getKey();
+    const existing = useEntriesStore.getState().decryptedEntries.find(e => e.id === id);
+    // "Hide from AI" is only ever turned off on purpose: a save that rebuilt
+    // the metadata without it keeps what the entry had (utils/aiHiddenFlag)
+    let meta = withAiHiddenKept(existing?.metadata as Record<string, unknown> | null | undefined, metadata);
     if (typeof meta._createdAt !== 'string') {
-      const existing = useEntriesStore.getState().decryptedEntries.find(e => e.id === id);
       const sealed = existing?.metadata?._createdAt;
       const at = typeof sealed === 'string' ? sealed : existing ? new Date(existing.createdAt).toISOString() : null;
-      if (at) meta = { ...metadata, _createdAt: at };
+      if (at) meta = { ...meta, _createdAt: at };
     }
-    return encryptionService.encryptPost(getKey(), id, content, meta);
+    // Hidden from AI (its own switch or its topic): the server is told before
+    // the save, so the Chronicles AI app never sees it (services/aiPrivacy.ts)
+    await markHiddenOnSave(id, meta);
+    return encryptionService.encryptPost(key, id, content, meta);
   }, []);
 
-  const encryptNewPost = useCallback(async (content: string, metadata: Record<string, unknown>) => {
+  const encryptNewPost = useCallback(async (content: string, metadata: Record<string, unknown>, options?: { aiMarks?: AiMarkBatch }) => {
     const key = getKey();
     const id = await reserveEntryId();
-    const meta = typeof metadata._createdAt === 'string' ? metadata : { ...metadata, _createdAt: new Date().toISOString() };
+    const fresh = withAiHiddenKept(null, metadata);
+    const meta = typeof fresh._createdAt === 'string' ? fresh : { ...fresh, _createdAt: new Date().toISOString() };
+    // A new entry that's hidden from AI is marked before it exists
+    await markHiddenBeforeCreate(id, meta, options?.aiMarks);
     return { ...(await encryptionService.encryptPost(key, id, content, meta)), id };
   }, []);
 

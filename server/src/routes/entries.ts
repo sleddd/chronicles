@@ -1,11 +1,19 @@
 import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
 import crypto from 'crypto';
-import { createPost, createPostCapped, updatePostCapped, createPosts, ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, getPostFingerprint, type CreatePostInput, getPost, getPostPage, updatePost, deletePost, postStorageBytes, reservePostIds, resealPosts, withTenantLock } from '../db/tenantQueries.js';
+import {
+  createPost, createPostCapped, updatePostCapped, createPosts, getPost, getPostPage, updatePost, deletePost, postExists,
+  postStorageBytes, reservePostIds, resealPosts, withTenantLock, type CreatePostInput, type CappedWrite,
+  // Entry sync
+  ensurePostSync, ensurePostReservations, getSyncCursor, getPostChanges, getPostFingerprint, getPostUpdatedAt,
+  // Hidden from AI, and the Chronicles AI app
+  getAiHiddenIds, setAiHidden, pruneAiHidden, getAiVisibleIds, isAiHidden, assistantMayUndo,
+} from '../db/tenantQueries.js';
 import { ENTRY_STORAGE_LIMIT_BYTES, ROW_OVERHEAD_BYTES } from '../utils/storageLimits.js';
-import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema } from '@chronicles/shared';
+import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePostIdsSchema, resealPostsSchema, aiHiddenSchema } from '@chronicles/shared';
 import { parseId } from '../middleware/parseId.js';
 import { deleteSharesForEntry } from '../db/shareQueries.js';
+import { assistantWrite, assistantCreatePost, assistantMark, forgetAssistantChangesFor, expireAssistantChanges, AssistantHistoryFull, ASSISTANT_HISTORY_FULL } from '../db/assistantHistory.js';
 
 const router = Router();
 
@@ -69,7 +77,8 @@ router.get('/', listGate, async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 5000, 1), 10000);
     // Bounded: a number past int4 fails the query's cast
     const offset = Math.min(Math.max(parseInt(req.query.offset as string) || 0, 0), 2_000_000_000);
-    const page = await getPostPage(req.auth!.tenantSchemaName, { limit, offset, maxBytes: ENTRY_PAGE_BYTES });
+    // The Chronicles AI app never receives entries hidden from AI
+    const page = await getPostPage(req.auth!.tenantSchemaName, { limit, offset, maxBytes: ENTRY_PAGE_BYTES, excludeAiHidden: !!req.auth!.assistant });
     const entries = page.posts.map(p => serializePost(p as unknown as Record<string, unknown>));
     res.json(req.query.v === '2' ? { entries, more: page.more } : entries);
   } catch (err) {
@@ -110,7 +119,7 @@ router.get('/changes', listGate, async (req, res) => {
       res.status(400).json({ error: 'Invalid cursor' });
       return;
     }
-    const changes = await getPostChanges(req.auth!.tenantSchemaName, since, 5000, ENTRY_PAGE_BYTES);
+    const changes = await getPostChanges(req.auth!.tenantSchemaName, since, 5000, ENTRY_PAGE_BYTES, { excludeAiHidden: !!req.auth!.assistant });
     const scope = syncScope(req.auth!.tenantSchemaName);
     if (changes.reset) {
       res.json({ reset: true, scope });
@@ -126,6 +135,68 @@ router.get('/changes', listGate, async (req, res) => {
   } catch (err) {
     console.error('Entry changes error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to load entries' });
+  }
+});
+
+// GET /api/entries/visible-ids — Every entry id the AI app may see, so it can
+// drop entries that were hidden from AI (or deleted) since it last looked.
+// Ids only, nothing else.
+router.get('/visible-ids', listGate, async (req, res) => {
+  try {
+    res.json({ ids: await getAiVisibleIds(req.auth!.tenantSchemaName) });
+  } catch (err) {
+    console.error('Visible ids error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed to load entries' });
+  }
+});
+
+// GET /api/entries/updated-at?ids=1,2,3 — When each of these entries was last
+// saved (up to 100), so a browser can check a few against its own copy without
+// downloading them. Not for the AI app.
+router.get('/updated-at', async (req, res) => {
+  try {
+    const raw = typeof req.query.ids === 'string' && req.query.ids.length <= 1200 ? req.query.ids.split(',') : [];
+    const ids = raw.map(v => parseId(v));
+    if (ids.length === 0 || ids.length > 100 || ids.some(Number.isNaN)) {
+      res.status(400).json({ error: 'Invalid ids' });
+      return;
+    }
+    res.json({ entries: await getPostUpdatedAt(req.auth!.tenantSchemaName, ids) });
+  } catch (err) {
+    console.error('Entry times error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed to load entries' });
+  }
+});
+
+// GET /api/entries/ai-hidden — The entries hidden from AI (the browser keeps
+// this list in step with each entry's switch and the hidden topics: both are
+// encrypted, so the server can only enforce what it is told). Not for the AI app.
+router.get('/ai-hidden', listGate, async (req, res) => {
+  try {
+    // Rows for entries that are gone are dropped here (once a load), not on every save
+    await pruneAiHidden(req.auth!.tenantSchemaName);
+    // So are versions kept of the AI app's changes whose days have run out
+    await expireAssistantChanges(req.auth!.tenantSchemaName);
+    res.json({ ids: await getAiHiddenIds(req.auth!.tenantSchemaName) });
+  } catch (err) {
+    console.error('AI hidden list error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed to load entries' });
+  }
+});
+
+// PUT /api/entries/ai-hidden — Hide entries from AI, or share them again
+router.put('/ai-hidden', async (req, res) => {
+  try {
+    const parsed = aiHiddenSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues[0].message });
+      return;
+    }
+    await setAiHidden(req.auth!.tenantSchemaName, parsed.data.ids, parsed.data.hidden);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('AI hidden update error:', err instanceof Error ? err.message : 'Unknown error');
+    res.status(500).json({ error: 'Failed to update entries' });
   }
 });
 
@@ -211,8 +282,16 @@ router.post('/', async (req, res) => {
     const input = toCreateInput(parsed.data);
     const size = input.contentEncrypted.length + input.metadataEncrypted.length + ROW_OVERHEAD_BYTES;
     const schema = req.auth!.tenantSchemaName;
-    // Lock, cap check and insert in one trip to the database
-    const post = await createPostCapped(schema, input, size, ENTRY_STORAGE_LIMIT_BYTES);
+    const post = req.auth!.assistant
+      // The AI app: its day's budget (it can't delete entries later), the cap,
+      // the create and what lets it undo this entry, all under one lock
+      ? await assistantCreatePost(schema, input, size, ENTRY_STORAGE_LIMIT_BYTES)
+      // Lock, cap check and insert in one trip to the database
+      : await createPostCapped(schema, input, size, ENTRY_STORAGE_LIMIT_BYTES);
+    if (post === 'limit') {
+      res.status(429).json({ error: 'The Chronicles AI app has added as many entries as it may in a day' });
+      return;
+    }
     if (post === 'full') {
       res.status(413).json(JOURNAL_FULL);
       return;
@@ -271,7 +350,7 @@ router.get('/:id', readGate('entry', 6), async (req, res) => {
   try {
     const id = parseId(String(req.params.id));
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
-    const post = await getPost(req.auth!.tenantSchemaName, id);
+    const post = await getPost(req.auth!.tenantSchemaName, id, { excludeAiHidden: !!req.auth!.assistant });
     if (!post) {
       res.status(404).json({ error: 'Entry not found' });
       return;
@@ -304,13 +383,42 @@ router.put('/:id', async (req, res) => {
     if (updates.metadataIv !== undefined) input.metadataIv = Buffer.from(updates.metadataIv, 'base64');
 
     const schema = req.auth!.tenantSchemaName;
-    // A save of the entry itself (the usual case): lock, cap check and write
-    // in one trip. A body with no encrypted fields only touches updated_at
-    const post = input.contentEncrypted && input.contentIv && input.metadataEncrypted && input.metadataIv
-      ? await updatePostCapped(schema, id,
-        { contentEncrypted: input.contentEncrypted, contentIv: input.contentIv, metadataEncrypted: input.metadataEncrypted, metadataIv: input.metadataIv },
-        input.contentEncrypted.length + input.metadataEncrypted.length + ROW_OVERHEAD_BYTES, ENTRY_STORAGE_LIMIT_BYTES)
-      : await withTenantLock(schema, tx => updatePost(schema, id, input, tx));
+    // A save of the entry itself carries all four encrypted fields
+    const fields = input.contentEncrypted && input.contentIv && input.metadataEncrypted && input.metadataIv
+      ? { contentEncrypted: input.contentEncrypted, contentIv: input.contentIv, metadataEncrypted: input.metadataEncrypted, metadataIv: input.metadataIv }
+      : null;
+    const size = fields ? fields.contentEncrypted.length + fields.metadataEncrypted.length + ROW_OVERHEAD_BYTES : 0;
+    let post: CappedWrite | undefined;
+    if (req.auth!.assistant) {
+      // The AI app makes only full saves — never a bare updated_at touch
+      if (!fields) {
+        res.status(400).json({ error: 'A full save is required' });
+        return;
+      }
+      // The version it replaces is kept and the save made under one lock, so
+      // what is kept is exactly what was overwritten. A save that is refused
+      // keeps nothing, and a full list refuses the save (the catch below)
+      post = await assistantWrite<CappedWrite>(schema, 'entry', String(id),
+        assistantMark.entry(fields.contentIv, fields.contentEncrypted, fields.metadataIv, fields.metadataEncrypted),
+        async (tx) => {
+          // Only an entry it can see: a hidden one is "not found" to it. Looked
+          // up inside the write, as late as can be (marking an entry hidden
+          // doesn't take the account's lock, so the two can still cross: the
+          // version written over is kept either way)
+          if (await isAiHidden(schema, id, tx)) return null;
+          if (await postStorageBytes(schema, id, tx) + size > ENTRY_STORAGE_LIMIT_BYTES) return 'full';
+          return (await updatePost(schema, id, fields, tx)) ?? null;
+        },
+        saved => saved !== null && saved !== 'full');
+      // No room, or no such entry (the rare path pays for the second look)
+      if (post === 'full' && !(await postExists(schema, id))) post = null;
+    } else {
+      // A save of the entry itself (the usual case): lock, cap check and write
+      // in one trip. A body with no encrypted fields only touches updated_at
+      post = fields
+        ? await updatePostCapped(schema, id, fields, size, ENTRY_STORAGE_LIMIT_BYTES)
+        : await withTenantLock(schema, tx => updatePost(schema, id, input, tx));
+    }
     if (post === 'full') {
       res.status(413).json(JOURNAL_FULL);
       return;
@@ -322,6 +430,7 @@ router.put('/:id', async (req, res) => {
 
     res.json(serializePost(post as unknown as Record<string, unknown>));
   } catch (err) {
+    if (err instanceof AssistantHistoryFull) { res.status(429).json(ASSISTANT_HISTORY_FULL); return; }
     console.error('Update entry error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to update entry' });
   }
@@ -332,13 +441,23 @@ router.delete('/:id', async (req, res) => {
   try {
     const id = parseId(req.params.id);
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
+    // The AI app never removes anything — except undoing an entry it created
+    // itself, within the undo window
+    if (req.auth!.assistant && !(await assistantMayUndo(req.auth!.tenantSchemaName, id))) {
+      res.status(403).json({ error: 'The Chronicles AI app can only undo what it just created' });
+      return;
+    }
     // Public links hold the entry as plaintext — they go first, so a failure
     // leaves the entry (and the client retries) rather than a live link to
     // an entry that's gone
     await deleteSharesForEntry(req.auth!.accountId, id);
+    // So do earlier versions kept from the AI app's changes: nothing of a deleted entry stays
+    await forgetAssistantChangesFor(req.auth!.tenantSchemaName, 'entry', String(id));
     await deletePost(req.auth!.tenantSchemaName, id);
     // Again: a link made between the two steps above would outlive the entry
     await deleteSharesForEntry(req.auth!.accountId, id);
+    // And a version kept by a write of the AI app that landed between them
+    await forgetAssistantChangesFor(req.auth!.tenantSchemaName, 'entry', String(id));
     res.json({ success: true });
   } catch (err) {
     console.error('Delete entry error:', err instanceof Error ? err.message : 'Unknown error');

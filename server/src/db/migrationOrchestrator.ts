@@ -6,7 +6,7 @@
  *
  *   npm run migrate:tenants             every step below
  *   npm run migrate:entry-sync          just entry-sync change tracking
- *   npm run migrate:tenants -- finance  any one step by name
+ *   npm run migrate:tenants -- finance  any one step by name (ai-privacy: the AI privacy tables)
  *
  * Uses the same environment as the server (server/.env), including
  * SHARD_DATABASE_URLS when there are several databases.
@@ -14,7 +14,7 @@
 import './scriptEnv.js';
 import { prisma } from './prisma.js';
 import {
-  ensureTopicEncryptionColumns, ensureFinanceTables, ensureDoseRecordsTable, ensurePostSync, ensurePostSyncFunction, ensurePostReservations, ensureTaxonomyReservations,
+  ensureTopicEncryptionColumns, ensureFinanceTables, ensureDoseRecordsTable, ensurePostSync, ensurePostSyncFunction, ensurePostReservations, ensureTaxonomyReservations, ensureAiPrivacyTables,
 } from './tenantQueries.js';
 import { shardIds, shardClient, disconnectShards } from './shards.js';
 
@@ -25,6 +25,7 @@ const STEPS: Record<string, (schemaName: string) => Promise<void>> = {
   'entry-sync': ensurePostSync,
   'entry-ids': ensurePostReservations,
   'topic-ids': ensureTaxonomyReservations,
+  'ai-privacy': ensureAiPrivacyTables,
 };
 
 async function main(): Promise<void> {

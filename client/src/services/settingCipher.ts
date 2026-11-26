@@ -50,7 +50,9 @@ export const SETTING_REVS_STORE = 'chronicles.setting-rev.v1';
 // moved away from) and whether Google's events are brought in
 // (`calendarImportMode`). Their values are plain strings, so the revision
 // rides in a small wrapper, `{ _rev, _value }`.
-const ROLLBACK_GUARDED = new Set(['aiConfig', 'imageStorageConfig', 'googleCalendarId', 'calendarImportMode']);
+// And what AI may not see (`aiPrivacySealed`): an older copy could list fewer
+// hidden topics.
+const ROLLBACK_GUARDED = new Set(['aiConfig', 'imageStorageConfig', 'googleCalendarId', 'calendarImportMode', 'aiPrivacySealed']);
 const isWrapped = (v: unknown): v is { _rev: unknown; _value: unknown } =>
   isPlainObject(v) && '_value' in v && Object.keys(v).every(k => k === '_rev' || k === '_value');
 

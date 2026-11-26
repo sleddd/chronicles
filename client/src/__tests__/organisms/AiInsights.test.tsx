@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { loadAiPrivacy } from '../../services/aiPrivacy.js';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithTheme } from '../testUtils';
 import { AiInsights } from '@/components/organisms/AiInsights';
@@ -25,6 +26,8 @@ const open = (onWrite = vi.fn()) => {
 
 describe('AiInsights', () => {
   beforeEach(() => {
+    // The "Don't share with AI" choices have been read (until then everything is kept from AI)
+    loadAiPrivacy({}, {}, true);
     ai.aiFeatureJson.mockReset().mockResolvedValue(ANSWER);
     ai.classifyFeatureReply.mockReset().mockResolvedValue(null);
     useEntriesStore.setState({

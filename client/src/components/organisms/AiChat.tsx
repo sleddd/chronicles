@@ -15,6 +15,7 @@ import { queueAnalyticsEvent } from '../../services/analyticsQueue.js';
 import { chatReply, classifyReply, classifyRisk, getAiConfigValue, type ChatTurn } from '../../services/aiAssistant.js';
 import { useUIStore } from '../../stores/uiStore.js';
 import { chatSaveFormats } from '../../utils/chatSaveFields.js';
+import { topicHiddenFromAi } from '../../services/aiPrivacy.js';
 import { MINOR_FALLBACK_REPLY, stripMinorTag, chatSystemPrompt, chatTranscriptHtml, parseSaveCommand, SAVED_CHATS_TOPIC, type TopicRef } from '../../utils/chatSave.js';
 import { getOrCreateTopic } from '../../utils/getOrCreateJournalTopic.js';
 import { parseChatMarkdown, type Inline } from '../../utils/chatMarkdown.js';
@@ -478,8 +479,10 @@ export function AiChat() {
 
   /** A reply from the model, kept to the house style (one quiet rewrite, then scrubbed). */
   const generateReply = async (history: ChatTurn[], safe: boolean): Promise<string> => {
-    const system = chatSystemPrompt(topicRefs.map(t => t.name), getAiConfigValue()?.chatNotes ?? '', safe, eatingSafeRef.current,
-      chatSaveFormats(topicRefs, topicCustomFields));
+    // A topic kept from AI isn't named to the model, nor are its fields (`/save` to it still works: that never leaves the browser)
+    const shared = topicRefs.filter(t => t.id === JOURNAL_PLACEHOLDER_ID || !topicHiddenFromAi(t.id));
+    const system = chatSystemPrompt(shared.map(t => t.name), getAiConfigValue()?.chatNotes ?? '', safe, eatingSafeRef.current,
+      chatSaveFormats(shared, topicCustomFields));
     let reply = (await chatReply(system, history)).trim();
     const found = findBanned(reply);
     if (found.length) {

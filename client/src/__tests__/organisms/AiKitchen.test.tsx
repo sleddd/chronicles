@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { loadAiPrivacy } from '../../services/aiPrivacy.js';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithTheme } from '../testUtils';
 import { AiMenuPlan } from '@/components/organisms/AiMenuPlan';
@@ -20,6 +21,8 @@ const days = ['2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26', '2026-11-2
 
 describe('AI kitchen', () => {
   beforeEach(() => {
+    // The "Don't share with AI" choices have been read (until then everything is kept from AI)
+    loadAiPrivacy({}, {}, true);
     ai.aiFeatureJson.mockReset();
     saves.createEntry.mockReset().mockResolvedValueOnce(101).mockResolvedValue(102);
     saves.savePrefs.mockReset().mockResolvedValue(undefined);

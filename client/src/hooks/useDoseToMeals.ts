@@ -4,6 +4,7 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../services/api.js';
 import { estimateFoodNutrition, isAiReady } from '../services/aiAssistant.js';
+import { featureHiddenFromAi, isHiddenFromAi } from '../services/aiPrivacy.js';
 import { stripHtml } from '../utils/stripHtml.js';
 import { toDateStr } from '../utils/dateUtils.js';
 import { nowTime } from '../utils/foodLog.js';
@@ -58,7 +59,9 @@ export function useDoseToMeals() {
     if (hasAnyNutrient(parsed)) return parsed;
 
     // Ask the AI once per name+dosage; remember the answer (even "none") on the medication
-    if (!isAiReady() || (cf.doseNutrientBasis === basis && cf.doseNutrientSource === 'ai')) return aiStale ? {} : stored;
+    // Never for a medication hidden from AI, or while medication doses are kept from AI
+    const keptFromAi = featureHiddenFromAi('doses') || isHiddenFromAi(med.metadata as Record<string, unknown> | null);
+    if (!isAiReady() || keptFromAi || (cf.doseNutrientBasis === basis && cf.doseNutrientSource === 'ai')) return aiStale ? {} : stored;
     try {
       const est = await estimateFoodNutrition({ description: `${name}${dosage ? `, ${dosage}` : ''} (one dose)`, mealType: 'supplement' }, DOSE_NUTRIENT_KEYS);
       const next: Record<string, unknown> = { ...cf, doseNutrientSource: 'ai', doseNutrientBasis: basis };

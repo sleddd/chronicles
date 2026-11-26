@@ -276,7 +276,9 @@ export function GoalCard({ goal, milestones, accentColor, isEditing, onSelect, o
     setSaving(true); setStatus('');
     try {
       const cf = { ...goal.customFields, ...editFields };
-      const metadata: Record<string, unknown> = { _taxonomyId: goal.taxonomyId, _customFields: cf };
+      // Built on the entry's own metadata: "Hide from AI", its photos and the rest stay
+      const existing = useEntriesStore.getState().decryptedEntries.find(e => e.id === goal.id)?.metadata as Record<string, unknown> | null | undefined;
+      const metadata: Record<string, unknown> = { ...(existing ?? {}), _taxonomyId: goal.taxonomyId, _customFields: cf };
       const encrypted = await encryptPost(goal.id, editContent, metadata);
       await entriesApi.update(goal.id, {
         contentEncrypted: encrypted.contentEncrypted, contentIv: encrypted.contentIv,

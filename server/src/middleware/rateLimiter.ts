@@ -67,8 +67,10 @@ export const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    const accountId = (req as any).auth?.accountId?.toString();
-    if (accountId) return accountId;
+    const auth = (req as Request).auth;
+    // The Chronicles AI app counts apart from the account's browsers, so a
+    // busy app can never use up the requests the owner's own pages need
+    if (auth) return auth.assistant ? `${auth.accountId}:assistant` : String(auth.accountId);
     return ipKeyGenerator(req.ip || 'unknown');
   },
   message: { error: 'Too many requests, please try again later' },
@@ -186,11 +188,12 @@ export const bugReportLimiter = rateLimit({
  * (autosave, dose ticks, an import's 50-entry batches) stays far below it.
  */
 export const MAX_WRITES_IN_FLIGHT = 16;
-const writesInFlight = new Map<number, number>();
+const writesInFlight = new Map<string, number>();
 
 export function writeGate(req: Request, res: Response, next: NextFunction): void {
-  const accountId = req.auth?.accountId;
-  if (accountId === undefined || req.method === 'GET' || req.method === 'HEAD') return next();
+  if (!req.auth || req.method === 'GET' || req.method === 'HEAD') return next();
+  // The Chronicles AI app has slots of its own (see apiLimiter): its saves never hold up the owner's
+  const accountId = req.auth.assistant ? `${req.auth.accountId}:assistant` : String(req.auth.accountId);
   const n = writesInFlight.get(accountId) ?? 0;
   if (n >= MAX_WRITES_IN_FLIGHT) {
     res.set('Retry-After', '2');

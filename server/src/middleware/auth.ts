@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../db/prisma.js';
+import { getRekey } from '../db/rekeyQueries.js';
+import { ASSISTANT_DEVICE, assistantAllowedForEmail, assistantMay, isAssistantSignOut, loadAiPrivacy, type AiPrivacy } from '../services/assistant.js';
 
 // Extend Express Request with auth info
 declare global {
@@ -11,6 +13,10 @@ declare global {
         tenantSchemaName: string;
         sessionId: number;
         selector: string;
+        /** A Chronicles AI app session: held to the allowlist in services/assistant.ts */
+        assistant?: boolean;
+        /** For an AI app session: the account's "Don't share with AI" choices, read for this request */
+        aiPrivacy?: AiPrivacy;
       };
     }
   }
@@ -127,25 +133,74 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     return;
   }
 
-  // Debounced lastActiveAt update (fire-and-forget)
-  const timeSinceActive = Date.now() - session.lastActiveAt.getTime();
-  if (timeSinceActive > ACTIVITY_DEBOUNCE_MS && !quietRequests.has(req)) {
+  // Debounced lastActiveAt update (fire-and-forget). Only for a request that
+  // is let through: an AI-app session that is being refused must not be able
+  // to keep itself from going idle by asking again
+  const noteActivity = () => {
+    const timeSinceActive = Date.now() - session.lastActiveAt.getTime();
+    if (timeSinceActive <= ACTIVITY_DEBOUNCE_MS || quietRequests.has(req)) return;
     prisma.session.update({
       where: { id: session.id },
       data: { lastActiveAt: new Date() },
     }).catch((err) => {
       console.error('Session activity update failed:', err instanceof Error ? err.message : 'Unknown error');
     });
-  }
+  };
 
   // Attach auth info to request
+  const assistant = session.deviceInfo === ASSISTANT_DEVICE;
   req.auth = {
     accountId: session.accountId,
     tenantSchemaName: session.tenantSchemaName,
     sessionId: session.id,
     selector: session.selector,
+    ...(assistant && { assistant: true }),
   };
 
+  // The Chronicles AI app may only call its short allowlist, and only while the
+  // account has it switched on — enforced here, for every route behind auth
+  if (assistant) {
+    try {
+      // Still on the list of accounts that may use it (taken off the list, its sessions stop working)
+      const account = await prisma.account.findUnique({ where: { id: session.accountId }, select: { email: true } });
+      if (!account || !assistantAllowedForEmail(account.email)) {
+        // Ended for good: back on the list later, it signs in again
+        await revokeSession(session.selector, 'assistant_off').catch(() => { /* refused either way */ });
+        res.status(403).json({ error: 'The Chronicles AI app isn’t available for this account' });
+        return;
+      }
+      const path = (req.originalUrl || req.url).split('?')[0];
+      // The journal is moving to a new key (the browser that started it does
+      // the work): the AI app waits, so it neither reads records half under
+      // the old key nor has a version sealed with the old key kept for it.
+      // Signing out is the one thing it can still do
+      if (!isAssistantSignOut(req.method, path) && await getRekey(session.accountId)) {
+        // Waiting for the move to finish is not being refused
+        noteActivity();
+        res.status(409).json({ error: 'Chronicles is moving your journal to a new key. Try again once it has finished.' });
+        return;
+      }
+      const privacy = await loadAiPrivacy(session.tenantSchemaName);
+      // Switched off: a session that outlived the switch (a sign-in that was on
+      // its way, a revoke that failed) ends here, so switching the app on
+      // again always needs a new sign-in
+      if (!privacy.appEnabled) {
+        await revokeSession(session.selector, 'assistant_off').catch(() => { /* refused either way */ });
+      }
+      const verdict = assistantMay(req.method, path, privacy);
+      if (!verdict.ok) {
+        res.status(verdict.status).json({ error: verdict.error });
+        return;
+      }
+      req.auth.aiPrivacy = privacy;
+    } catch (err) {
+      console.error('Assistant check error:', err instanceof Error ? err.message : 'Unknown error');
+      res.status(500).json({ error: 'Request failed' });
+      return;
+    }
+  }
+
+  noteActivity();
   next();
 }
 
@@ -224,6 +279,14 @@ export async function revokeAllSessions(accountId: number, exceptSelector?: stri
       ...(exceptSelector ? { NOT: { selector: exceptSelector } } : {}),
     },
     data: { revokedAt: new Date(), revokedReason: reason },
+  });
+}
+
+/** The Chronicles AI app was switched off: its sessions end, so switching it on again needs a new sign-in */
+export async function revokeAssistantSessions(accountId: number): Promise<void> {
+  await prisma.session.updateMany({
+    where: { accountId, deviceInfo: ASSISTANT_DEVICE, revokedAt: null },
+    data: { revokedAt: new Date(), revokedReason: 'assistant_off' },
   });
 }
 

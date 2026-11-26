@@ -53,6 +53,9 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: emailSchema,
   authSecret: authSecretSchema,
+  // The Chronicles AI app (Mac and iPad) signing in: it gets an assistant
+  // session, held to a short allowlist on the server (server/src/services/assistant.ts)
+  client: z.literal('smith').optional(),
 }).strict();
 
 // The sensitive actions are confirmed one of two ways: the current password
@@ -139,6 +142,8 @@ export const twoFALoginSchema = z.object({
   // "Don't ask for a code on this browser for 30 days" — honoured only after
   // an authenticator code, never a backup code
   trustBrowser: z.boolean().optional(),
+  // The Chronicles AI app finishing its sign-in (see loginSchema)
+  client: z.literal('smith').optional(),
 });
 
 // Turning 2FA on replaces the authenticator secret and backup codes, so it
@@ -384,6 +389,13 @@ export const createPostsBatchSchema = z.object({
 export const reservePostIdsSchema = z.object({
   count: z.number().int().min(1).max(50).default(1),
 });
+
+// Hide entries from AI, or share them again (PUT /api/entries/ai-hidden)
+export const aiHiddenSchema = z.object({
+  // Entry ids are int4 in the database
+  ids: z.array(z.number().int().positive().max(2_147_483_647)).min(1).max(5000),
+  hidden: z.boolean(),
+}).strict();
 
 // The one-time move of older entries to the id-bound format: up to 100 at a time
 export const resealPostsSchema = z.object({

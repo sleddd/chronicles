@@ -19,7 +19,7 @@ describe('wins', () => {
   });
 
   it('a journal save rewrites the text from the wins, keeping the day', async () => {
-    const out = await prepareEntryForSave('<p>Wins: 10/30/2026</p>', { wins: [{ id: 'a', text: 'Shipped it' }] }, 'wins', []);
+    const out = await prepareEntryForSave('<p>Wins: 10/30/2026</p>', { wins: [{ id: 'a', text: 'Shipped it' }] }, 'wins', [], null, {});
     expect(out.content).toBe('<p>Wins: 10/30/2026</p><ul><li><p>Shipped it</p></li></ul>');
   });
 });

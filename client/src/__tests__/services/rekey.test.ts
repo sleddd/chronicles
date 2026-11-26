@@ -17,9 +17,26 @@ const server = vi.hoisted(() => ({
   failDosesOnce: false,
   refuseEntryOnce: 0,
   financeBatches: [] as number[],
+  /** Versions kept of what the Chronicles AI app overwrote (sealed with the old key) */
+  keptChanges: 0,
+  /** How DELETE /assistant-changes answers: fine, a failure, or a server from before the feature */
+  clearChanges: 'ok' as 'ok' | 'fail' | 'missing',
 }));
 
-vi.mock('@/services/api', () => ({
+vi.mock('@/services/api', () => {
+  class ApiError extends Error {
+    constructor(public status: number, message: string) { super(message); }
+  }
+  return {
+  ApiError,
+  assistantChanges: {
+    clear: async () => {
+      if (server.clearChanges === 'fail') throw new ApiError(500, 'Failed to delete');
+      if (server.clearChanges === 'missing') throw new ApiError(404, 'Not found');
+      server.keptChanges = 0;
+      return { success: true };
+    },
+  },
   auth: {
     rekeyFinish: async (id: string, runner: string) => {
       server.finishRunners.push(runner);
@@ -64,7 +81,8 @@ vi.mock('@/services/api', () => ({
       return { resealed: records.length };
     },
   },
-}));
+  };
+});
 
 vi.mock('@/services/r2Signer', () => ({
   presignR2: async (_cfg: unknown, method: string, key: string) => `r2://${method}/${key}`,
@@ -117,6 +135,8 @@ async function seed(oldKey: CryptoKey) {
   server.refuseFinish = false;
   server.financeBatches.length = 0;
   server.refuseEntryOnce = 0;
+  server.keptChanges = 0;
+  server.clearChanges = 'ok';
   server.failDosesOnce = false;
   // A photo and its thumbnail in the bucket, under the old key
   const photo = await encryptionService.encryptFile(oldKey, enc.encode('photo-bytes').buffer as ArrayBuffer, imageAad(IMG));
@@ -278,6 +298,27 @@ describe('runRekey', () => {
     expect(ref.key).toBe(newImg);
     expect(ref.iv).not.toBe(firstIv);
     expect(dec.decode(await encryptionService.decryptFile(newKey, server.bucket.get(newImg)!, ref.iv, imageAad(newImg)))).toBe('other-bytes');
+  });
+
+  // What the AI app overwrote is kept sealed with the old key: none of it may outlive that key
+  it('clears the versions kept of the AI app’s changes before it finishes, and never finishes while that fails', async () => {
+    await seed(oldKey);
+    server.keptChanges = 3;
+    server.clearChanges = 'fail';
+    await expect(runRekey({ newKey, oldKey, rekeyId: REKEY, runner: RUNNER, fetchFn })).rejects.toThrow();
+    expect(server.finished).toEqual([]);
+    expect(server.keptChanges).toBe(3);
+    server.clearChanges = 'ok';
+    await runRekey({ newKey, oldKey, rekeyId: REKEY, runner: RUNNER, fetchFn });
+    expect(server.keptChanges).toBe(0);
+    expect(server.finished).toEqual([REKEY]);
+  });
+
+  it('finishes against a server from before the AI app (nothing kept there to clear)', async () => {
+    await seed(oldKey);
+    server.clearChanges = 'missing';
+    await runRekey({ newKey, oldKey, rekeyId: REKEY, runner: RUNNER, fetchFn });
+    expect(server.finished).toEqual([REKEY]);
   });
 
   it('names itself when it finishes, and leaves the job open when the server says it isn’t its own', async () => {

@@ -29,6 +29,8 @@ export const SEALED_SETTING_KEYS: readonly string[] = [
   ...PRIVATE_SETTING_KEYS,
   'nutritionGoals', 'dashboardConfig', 'healthLayout', 'planningOrder', 'plannerOrder', 'symptomChips', 'symptomTriggerReviews', 'taskTypes', 'goalCategories', 'onboarding', 'financeBalance', 'wallpaper', 'timeLog', 'habitLog', 'followedShelves', 'aiKitchenPrefs',
   'aiConfig', 'imageStorageConfig',
+  // What AI may not see, as the browser believes it (the readable `aiPrivacy` is the server's copy)
+  'aiPrivacySealed',
   'settingsSealV2', 'entriesSealV3', 'topicsSealV2', 'dosesSealV2',
 ];
 

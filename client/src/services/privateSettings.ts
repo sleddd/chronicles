@@ -3,6 +3,7 @@ import { useEncryption } from '../contexts/EncryptionContext.js';
 import { settings as settingsApi } from './api.js';
 import { isSealed, isBound, sealSetting, openSetting, openUnbound, trackGuardedSave, type SealedValue, type EncryptBytes, type DecryptBytes } from './settingCipher.js';
 import { PRIVATE_SETTING_KEYS } from '@shared/validation/sealedSettings.js';
+import { AI_PRIVACY_SEALED_KEY } from '@shared/validation/aiPrivacy.js';
 import { sealMarkerHeld, noteSealMarker, legacyMigrationAllowed } from './sealedFormats.js';
 import { EGRESS_KEYS, egressOn, reconcileEgress, type EgressKey } from './deviceConsent.js';
 
@@ -35,6 +36,13 @@ export { PRIVATE_SETTING_KEYS };
 export type PrivateSettingKey = typeof PRIVATE_SETTING_KEYS[number];
 
 const PRIVATE = new Set<string>(PRIVATE_SETTING_KEYS);
+/* Read from the opened map, never taken readable and never in the unbound
+   form from before v2 (it names no key, so any old ciphertext could be filed
+   here). The "Don't share
+   with AI" choices as this browser believes them: a readable value there would
+   be the server's own, passed off as the sealed copy, and the server's copy may
+   only ever add to what is hidden (services/aiPrivacy.ts). */
+const SEALED_ONLY = new Set<string>([AI_PRIVACY_SEALED_KEY]);
 const CREDENTIALS = new Set<string>(['aiConfig', 'imageStorageConfig']);
 const EGRESS = new Set<string>(EGRESS_KEYS);
 
@@ -77,13 +85,13 @@ export async function openSettingsMap(map: Record<string, unknown>, decryptBytes
       if (isBound(v)) {
         try { map[key] = await openSetting(key, v, decryptBytes); }
         catch { delete map[key]; }
-      } else if (!migrated && !EGRESS.has(key) && !CREDENTIALS.has(key)) {
+      } else if (!migrated && !EGRESS.has(key) && !CREDENTIALS.has(key) && !SEALED_ONLY.has(key)) {
         try { map[key] = await openUnbound(v, decryptBytes); toReseal.push(key); }
         catch { delete map[key]; }
       } else {
         delete map[key];
       }
-    } else if (PRIVATE.has(key)) {
+    } else if (PRIVATE.has(key) || SEALED_ONLY.has(key)) {
       // A private key is never taken readable — not even the ones that were
       // plaintext before v2: the server could write any value there
       delete map[key];

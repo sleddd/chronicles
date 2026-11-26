@@ -12,13 +12,15 @@ export function useCalorieEstimate(
   contentHtml: string,
   customFields: Record<string, unknown>,
   onChange: (fields: Record<string, unknown>) => void,
+  /** The entry is hidden from AI (its switch or its topic): no Estimate button, nothing sent */
+  hiddenFromAi = false,
 ) {
   const aiReady = useAiReady();
   const [estimating, setEstimating] = useState(false);
   const [error, setError] = useState('');
 
   const run = useCallback(async () => {
-    if (!kind) return;
+    if (!kind || hiddenFromAi) return;
     setEstimating(true);
     setError('');
     try {
@@ -28,10 +30,10 @@ export function useCalorieEstimate(
     } finally {
       setEstimating(false);
     }
-  }, [kind, contentHtml, customFields, onChange]);
+  }, [kind, contentHtml, customFields, onChange, hiddenFromAi]);
 
   return {
-    estimate: aiReady && kind ? run : undefined,
+    estimate: aiReady && kind && !hiddenFromAi ? run : undefined,
     estimating,
     error,
   };

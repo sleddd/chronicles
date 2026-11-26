@@ -37,6 +37,7 @@ import { useInitializeData } from '../hooks/useInitializeData.js';
 import { useSignOut } from '../hooks/useSignOut.js';
 import { useAuth } from '../contexts/AuthContext.js';
 import { useEncryption, type PreparedRekey } from '../contexts/EncryptionContext.js';
+import { flushAiMarks, newAiMarkBatch } from '../services/aiPrivacy.js';
 import { findImageRefs, settingsPhotoRefs, checkPhotosReachable } from '../services/rekey.js';
 import { Checkbox } from '../components/atoms/Checkbox.js';
 import { useUIStore } from '../stores/uiStore.js';
@@ -966,8 +967,11 @@ export function SettingsView() {
 
       // Entries are saved IMPORT_BATCH at a time (one request each), so a big
       // file doesn't run into the per-account request limit
+      const aiMarks = newAiMarkBatch();
       let pending: { payload: Parameters<typeof entriesApi.createMany>[0][number]; content: string; metadata: Record<string, unknown> }[] = [];
       const flush = async () => {
+        // Entries hidden from AI are marked first, all at once (services/aiPrivacy)
+        await flushAiMarks(aiMarks);
         const created = await entriesApi.createMany(pending.map(p => p.payload));
         created.forEach((result, k) => {
           addDecryptedEntry({
@@ -1038,7 +1042,7 @@ export function SettingsView() {
         metadata._createdAt = createdAt;
 
         // Encrypt
-        const encrypted = await encryptNewPost(htmlContent, metadata);
+        const encrypted = await encryptNewPost(htmlContent, metadata, { aiMarks });
 
         // Queue for the next batch create
         const taxonomyIds = metadata._taxonomyId ? [metadata._taxonomyId as number] : [];

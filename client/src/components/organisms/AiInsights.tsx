@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { visibleToAi } from '../../services/aiPrivacy.js';
+import { useAiPrivacy } from '../../hooks/useAiPrivacy.js';
 import styled from 'styled-components';
 import { Modal } from '../atoms/Modal.js';
 import { PillButton } from '../atoms/PillButton.js';
@@ -116,6 +118,8 @@ export function AiInsights({ trigger, onWrite }: {
 function InsightsPanel({ onClose, onWrite }: { onClose: () => void; onWrite: (prompt: string) => void }) {
   const journalId = useEntriesStore(s => s.allTopics.find(t => t.name.trim().toLowerCase() === 'journal')?.id ?? null);
   const journal = useEntriesStore(s => (journalId === null ? null : topicEntries(s.decryptedEntries, journalId)));
+  // Never an entry hidden from AI (or a Journal kept from AI altogether)
+  const privacy = useAiPrivacy();
 
   const [period, setPeriod] = useState<InsightsPeriod>(7);
   const [step, setStep] = useState<Step>('share');
@@ -130,12 +134,12 @@ function InsightsPanel({ onClose, onWrite }: { onClose: () => void; onWrite: (pr
     const today = toDateStr(new Date());
     const firstDay = addDays(today, -(period - 1));
     // Only the period's entries are turned into plain text: doing that for a whole long journal stalls the panel
-    const texts = (journal ?? [])
+    const texts = visibleToAi(journal ?? [], privacy)
       .map(e => ({ e, day: toDateStr(e.createdAt instanceof Date ? e.createdAt : new Date(e.createdAt)) }))
       .filter(({ day }) => day >= firstDay && day <= today)
       .map(({ e, day }) => ({ id: e.id, day, title: entryTitleText(e.content), text: stripHtml(e.content) }));
     return buildInsightsRequest(texts, period, today, firstDay);
-  }, [journal, period]);
+  }, [journal, period, privacy]);
 
   const send = async () => {
     const run = ++runRef.current;

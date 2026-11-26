@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { visibleToAi } from '../services/aiPrivacy.js';
+import { useAiPrivacy } from './useAiPrivacy.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useEntriesStore } from '../stores/entriesStore.js';
 import { entryTitleText } from '../utils/entryTitle.js';
@@ -33,6 +35,8 @@ function useTopicsEntries(...names: string[]): TopicEntries[] {
 }
 
 export function useKitchenData(): { allergies: KitchenAllergy[]; recipes: KitchenRecipeIn[]; menuWeeks: MenuWeek[] } {
+  // What the AI kitchen sends: never an entry hidden from AI
+  const privacy = useAiPrivacy();
   const allergyLists = useTopicsEntries('allergy', 'allergies');
   const menuLists = useTopicsEntries('menu plan', 'menu plans', 'menu');
   const recipeLists = useTopicsEntries('recipe', 'recipes');
@@ -40,7 +44,7 @@ export function useKitchenData(): { allergies: KitchenAllergy[]; recipes: Kitche
   const allergies = useMemo(() => {
     const out: KitchenAllergy[] = [];
     const seen = new Set<string>();
-    for (const e of allergyLists.flat()) {
+    for (const e of visibleToAi(allergyLists.flat(), privacy)) {
       const cf = fieldsOf(e.metadata);
       const allergen = text(cf.allergen) || entryTitleText(e.content);
       if (!allergen || seen.has(allergen.toLowerCase())) continue;
@@ -49,11 +53,11 @@ export function useKitchenData(): { allergies: KitchenAllergy[]; recipes: Kitche
       out.push({ allergen, reaction: text(cf.reaction), severity });
     }
     return out;
-  }, [allergyLists]);
+  }, [allergyLists, privacy]);
 
   const menuWeeks = useMemo(() => {
     const out: MenuWeek[] = [];
-    for (const e of menuLists.flat()) {
+    for (const e of visibleToAi(menuLists.flat(), privacy)) {
       const cf = fieldsOf(e.metadata);
       const weekStart = text(cf.weekStart);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) continue;
@@ -64,11 +68,11 @@ export function useKitchenData(): { allergies: KitchenAllergy[]; recipes: Kitche
       out.push({ weekStart, meals });
     }
     return out;
-  }, [menuLists]);
+  }, [menuLists, privacy]);
 
   const recipes = useMemo(() => {
     const out: KitchenRecipeIn[] = [];
-    for (const e of recipeLists.flat()) {
+    for (const e of visibleToAi(recipeLists.flat(), privacy)) {
       const cf = fieldsOf(e.metadata);
       const title = text(cf.recipeName) || entryTitleText(e.content);
       if (!title) continue;
@@ -78,7 +82,7 @@ export function useKitchenData(): { allergies: KitchenAllergy[]; recipes: Kitche
       out.push({ id: e.id, title, ingredients });
     }
     return out;
-  }, [recipeLists]);
+  }, [recipeLists, privacy]);
 
   return useMemo(() => ({ allergies, recipes, menuWeeks }), [allergies, recipes, menuWeeks]);
 }

@@ -1,8 +1,9 @@
+import { assistantWrite, assistantMark, assistantNewRecordAllowed, forgetAssistantChangesFor, AssistantHistoryFull, ASSISTANT_HISTORY_FULL, ASSISTANT_NEW_DOSES_PER_DAY } from '../db/assistantHistory.js';
 import { Router } from 'express';
 import { readGate } from '../middleware/readGate.js';
 import { doseRecordIdSchema, putDoseRecordSchema, resealDoseRecordsSchema } from '@chronicles/shared';
 import {
-  ensureDoseRecordsTable, getDoseRecords, upsertDoseRecordCapped, deleteDoseRecord, resealDoseRecords, doseRecordStorage, withTenantLock,
+  ensureDoseRecordsTable, getDoseRecords, upsertDoseRecordCapped, upsertDoseRecord, deleteDoseRecord, resealDoseRecords, doseRecordStorage, withTenantLock,
   type DoseRecordRow,
 } from '../db/tenantQueries.js';
 
@@ -136,15 +137,32 @@ router.put('/:id', async (req, res) => {
     const schema = req.auth!.tenantSchemaName;
     await ensureDoseRecordsTable(schema);
     const payload = Buffer.from(body.data.payload, 'base64');
-    // Lock, caps and write in one trip, so parallel saves can't both fit
-    const row = await upsertDoseRecordCapped(schema, id.data, body.data.date, payload, Buffer.from(body.data.iv, 'base64'),
-      { maxRows: DOSE_RECORD_LIMIT, maxBytes: DOSE_STORAGE_LIMIT_BYTES });
+    const iv = Buffer.from(body.data.iv, 'base64');
+    const row = req.auth!.assistant
+      // The Chronicles AI app: the record it replaces is kept and the save made
+      // under one lock, for the owner to put back (a full list refuses the save)
+      // A dose record it makes new comes out of its day's budget: it can't
+      // delete one later, and a new record has no earlier version to put back
+      ? await assistantWrite(schema, 'dose', id.data, assistantMark.record(iv, payload), async (tx) => {
+        if (!(await assistantNewRecordAllowed(tx, schema, 'dose', id.data, ASSISTANT_NEW_DOSES_PER_DAY))) return 'limit' as const;
+        const used = await doseRecordStorage(schema, [id.data], tx);
+        if (used.count + 1 > DOSE_RECORD_LIMIT || used.bytes + payload.length > DOSE_STORAGE_LIMIT_BYTES) return null;
+        return upsertDoseRecord(schema, id.data, body.data.date, payload, iv, tx);
+      }, saved => saved !== null && saved !== 'limit')
+      // Lock, caps and write in one trip, so parallel saves can't both fit
+      : await upsertDoseRecordCapped(schema, id.data, body.data.date, payload, iv,
+        { maxRows: DOSE_RECORD_LIMIT, maxBytes: DOSE_STORAGE_LIMIT_BYTES });
+    if (row === 'limit') {
+      res.status(429).json({ error: 'The Chronicles AI app has recorded as many new doses as it may in a day' });
+      return;
+    }
     if (!row) {
       res.status(413).json(DOSES_FULL);
       return;
     }
     res.json({ record: serialize(row) });
   } catch (err) {
+    if (err instanceof AssistantHistoryFull) { res.status(429).json(ASSISTANT_HISTORY_FULL); return; }
     console.error('Save dose record error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to save dose' });
   }
@@ -159,7 +177,12 @@ router.delete('/:id', async (req, res) => {
   }
   try {
     await ensureDoseRecordsTable(req.auth!.tenantSchemaName);
-    res.json({ deleted: await deleteDoseRecord(req.auth!.tenantSchemaName, id.data) });
+    // Earlier versions kept from the AI app's changes go with it
+    await forgetAssistantChangesFor(req.auth!.tenantSchemaName, 'dose', id.data);
+    const deleted = await deleteDoseRecord(req.auth!.tenantSchemaName, id.data);
+    // Again: a write by the AI app that landed between the two would leave a version of a record that is gone
+    await forgetAssistantChangesFor(req.auth!.tenantSchemaName, 'dose', id.data);
+    res.json({ deleted });
   } catch (err) {
     console.error('Delete dose record error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to delete dose' });

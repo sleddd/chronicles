@@ -460,7 +460,9 @@ export function GoalsView() {
 
   // Shared persist helper
   const persistEntry = useCallback(async (id: number, content: string, taxonomyId: number, customFields: Record<string, unknown>) => {
-    const metadata: Record<string, unknown> = { _taxonomyId: taxonomyId, _customFields: customFields };
+    // Built on the entry's own metadata: "Hide from AI", its photos and the rest stay
+    const existing = useEntriesStore.getState().decryptedEntries.find(e => e.id === id)?.metadata as Record<string, unknown> | null | undefined;
+    const metadata: Record<string, unknown> = { ...(existing ?? {}), _taxonomyId: taxonomyId, _customFields: customFields };
     updateDecryptedEntry(id, { metadata });
     const encrypted = await encryptPost(id, content, metadata);
     await entriesApi.update(id, {

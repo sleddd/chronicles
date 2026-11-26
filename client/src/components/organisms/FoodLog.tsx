@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type MouseEvent } from 'react';
+import { isHiddenFromAi } from '../../services/aiPrivacy.js';
 import styled from 'styled-components';
 import { glassPill } from '../../styles/wallpaper.js';
 import { Select } from '../atoms/Select.js';
@@ -123,7 +124,9 @@ export function useFoodLogActions(topicName: string) {
     setPending(p => new Set(p).add(id));
     setAiError('');
     try {
-      const next = opts.refreshAi ? await estimateEntryNutrition(text, cf, opts) : await autoNutritionOnSave(text, cf);
+      // Hidden from AI: never sent, not even on request
+      if (isHiddenFromAi(entry.metadata as Record<string, unknown>)) return;
+      const next = opts.refreshAi ? await estimateEntryNutrition(text, cf, opts) : await autoNutritionOnSave(text, cf, (entry.metadata ?? {}) as Record<string, unknown>);
       if (next) await save(id, entry.content, next);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : 'Could not estimate nutrients');

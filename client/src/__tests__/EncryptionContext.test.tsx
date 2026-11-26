@@ -47,6 +47,10 @@ vi.mock('@shared/crypto/encryptionService.js', () => ({
 }));
 
 // What the browser stores is kept for the same person and wiped for anyone else (services/browserData)
+// Telling the server which entries are hidden from AI has its own tests (services/aiPrivacy.test.ts)
+vi.mock('../services/aiPrivacy.js', () => ({
+  clearAiPrivacy: vi.fn(), markHiddenBeforeCreate: vi.fn().mockResolvedValue(undefined), markHiddenOnSave: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('../services/rekey.js', () => ({
   runRekey: (...args: unknown[]) => mockRunRekey(...args),
   resealLocalDrafts: (...args: unknown[]) => mockResealLocalDrafts(...args),

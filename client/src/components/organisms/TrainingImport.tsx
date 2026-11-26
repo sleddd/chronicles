@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { flushAiMarks, newAiMarkBatch } from '../../services/aiPrivacy.js';
 import { SettingsRow } from '../molecules/SettingsCard.js';
 import { ActionButton, RowLink } from '../atoms/SettingsAtoms.js';
 import { Spinner } from '../atoms/Spinner.js';
@@ -114,8 +115,11 @@ export function TrainingImport() {
       const tid = await topicId(['exercise'], 'dumbbell');
       type Pending = { payload: Parameters<typeof entriesApi.createMany>[0][number]; content: string; metadata: Record<string, unknown> };
       let pending: Pending[] = [];
+      const aiMarks = newAiMarkBatch();
       const flush = async () => {
         if (!pending.length) return;
+        // Entries hidden from AI are marked first, all at once (services/aiPrivacy)
+        await flushAiMarks(aiMarks);
         const created = await entriesApi.createMany(pending.map(p => p.payload));
         created.forEach((res, k) => {
           useEntriesStore.getState().addDecryptedEntry({
@@ -137,7 +141,7 @@ export function TrainingImport() {
         const content = `<p>${escapeHtml(exerciseSummary(fields))}</p>`;
         const createdAt = new Date(`${s.date}T12:00:00`).toISOString();
         const metadata: Record<string, unknown> = { _taxonomyId: tid, _importKey: s.importKey, _customFields: fields, _createdAt: createdAt };
-        const enc = await encryptNewPost(content, metadata);
+        const enc = await encryptNewPost(content, metadata, { aiMarks });
         pending.push({ content, metadata, payload: { id: enc.id,
           contentEncrypted: enc.contentEncrypted, contentIv: enc.contentIv,
           metadataEncrypted: enc.metadataEncrypted, metadataIv: enc.metadataIv,

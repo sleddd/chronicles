@@ -1,3 +1,4 @@
+import { withAiHiddenKept } from '../utils/aiHiddenFlag.js';
 import { create } from 'zustand';
 import type { DecryptedPost, EncryptedPost } from '@shared/crypto/types';
 import type { Topic } from '../types/topics.js';
@@ -72,7 +73,11 @@ export const useEntriesStore = create<EntriesState>((set, get) => ({
     decryptedEntries: [entry, ...s.decryptedEntries],
   })),
   updateDecryptedEntry: (id, updates) => set(s => ({
-    decryptedEntries: s.decryptedEntries.map(e => e.id === id ? { ...e, ...updates } : e),
+    // "Hide from AI" is only ever turned off on purpose: a save path that
+    // rebuilt the metadata without it keeps what the entry had (utils/aiHiddenFlag)
+    decryptedEntries: s.decryptedEntries.map(e => e.id === id
+      ? { ...e, ...updates, ...(updates.metadata && { metadata: withAiHiddenKept(e.metadata as Record<string, unknown> | null, updates.metadata as Record<string, unknown>) }) }
+      : e),
   })),
   removeEntry: (id) => set(s => ({
     decryptedEntries: s.decryptedEntries.filter(e => e.id !== id),

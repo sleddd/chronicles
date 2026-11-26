@@ -43,7 +43,9 @@ export async function prepareEntryForSave(
   topicName: string | undefined,
   userFieldDefs: UserFieldDef[],
   /** The entry's fields as last saved (null = a new entry) — a medication records what changed */
-  previousFields: Record<string, unknown> | null = null,
+  previousFields: Record<string, unknown> | null,
+  /** Its topic and "Hide from AI" switch: a hidden entry isn't sent for a calorie estimate. Required, so no caller can leave the check out */
+  aiMeta: Record<string, unknown>,
 ): Promise<{ content: string; customFields: Record<string, unknown> }> {
   const hasText = !!stripHtml(content).trim() || content.includes('data-type="drawing"');
   const userFieldValues = (customFields._userFields as Record<string, unknown>) ?? {};
@@ -57,7 +59,7 @@ export async function prepareEntryForSave(
   let fields = customFields;
   const calorieKind = topicName === 'meals' ? 'food' : topicName === 'exercise' ? 'exercise' : null;
   if (calorieKind) {
-    const estimated = await autoCaloriesOnSave(calorieKind, stripHtml(finalContent), customFields).catch(() => null);
+    const estimated = await autoCaloriesOnSave(calorieKind, stripHtml(finalContent), customFields, aiMeta).catch(() => null);
     if (estimated) fields = estimated;
   }
   if (topicName === 'medication') fields = withMedicationChanges(previousFields, fields, toDateStr(new Date()));

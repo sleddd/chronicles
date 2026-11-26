@@ -27,7 +27,15 @@ router.get('/', readGate('topics', 3), async (req, res) => {
   try {
     await ensureTopicEncryptionColumns(req.auth!.tenantSchemaName);
     const taxonomies = await getAllTaxonomies(req.auth!.tenantSchemaName);
-    res.json(taxonomies);
+    // The Chronicles AI app holds the account's key, so a topic kept from AI
+    // is left out altogether: its name is never sent
+    // (authMiddleware always hands the choices over; without them nothing is listed)
+    if (req.auth!.assistant && !req.auth!.aiPrivacy) {
+      res.status(403).json({ error: 'Not available to the Chronicles AI app' });
+      return;
+    }
+    const hidden = req.auth!.assistant ? new Set(req.auth!.aiPrivacy!.hiddenTopicIds) : null;
+    res.json(hidden ? taxonomies.filter(t => !hidden.has(t.id)) : taxonomies);
   } catch (err) {
     console.error('Get topics error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to fetch topics' });
