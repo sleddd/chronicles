@@ -24,10 +24,11 @@ import { addDays, weekLabel, weekOf } from '../utils/planner.js';
 import { usePlanData } from '../hooks/usePlanData.js';
 import {
   HABIT_DEFAULTS, HABIT_ICON, HABIT_TOPIC, countSeries, dayCells, dayTarget, describeTarget, habitCsvRows, habitTotals,
-  isDueOn, nextCount, streakWeeks, weekProgress, type CountOn, type DayCell, type DayRange, type Habit,
+  isDueOn, nextCount, streakWeeks, type CountOn, type DayCell, type DayRange, type Habit,
 } from '../utils/habits.js';
 
-/* Health → Habits: small cards, three across, under their categories — each
+/* Health → Habits: small cards, three across in one grid (no category
+   headings) — in the order they were added, or sorted by category — each
    habit with a tick for every day of the week (Sunday to Saturday), how the
    week stands against its target and its streak of weeks met. Choosing a habit shows how often it was done over a period: big
    figures, a bar chart and a square per day. */
@@ -64,16 +65,22 @@ const CardHead = styled.div`
   gap: 12px;
 `;
 
-const GroupHead = styled.h2`
-  margin: 0 0 20px;
-  padding: 26px 0 10px;
-  border-bottom: 1px solid var(--border-default);
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 300;
-  color: var(--text-secondary);
-  section:first-child > & { padding-top: 0; }
+/* Above the cards: how they're ordered */
+const SortRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 36px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
 `;
+
+type HabitSort = 'added' | 'category';
+const SORT_KEY = 'chronicles.habits-sort';
+function savedSort(): HabitSort {
+  try { return localStorage.getItem(SORT_KEY) === 'category' ? 'category' : 'added'; } catch { return 'added'; }
+}
 
 const NameBtn = styled.button`
   display: flex;
@@ -96,6 +103,10 @@ const Days = styled.div`
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 2px;
+  /* A hairline between the habit's name and the week's letters */
+  margin-top: 4px;
+  padding-top: 26px;
+  border-top: 1px solid var(--border-subtle);
 `;
 
 const Day = styled.div<{ $today: boolean }>`
@@ -136,24 +147,6 @@ const Off = styled.span`
   color: var(--text-faint, var(--text-disabled));
 `;
 
-const Week = styled.div<{ $met: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: ${({ $met }) => ($met ? 'var(--color-accent-soft)' : 'var(--text-secondary)')};
-`;
-
-const Track = styled.i`
-  display: block;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--progress-track, var(--bg-row-hover));
-  overflow: hidden;
-  i { display: block; height: 100%; border-radius: 2px; background: var(--color-accent-fill, var(--color-accent)); transition: width 0.3s ease-out; }
-`;
-
 const Streak = styled.span`
   flex: none;
   font-family: var(--font-sans);
@@ -176,10 +169,10 @@ const Paused = styled.div`
 const Panel = styled.section`
   margin-top: 24px;
   scroll-margin-top: 24px;
-  padding: 28px 32px 30px;
+  padding: 28px 32px 44px;
   background: var(--bg-panel);
   border-radius: 14px;
-  @media (max-width: 560px) { padding: 22px 18px 24px; }
+  @media (max-width: 560px) { padding: 22px 18px 34px; }
 `;
 
 const PanelHead = styled.div`
@@ -209,7 +202,15 @@ const Bar = styled.div<{ $top?: boolean }>`
   align-items: center;
   justify-content: space-between;
   gap: 12px 16px;
-  margin: ${p => p.$top ? '40px 0 0' : '22px 0 6px'};
+  margin: ${p => p.$top ? '56px 0 44px' : '22px 0 6px'};
+`;
+
+/* A habit's figures: the numbers the same size as their words (the history pages keep
+   their big figures). One line of plain text, the number a step heavier */
+const HabitFigures = styled(Figures)`
+  font-size: inherit;
+  color: inherit;
+  strong { margin-right: 5px; font-family: inherit; font-size: inherit; font-weight: 600; color: inherit; }
 `;
 
 const Sum = styled.div`
@@ -218,15 +219,15 @@ const Sum = styled.div`
   align-items: baseline;
   justify-content: space-between;
   gap: 8px 24px;
-  margin: 18px 0 18px;
+  margin: 18px 0 32px;
+  /* One size and colour throughout (figures and dates), under a hairline */
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
   font-family: var(--font-sans);
-`;
-
-const Note = styled.p`
-  margin: 10px 0 0;
-  font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
+  font-style: italic;
   color: var(--text-muted);
+  & > span { font-size: inherit; color: inherit; }
 `;
 
 const SquaresHead = styled.div`
@@ -235,7 +236,7 @@ const SquaresHead = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px 16px;
-  margin: 26px 0 8px;
+  margin: 40px 0 10px;
   font-family: var(--font-sans);
   font-size: 13px;
   color: var(--text-muted);
@@ -267,7 +268,14 @@ export function HabitsView() {
   const [savedCategories] = useEncryptedSetting<GoalCategoryConfig>('goalCategories', EMPTY_GOAL_CATEGORIES);
   const categories = useMemo(() => goalCategoryList(parseGoalCategories(savedCategories)), [savedCategories]);
   const groups = useMemo(() => groupByCategory(habits, h => h.category, categories), [habits, categories]);
-  const grouped = groups.length > 1 || (groups.length === 1 && !!groups[0].category);
+  const hasCategories = groups.some(g => !!g.category);
+  // Sorting is this browser's own choice, remembered between visits
+  const [sort, setSortState] = useState<HabitSort>(savedSort);
+  const setSort = (v: HabitSort) => {
+    setSortState(v);
+    try { localStorage.setItem(SORT_KEY, v); } catch { /* not remembered */ }
+  };
+  const byCategory = sort === 'category' && hasCategories;
 
   const key = (h: Habit) => String(h.id);
   const [chosenKey, setChosenKey] = useState<string | null>(null);
@@ -298,7 +306,6 @@ export function HabitsView() {
   };
 
   const renderCard = (h: Habit) => {
-    const wp = weekProgress(h, days, count);
     const streak = streakWeeks(h, today, count);
     const full = dayTarget(h);
     const on = !!chosen && key(chosen) === key(h);
@@ -307,7 +314,7 @@ export function HabitsView() {
         <CardHead>
           <NameBtn type="button" aria-pressed={on} title="Go to its chart" onClick={() => pick(h)}>
             <b>{h.name}</b>
-            <small>{describeTarget(h, describeDays)}</small>
+            <small>{describeTarget(h, describeDays)}{h.category?.trim() ? ` · ${h.category.trim()}` : ''}</small>
             {goalOf(h) && <small>Part of {goalOf(h)}</small>}
           </NameBtn>
           {streak > 0 && <Streak title="Weeks in a row that met the target">{plural(streak, 'week', 'weeks')}</Streak>}
@@ -332,16 +339,12 @@ export function HabitsView() {
             );
           })}
         </Days>
-        <Week $met={wp.met}>
-          <span>{wp.met ? `Target met · ${wp.done} of ${wp.target}` : `${wp.done} of ${wp.target} this week`}</span>
-          <Track aria-hidden="true"><i style={{ width: `${Math.min(100, Math.round((wp.done / wp.target) * 100))}%` }} /></Track>
-        </Week>
       </Card>
     );
   };
 
-  // Every habit gets its chart, in the same order as the cards
-  const ordered = grouped ? groups.flatMap(g => g.items) : habits;
+  // The cards in the chosen order; every habit gets its chart in that order too
+  const ordered = byCategory ? groups.flatMap(g => g.items) : habits;
 
   return (
     <PlanningShell title="Health" tabs={<HealthTabBar />} actions={<>
@@ -352,14 +355,20 @@ export function HabitsView() {
       {habits.length === 0 ? (
         <EmptyState message="No habits yet." submessage="Add one with a target, like 3 times a week, and tick it off here each day." />
       ) : (
-        grouped
-          ? groups.map(g => (
-              <section key={g.category || 'none'} aria-label={g.category || 'No category'}>
-                <GroupHead>{g.category || 'No category'}</GroupHead>
-                <Cards>{g.items.map(renderCard)}</Cards>
-              </section>
-            ))
-          : <Cards>{habits.map(renderCard)}</Cards>
+        <>
+          {hasCategories && (
+            <SortRow>
+              <span>Sort</span>
+              <Chips role="group" aria-label="Sort habits">
+                {([['added', 'Date added'], ['category', 'Category']] as const).map(([v, label]) => (
+                  <Chip key={v} type="button" $active={sort === v} aria-pressed={sort === v}
+                    onClick={() => setSort(v)}>{label}</Chip>
+                ))}
+              </Chips>
+            </SortRow>
+          )}
+          <Cards>{ordered.map(renderCard)}</Cards>
+        </>
       )}
 
       {paused.length > 0 && (
@@ -400,7 +409,8 @@ function HabitHistory({ habit, goal, range, today, count, onEdit }: {
 }) {
   const totals = useMemo(() => habitTotals(habit, range, today, count), [habit, range, today, count]);
   const series = useMemo(() => countSeries(habit, range, count), [habit, range, count]);
-  const cells = useMemo(() => dayCells(habit, range, today, count), [habit, range, today, count]);
+  // Up to today: days still ahead aren't drawn, so the squares fill the row edge to edge
+  const cells = useMemo(() => dayCells(habit, range, today, count).filter(c => c !== 'ahead'), [habit, range, today, count]);
   const streak = streakWeeks(habit, today, count);
   return (
     <Panel id={`habit-history-${habit.id}`} aria-label={`${habit.name} over time`}>
@@ -412,20 +422,17 @@ function HabitHistory({ habit, goal, range, today, count, onEdit }: {
         <LinkBtn type="button" onClick={onEdit}>Edit habit</LinkBtn>
       </PanelHead>
       <Sum>
-        <Figures>
+        <HabitFigures>
           <span><strong>{totals.times}</strong>{totals.times === 1 ? 'time' : 'times'}</span>
           <span><strong>{totals.days}</strong>{totals.days === 1 ? 'day' : 'days'}</span>
           <span><strong>{totals.weeksMet}</strong>of {plural(totals.weeks, 'week', 'weeks')} met</span>
           <span><strong>{streak}</strong>week streak</span>
-        </Figures>
+        </HabitFigures>
         <Dates>{rangeLabel(range)}</Dates>
       </Sum>
       <CountBars labels={series.labels} values={series.values} target={series.target}
         ariaLabel={`${habit.name}: times done each ${series.unit}, ${rangeLabel(range)}`}
         unitLabel={v => plural(v, 'time', 'times')} />
-      <Note>
-        Each bar is a {series.unit}.{series.target !== undefined ? ` The dashed line is the target of ${series.target} a ${series.unit}.` : ''}
-      </Note>
       {cells.length <= 190 && (<>
         <SquaresHead>
           <span>Each square is a day</span>

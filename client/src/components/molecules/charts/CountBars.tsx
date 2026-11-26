@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 
 /* Quiet bar chart in the reports style (TrendChart's sibling): faint gridlines
-   over a firmer baseline, 0 / half / max ticks, muted labels, one bar per
+   over a firmer baseline, 0 / half / max ticks (the figures over their lines at the left, none for 0), muted labels, one bar per
    period in its colour and an optional dashed grey line at the target. A bar
    that reaches the target is the full colour, one short of it is paler. Pure
    SVG, every colour a CSS value. Props only. */
@@ -20,7 +20,10 @@ interface CountBarsProps {
 
 const W = 900;
 const H = 230;
-const PAD = { l: 44, r: 8, t: 12, b: 36 };
+/* Edge to edge: the plot runs the chart's full width, so it lines up with the
+   text above and below it; the tick figures sit just above their gridlines at
+   the left (room at the top for the highest one) */
+const PAD = { l: 0, r: 0, t: 22, b: 36 };
 
 const Svg = styled.svg`
   display: block;
@@ -61,7 +64,7 @@ export function CountBars({ labels, values, target, color = 'var(--color-accent-
         <g key={t}>
           <line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)}
             stroke={t === 0 ? 'var(--border-card)' : 'var(--border-subtle)'} strokeWidth={t === 0 ? 1.5 : 1} />
-          <text x={PAD.l - 10} y={y(t) + 4} textAnchor="end">{Number.isInteger(t) ? t : t.toFixed(1)}</text>
+          {t > 0 && <text x={PAD.l} y={y(t) - 6} textAnchor="start">{Number.isInteger(t) ? t : t.toFixed(1)}</text>}
         </g>
       ))}
       {values.map((v, i) => v > 0 && (

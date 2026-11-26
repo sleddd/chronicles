@@ -1,4 +1,5 @@
 import { useSealedDraft } from '../hooks/useSealedDraft.js';
+import { moodSummary } from '../utils/moodFields.js';
 import { useAiIsOn, useAiPrivacy } from '../hooks/useAiPrivacy.js';
 import { AI_HIDDEN_META, loadAiPrivacy, reconcileAfterLoad, sealedCopyStored } from '../services/aiPrivacy.js';
 import { showFlash } from '../services/flashNotice.js';
@@ -415,9 +416,8 @@ export function JournalView() {
     if (!hasText) {
       const w = (customFields.waterGlasses as number) || 0;
       const g = (customFields.waterGoal as number) || 8;
-      const m = (customFields.moodScore as number) || 0;
       const s = (customFields.sleepHours as number) || 0;
-      const parts = [w > 0 ? `${w}/${g} glasses` : '', m > 0 ? `Mood ${m}/5` : '', s > 0 ? `${s}h sleep` : ''].filter(Boolean);
+      const parts = [w > 0 ? `${w}/${g} glasses` : '', moodSummary(customFields), s > 0 ? `${s}h sleep` : ''].filter(Boolean);
       finalContent = `<p>${parts.join(' · ') || 'Wellness check-in'}</p>`;
     }
     try {

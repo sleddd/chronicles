@@ -348,6 +348,8 @@ export interface WellnessFieldValues {
   waterGlasses: number;
   waterGoal: number;   // default 8
   moodScore: number;   // 1–5, 0 = unset
+  /** A mood beside the scale ('calm' | 'stressed' | 'sick'), '' = none — utils/moodFields */
+  moodWord?: string;
   sleepHours: number;  // 0–12, 0.5 increments, 0 = unset
   sleepQuality: number; // 1–5, 0 = unset — "How rested did you feel when you woke up?"
   periodToday?: boolean;

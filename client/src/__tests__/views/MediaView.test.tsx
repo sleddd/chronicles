@@ -51,10 +51,10 @@ describe('MediaView', () => {
     expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'title' } });
     expect(screen.getAllByRole('button', { name: /^Open Title/ })).toHaveLength(24);
-    // The type chips narrow the grid; the list layout shows the same items as rows
-    fireEvent.click(screen.getByRole('button', { name: 'Movies' }));
+    // The Type picker narrows the grid; the list layout shows the same items as rows
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'movie' } });
     expect(screen.getByText('Nothing matches those filters.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'List' }));
     expect(screen.queryAllByRole('button', { name: /^Open Title/ })).toHaveLength(0);
     expect(screen.getAllByText(/^Title \d+$/)).toHaveLength(24);

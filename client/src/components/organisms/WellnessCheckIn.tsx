@@ -9,6 +9,7 @@ import { useUIStore } from '../../stores/uiStore.js';
 import { entries as entriesApi, topics as topicsApi } from '../../services/api.js';
 import { toDateStr } from '../../utils/dateUtils.js';
 import { predictNextPeriod } from '../../utils/cyclePrediction.js';
+import { moodFields, moodOf } from '../../utils/moodFields.js';
 
 type Flow = FlowIntensity;
 
@@ -59,7 +60,7 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
   const water = stored ? (Number(stored.waterGlasses) || 0) : pendingWater;
   const sleep = stored ? (Number(stored.sleepHours) || 0) : pendingSleep;
   const flow = stored ? ((stored.flowIntensity as Flow) || '') : pendingFlow;
-  const mood = stored ? (Number(stored.moodScore) || 0) : pendingMood;
+  const mood = stored ? moodOf(stored) : pendingMood;
   // The rest of the daily inventory ("Your day")
   const day: DayInventoryValues = stored
     ? {
@@ -135,7 +136,7 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
       _widgetType: 'wellness-checkin',
       _customFields: {
         sleepQuality: 0, ...prevCf, ...extra,
-        date: today, waterGlasses: w, waterGoal: WATER_GOAL, moodScore: m, sleepHours: s,
+        date: today, waterGlasses: w, waterGoal: WATER_GOAL, ...moodFields(m), sleepHours: s,
         periodToday: f !== '', flowIntensity: f,
       },
     };
@@ -195,7 +196,7 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
   };
 
   const setMood = (v: number) => {
-    if (entry) optimistic({ moodScore: v }); else setPendingMood(v);
+    if (entry) optimistic(moodFields(v)); else setPendingMood(v);
     scheduleSave({ mood: v });
   };
 

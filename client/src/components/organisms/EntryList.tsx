@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { moodSummary } from '../../utils/moodFields.js';
 import { memo, useMemo, useCallback, useEffect, useState } from 'react';
 import { useUIStore } from '../../stores/uiStore.js';
 import { useEntriesStore } from '../../stores/entriesStore.js';
@@ -311,9 +312,8 @@ export const EntryList = memo(function EntryList({ onToggleBookmark }: EntryList
                 if ((meta._widgetType as string) === 'wellness-checkin') {
                   const w = (customFields.waterGlasses as number) || 0;
                   const g = (customFields.waterGoal as number) || 8;
-                  const m = (customFields.moodScore as number) || 0;
                   const s = (customFields.sleepHours as number) || 0;
-                  const parts = [w > 0 ? `${w}/${g} glasses` : '', m > 0 ? `Mood ${m}/5` : '', s > 0 ? `${s}h sleep` : ''].filter(Boolean);
+                  const parts = [w > 0 ? `${w}/${g} glasses` : '', moodSummary(customFields), s > 0 ? `${s}h sleep` : ''].filter(Boolean);
                   previewText = parts.join(' · ') || 'Wellness check-in';
                 } else if (builtinEntryName(customFields)) {
                   previewText = builtinEntryName(customFields);

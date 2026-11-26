@@ -48,6 +48,8 @@ const Row = styled.div<{ $plain?: boolean }>`
   font-family: var(--font-sans);
   font-size: ${({ $plain }) => ($plain ? '15px' : '16px')};
   color: var(--text-secondary);
+  /* The habit circles a touch smaller than the standard 18px checkbox */
+  .ch-check__box, .ch-check__box svg { width: 14px; height: 14px; }
 `;
 
 const Name = styled.button<{ $done: boolean }>`

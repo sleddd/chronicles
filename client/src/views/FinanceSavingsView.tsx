@@ -61,15 +61,16 @@ const CardHead = styled.div`
 const Balance = styled.div`
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 6px;
   margin: 24px 0 20px;
-  font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 300;
-  line-height: 1;
+  /* "$120 of $500" in one size: the card's text size, the amount a shade firmer than "of …" */
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.4;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
-  small { font-family: var(--font-sans); font-size: 14px; color: var(--text-muted); }
+  small { font-size: inherit; color: var(--text-muted); }
 `;
 
 const Buttons = styled.div`

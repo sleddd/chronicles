@@ -1,6 +1,7 @@
 import { WellnessPanel, WATER_GOAL, type FlowIntensity } from '../WellnessPanel.js';
 import { DayInventory } from '../DayInventory.js';
 import type { WellnessFieldValues } from '../../../types/fields.js';
+import { moodFields, moodOf } from '../../../utils/moodFields.js';
 export type { WellnessFieldValues } from '../../../types/fields.js';
 
 /* Wellness check-in fields in the journal editor and Quick entry — the same
@@ -27,11 +28,11 @@ export function WellnessFields({ values, onChange, cycleTrackingEnabled, onAutoS
         water={values.waterGlasses || 0}
         waterGoal={values.waterGoal || WATER_GOAL}
         sleep={values.sleepHours || 0}
-        mood={values.moodScore || 0}
+        mood={moodOf(values)}
         flow={(values.flowIntensity || '') as FlowIntensity}
         onWater={v => change({ ...values, waterGlasses: v })}
         onSleep={v => change({ ...values, sleepHours: v })}
-        onMood={v => change({ ...values, moodScore: v })}
+        onMood={v => change({ ...values, ...moodFields(v) })}
         onFlow={f => change({ ...values, flowIntensity: f, periodToday: f !== '' })}
         showCycle={!!cycleTrackingEnabled}
         row

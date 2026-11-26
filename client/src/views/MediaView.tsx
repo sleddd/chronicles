@@ -61,7 +61,8 @@ function loadSaved(): Saved {
     return {
       type: MEDIA_TYPES.some(t => t.value === v.type) ? v.type as MediaType : '',
       shelf: SHELVES.some(s => s.value === v.shelf) ? v.shelf as MediaShelf : '',
-      minRating: typeof v.minRating === 'number' ? v.minRating : 0,
+      // The rating filter is gone (rating is a sort now): a saved one never hides anything
+      minRating: 0,
       sort: MEDIA_SORTS.some(s => s.value === v.sort) ? v.sort as MediaSort : 'newest',
       // The chosen tag is never remembered: a tag is private (it names what the
       // person is reading or watching) and this record outlives the session.

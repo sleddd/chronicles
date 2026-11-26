@@ -1,21 +1,19 @@
 import type { ReactNode } from 'react';
 import styled from 'styled-components';
 import { Icon } from '../atoms/core/Icon.jsx';
-import { Chip, Chips } from './fields/formKit.js';
 import { glassControl } from '../../styles/wallpaper.js';
 import { NAV_COMPACT } from '../../styles/breakpoints.js';
 import {
-  MEDIA_SORTS, SHELVES, shelfFilterLabel, formatRating,
+  MEDIA_SORTS, SHELVES, shelfFilterLabel,
   type MediaShelf, type MediaSort, type MediaType,
 } from '../../utils/media.js';
 
 /* The media journal's tool row, shared by the owner's page and a public
    shelf: one outlined box holding the search (a filled field), then the Shelf
-   / Rating / Sort choices as bare pickers split by rules — "All shelves ⌄" —
-   and, on the owner's page, the grid | list switch at its end (`aside`); under
-   the box the types as a row of chips (All, Books, Movies, TV shows, Music).
-   On phones the search takes the box's first row, the pickers the second, and
-   the chips scroll sideways. Props only — the pages keep the state (and the
+   / Type / Tag / Sort choices as bare pickers split by rules — "All shelves ⌄",
+   "All types ⌄" (rating is a sort, Highest rated, not a filter) — and, on the
+   owner's page, the grid | list switch at its end (`aside`). On phones the
+   search takes the box's first row and the pickers the second. Props only — the pages keep the state (and the
    public page sends it to the server). */
 
 export interface MediaFilters {
@@ -33,7 +31,6 @@ const TYPE_CHIPS: { value: MediaType; label: string }[] = [
   { value: 'book', label: 'Books' }, { value: 'movie', label: 'Movies' }, { value: 'tv', label: 'TV shows' }, { value: 'music', label: 'Music' },
 ];
 const SORT_WORDS: Record<MediaSort, string> = { newest: 'Newest first', rating: 'Highest rated', title: 'Title A–Z', type: 'By type', tag: 'By tag' };
-const RATINGS = [5, 4.5, 4, 3.5, 3, 2];
 
 export const MediaToolBox = styled.div<{ $phone: boolean }>`
   /* Above the shelf under it, so a menu opened from it (the public shelf's ⋯) sits over the covers
@@ -202,29 +199,6 @@ const ViewBtn = styled.button<{ $active: boolean }>`
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
-const TypeRow = styled(Chips)<{ $phone: boolean; $roomy?: boolean }>`
-  margin-top: ${({ $roomy }) => ($roomy ? 32 : 24)}px;
-  ${NAV_COMPACT} { margin-top: 34px; }
-  ${({ $phone }) => ($phone ? 'flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-right: -16px; padding-right: 16px; &::-webkit-scrollbar { display: none; }' : '')}
-  ${Chip} { height: 36px; padding: 0 18px; flex: none; }
-  /* The forms' chips are faded on purpose; here they sit on the page (or the
-     photo), so the unchosen ones keep a clear outline */
-  ${Chip}[aria-pressed='false'] { border-color: var(--border-pill, var(--control-border)); }
-  html[data-wallpaper] & ${Chip}[aria-pressed='false'] { border-color: rgba(255, 255, 255, 0.55); }
-  html[data-wallpaper][data-theme='dark'] & ${Chip}[aria-pressed='false'] { border-color: rgba(255, 255, 255, 0.24); }
-  ${Chip}[aria-pressed='false']:hover { border-color: var(--text-muted); }
-  /* Light, on the photo: lightly frosted (see-through, never a full fill) with full-strength
-     text and a firm outline, so the chips don't disappear against the picture */
-  html[data-wallpaper][data-theme='light'] & ${Chip} {
-    background: rgba(255, 255, 255, 0.22);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    color: var(--text-primary);
-  }
-  html[data-wallpaper][data-theme='light'] & ${Chip}[aria-pressed='false'] { border-color: var(--border-pill, var(--control-border)); }
-  html[data-wallpaper][data-theme='light'] & ${Chip}[aria-pressed='true'] { color: var(--color-accent-soft); }
-`;
-
 export type MediaLayout = 'grid' | 'list';
 
 /** The grid | list switch for the owner's page, passed to the bar as its `aside` */
@@ -242,7 +216,7 @@ export function MediaViewSwitch({ value, onChange }: { value: MediaLayout; onCha
 }
 
 interface MediaFilterBarProps {
-  /** A little more room above the type chips (the owner's page) */
+  /** Kept for callers; the type chips it spaced are gone (Type is a picker now) */
   roomy?: boolean;
   query: string;
   onQuery: (q: string) => void;
@@ -255,7 +229,7 @@ interface MediaFilterBarProps {
   tags?: string[];
 }
 
-export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, searchPlaceholder = 'Search titles, creators, genres', aside, tags, roomy }: MediaFilterBarProps) {
+export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, searchPlaceholder = 'Search titles, creators, genres', aside, tags }: MediaFilterBarProps) {
   const set = (patch: Partial<MediaFilters>) => onFilters({ ...filters, ...patch });
   const chevron = <Icon name="chevron-down" size={14} strokeWidth={2} />;
   return (
@@ -276,11 +250,12 @@ export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, sear
               {SHELVES.map(s => <option key={s.value} value={s.value}>{shelfFilterLabel(s.value)}</option>)}
             </select>
           </Pick>
-          <Pick $set={filters.minRating > 0} $phone={phone}>
-            <span>{filters.minRating ? `${formatRating(filters.minRating)}+ stars` : 'Any rating'}</span>{chevron}
-            <select aria-label="Rating" value={filters.minRating} onChange={e => set({ minRating: Number(e.target.value) })}>
-              <option value={0}>Any rating</option>
-              {RATINGS.map(r => <option key={r} value={r}>{formatRating(r)}+ stars</option>)}
+          {/* Type in a picker beside Shelf (no row of type chips); rating is a sort, Highest rated */}
+          <Pick $set={!!filters.type} $phone={phone}>
+            <span>{TYPE_CHIPS.find(t => t.value === filters.type)?.label ?? 'All types'}</span>{chevron}
+            <select aria-label="Type" value={filters.type} onChange={e => set({ type: e.target.value as MediaType | '', minRating: 0 })}>
+              <option value="">All types</option>
+              {TYPE_CHIPS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </Pick>
           {tags && tags.length > 0 && (
@@ -301,12 +276,6 @@ export function MediaFilterBar({ query, onQuery, filters, onFilters, phone, sear
           {aside && !phone && <Aside $phone={false}>{aside}</Aside>}
         </Picks>
       </MediaToolBox>
-      <TypeRow $phone={phone} $roomy={roomy} role="group" aria-label="Type">
-        <Chip type="button" $active={!filters.type} aria-pressed={!filters.type} onClick={() => set({ type: '' })}>All</Chip>
-        {TYPE_CHIPS.map(t => (
-          <Chip key={t.value} type="button" $active={filters.type === t.value} aria-pressed={filters.type === t.value} onClick={() => set({ type: t.value })}>{t.label}</Chip>
-        ))}
-      </TypeRow>
     </>
   );
 }

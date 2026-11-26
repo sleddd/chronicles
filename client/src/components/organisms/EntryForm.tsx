@@ -231,10 +231,12 @@ const EditorArea = styled.div<{ $hidden?: boolean; $quick?: boolean; $titled?: b
     }
     .tiptap > :first-child { margin-bottom: 0.5em; }
   ` : '')}
-  /* A journal entry in the journal: its first line is its title — larger, with a
-     hairline under it — and a little room between its paragraphs */
+  /* A journal entry (the journal and the Quick entry): its first line is its title —
+     larger, with a hairline under it — once something is written; until then the
+     "Enter title/text..." placeholder is the standard text size. A little room
+     between its paragraphs */
   ${({ $journalTitle }) => ($journalTitle ? `
-    .tiptap > :first-child, .tiptap > p.is-editor-empty:first-child::before {
+    .tiptap > :first-child:not(.is-editor-empty) {
       font-family: var(--font-display);
       font-size: 28px;
       font-weight: 300;
@@ -384,9 +386,11 @@ const TaskHead = styled.div`
     border-bottom: 1px solid var(--border-card);
     pointer-events: none;
   }
+  /* The journal's rule in the same tone as the hairline above its Save row (JournalFoot) */
+  &[data-journal]::after { border-bottom-color: var(--border-default); }
   /* The Quick entry: the same rule under the picker row, a little room under it */
   [data-quick-open] > & { margin-bottom: 10px; }
-  [data-quick-open] > &::after { border-bottom-color: var(--border-default); } /* firm enough to see on the cream card */
+  [data-quick-open] > &::after { border-bottom-color: var(--border-default); } /* the Save row's hairline tone */
   /* Full width: room between the topic picker / close row and the entry under it */
   @media (min-width: 1025px) { &[data-full] { margin-bottom: 32px; } }
   /* Phones / tablets: snug under the "Entry list" row above it */
@@ -722,15 +726,9 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
   && ${EditorArea} .tiptap { padding-bottom: 0; }
   &&[data-tools-beside] ${EditorArea} { padding-right: 150px; }
   /* The Quick entry: the question is the card's first line, the writing straight under it,
-     its "Enter title/text..." in the question's thin italic Work Sans, a step quieter */
+     its "Enter title/text..." the standard text size (the title grows once it's written) */
   && > [data-card-prompt] ~ ${EditorArea} { padding-top: 20px; }
   &&&[data-card-prompt-centered]:not(:has(.tiptap:focus)) ${EditorArea} .tiptap p.is-editor-empty:first-child::before { opacity: 0; }
-  &&& > [data-card-prompt] ~ ${EditorArea} .tiptap p.is-editor-empty:first-child::before {
-    font-family: var(--font-display);
-    font-size: 19px;
-    font-weight: 300;
-    font-style: italic;
-  }
   @container entrycard (max-width: 600px) {
     && ${EditorArea} { padding: 22px 20px 18px; }
     &&[data-tools-beside] ${EditorArea} { padding-right: 124px; }
@@ -790,7 +788,8 @@ const CardFoot = styled.div`
   justify-content: space-between;
   gap: 10px 12px;
   padding: 14px 24px 14px ${CARD_X};
-  border-top: 1px solid var(--border-subtle);
+  /* The same tone as the rule under the topic picker row */
+  border-top: 1px solid var(--border-default);
   background: var(--bg-app);
   & > :last-child { margin-left: auto; }
   @media (max-width: 640px) { padding: 12px 20px; }
@@ -879,7 +878,7 @@ const QuickFoot = styled(CardFoot)`
   border-radius: 0 0 14px 14px;
   /* The card's own colour (the same glass as the rest of it), ruled off from the fields by a hairline */
   background: transparent;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-default);
   margin-top: 14px;
   /* Save entry: an accent outline with accent text once there's something to save (a quiet grey
      outline until then), filling in as a solid accent pill with dark text on hover and while pressed */
@@ -961,7 +960,8 @@ const JournalHead = styled.div<{ $expanded?: boolean; $roomy?: boolean }>`
     left: 36px;
     right: 36px;
     bottom: 0;
-    border-bottom: 1px solid var(--border-card);
+    /* The same tone as the hairline above the Save row */
+    border-bottom: 1px solid var(--border-default);
   }
   ${NAV_COMPACT} { padding-right: 24px; padding-top: 18px; }
   @media (max-width: 640px) {
@@ -1054,8 +1054,7 @@ const QuickCardPrompt = styled(PromptLine)`
     left: ${CARD_X};
     right: ${CARD_X};
     bottom: 0;
-    /* The divider tone, a step firmer than the card-edge colour: on the cream card in light
-       the card-edge colour (#eae5e1 on #f9f4ee) was too faint to see */
+    /* The same tone as the hairline above the Save row (QuickFoot / CardFoot) */
     border-bottom: 1px solid var(--border-default);
     pointer-events: none;
   }
@@ -1833,7 +1832,7 @@ export function EntryForm({
       ) : textOnly ? (
         // Only text: no label or box, the tools go to the foot
         <>
-          <PlainText><EditorArea $quick={quick} $roomy={quick} $journalTitle={!quick && isJournalTopic}>{editorEl}</EditorArea></PlainText>
+          <PlainText><EditorArea $quick={quick} $roomy={quick} $journalTitle={isJournalTopic}>{editorEl}</EditorArea></PlainText>
           {tagsOn && <TagsLine><span>Tags</span>{tagsField}</TagsLine>}
         </>
       ) : (
@@ -1860,7 +1859,7 @@ export function EntryForm({
           </TitleBox>
         </TextRow>
       )) : (
-        <EditorArea $hidden={editorHidden} $quick={quick} $titled={!!nameTarget} $journalTitle={!quick && !nameTarget && isJournalTopic} $roomy={quick && !customType && userFieldDefs.length === 0}>
+        <EditorArea $hidden={editorHidden} $quick={quick} $titled={!!nameTarget} $journalTitle={!nameTarget && isJournalTopic} $roomy={quick && !customType && userFieldDefs.length === 0}>
           {editorEl}
         </EditorArea>
       )}
