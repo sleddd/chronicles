@@ -32,6 +32,7 @@ const Top = styled.section`
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   @media (max-width: 640px) { padding: 16px; }
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card-firm); } /* light: no fill on the finance cards, just their edge, as dark as the dashboard widgets' */
 `;
 
 const BreakdownCard = styled.section`
@@ -41,6 +42,7 @@ const BreakdownCard = styled.section`
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   @media (max-width: 640px) { padding: 16px; }
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card-firm); } /* light: no fill on the finance cards, just their edge, as dark as the dashboard widgets' */
 `;
 
 const Section = styled.section`
@@ -54,6 +56,7 @@ const CategoryCard = styled.section`
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   @media (max-width: 640px) { padding: 16px; }
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card-firm); } /* light: no fill on the finance cards, just their edge, as dark as the dashboard widgets' */
 `;
 
 const COLS = 'minmax(0, 1.6fr) repeat(4, minmax(0, 1fr))';
@@ -70,6 +73,7 @@ const Grid = styled.div`
   font-variant-numeric: tabular-nums;
   & > :not(:first-child) { text-align: right; }
   & + & { border-top: 1px solid ${SHEET_RULE}; }
+  html[data-theme='light'] && + && { border-top-color: #e6e0da; } /* light: the line between rows a little darker */
   @media (max-width: 640px) {
     grid-template-columns: minmax(0, 1fr) 90px 90px;
     padding: 12px 16px;
@@ -122,6 +126,7 @@ const CatRow = styled.div<{ $archived?: boolean }>`
   font-size: 15px;
   color: ${({ $archived }) => ($archived ? 'var(--text-muted)' : 'var(--text-secondary)')};
   & + & { border-top: 1px solid ${SHEET_RULE}; }
+  html[data-theme='light'] && + && { border-top-color: #e6e0da; } /* light: the line between rows a little darker */
 `;
 
 const Move = styled.div`

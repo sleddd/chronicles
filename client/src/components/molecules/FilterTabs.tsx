@@ -11,7 +11,7 @@ const Row = styled.div<{ $flush?: boolean; $bordered?: boolean }>`
   max-width: 100%;
   overflow-x: auto;
   padding: 4px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 10px;
   ${glassControl}
 `;

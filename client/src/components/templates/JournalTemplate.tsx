@@ -122,7 +122,7 @@ const StyledSidePanel = styled.div<{ $hiddenMobile?: boolean; $isDark?: boolean 
   --list-bg: color-mix(in srgb, var(--bg-app) 80%, #000);
   /* Light: a cool grey in the nav rail's own hue, a step lighter than it (a plain
      darkening of the page read warm beside the rail) */
-  html[data-theme='light'] & { --list-bg: #f4eee9; } /* a little darker than the nav rail (#faf5f0): halfway to the tile colour (#ede6e2) */
+  html[data-theme='light'] & { --list-bg: #f5f1ed; } /* a little darker than the nav rail (#faf5f0): halfway to the tile colour (#eee9e3) */
   /* Dark: never a black slab — a touch lighter than the nav rail and page, a step
      under the editor, so list, rail and editor blend */
   html[data-theme='dark'] & { --list-bg: #15171d; }

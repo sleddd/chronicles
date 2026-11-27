@@ -78,6 +78,7 @@ const Dropdown = styled.div`
   border-radius: ${({ theme }) => theme.borderRadius.md}px;
   box-shadow: ${({ theme }) => theme.shadow.lg};
   animation: ${dropdownSlide} 0.15s ease-out;
+  html[data-theme='light'] & { background: var(--bg-menu); }
   transform-origin: top center;
 `;
 
@@ -87,6 +88,7 @@ const SearchWrapper = styled.div`
   position: sticky;
   top: 0;
   background: var(--paper-surface, ${({ theme }) => theme.colors.surface});
+  html[data-theme='light'] & { background: var(--bg-menu); }
 
   /* Search field: no box/border/fill — just icon + text above the bottom divider. */
   & > div {

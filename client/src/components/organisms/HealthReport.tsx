@@ -56,6 +56,8 @@ export const Panel = styled.section`
   background: var(--bg-panel);
   border-radius: 12px;
   @media (max-width: 480px) { padding: 18px 16px; }
+  /* Light: no fill, just the Health widgets' edge (a ring, so nothing moves) */
+  html[data-theme='light'] & { background: transparent; box-shadow: 0 0 0 1px var(--edge-card); }
 `;
 
 const PanelHead = styled.div`
@@ -149,7 +151,7 @@ const Pop = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--bg-tile);
+  background: var(--bg-menu, var(--bg-tile));
   border: 1px solid var(--border-pop);
   border-radius: 10px;
   box-shadow: var(--shadow-lg);

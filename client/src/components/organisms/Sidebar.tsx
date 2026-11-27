@@ -232,7 +232,7 @@ const ViewList = styled.ul`
   background: color-mix(in srgb, var(--bg-rail) 82%, #fff);
   html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 98%, #c8d4ff); } /* a hair lighter than the rail, with its cool cast — never bright */
   /* Light: the views sit a little lighter than the current page's row, both shades of the
-     tile colour (#ede6e2) worked out from the menu's own colour */
+     tile colour (#eee9e3) worked out from the menu's own colour */
   html[data-theme='light'] & { background: color-mix(in srgb, var(--bg-rail) 75%, var(--bg-tile)); }
   /* Lines only between rows: none above the first or below the last, so it sits right against
      the section's row and the next item */
@@ -306,7 +306,7 @@ const Flyout = styled.div`
   z-index: 1200;
   min-width: 200px;
   padding: 6px;
-  background: var(--bg-tile);
+  background: var(--bg-menu, var(--bg-tile));
   border: 1px solid var(--border-pop);
   border-radius: 10px;
   box-shadow: var(--shadow-lg);

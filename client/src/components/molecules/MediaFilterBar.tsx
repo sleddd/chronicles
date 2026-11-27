@@ -44,7 +44,7 @@ export const MediaToolBox = styled.div<{ $phone: boolean }>`
   padding: 8px;
   /* The card / input outline in light (fainter ones vanished on the plain page);
      the ordinary hairline in dark */
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   html[data-theme='dark'] & { border-color: var(--border-subtle); }
   border-radius: 10px;
   ${glassControl}

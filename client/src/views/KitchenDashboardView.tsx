@@ -93,7 +93,9 @@ const Note = styled.p`
 
 /* Like the home dashboard's cards: no outline, the light even shadow instead */
 const ShadowCard = styled.div`
-  & > section { border: none; box-shadow: var(--shadow-card); }
+  & > section { border: none; box-shadow: var(--shadow-card); background: var(--bg-dash-panel, var(--bg-surface)); }
+  /* Light: no fill, on the photo too (beats glassCard's panel colour) */
+  html[data-theme='light'] & > section { background: transparent; }
   /* A little room between the card's title and the line under it (the list's name, the day) */
   && > section > p { margin-top: 14px; }
 `;

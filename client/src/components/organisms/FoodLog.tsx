@@ -189,6 +189,8 @@ const Glance = styled.div<{ $cols: number }>`
   /* stacked (and always on phones): one column — a row per nutrient */
   &[data-stacked] { grid-template-columns: minmax(0, 1fr); }
   @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
+  /* Light: no fill, just the Health widgets' edge */
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card); box-shadow: var(--shadow-soft); }
 `;
 
 const Stat = styled.div`
@@ -287,7 +289,7 @@ const DayNav = styled.div`
   gap: 4px;
   height: 40px;
   padding: 0 10px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 999px;
   /* On a background photo: smoked glass, its day and arrows white (the Menu's week pill does the same) */
   ${glassPill}
@@ -366,6 +368,8 @@ const Scroll = styled.div`
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
+  /* Light: no fill, just the Health widgets' edge */
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card); box-shadow: var(--shadow-soft); }
 `;
 
 const Table = styled.table<{ $min: number }>`
@@ -689,7 +693,7 @@ const Windows = styled.div`
   display: flex;
   gap: 2px;
   padding: 4px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 10px;
 `;
 

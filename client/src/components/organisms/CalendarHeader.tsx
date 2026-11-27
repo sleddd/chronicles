@@ -47,7 +47,7 @@ const box = `
   display: flex;
   align-items: center;
   height: 40px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 10px;
 `;
 

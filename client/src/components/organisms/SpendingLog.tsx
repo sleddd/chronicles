@@ -41,6 +41,8 @@ const AddRow = styled.form`
     & > label:nth-child(odd):not(:nth-child(1)) { border-left: 1px solid var(--border-card) !important; }
     & > :last-child { grid-column: 1 / -1; padding: 8px; display: flex; justify-content: flex-end; }
   }
+  /* Light: the finance cards' firmer edge */
+  html[data-theme='light'] & { border-color: var(--edge-card-firm); }
 `;
 
 const Bare = styled.input`
@@ -112,6 +114,7 @@ const Line = styled.div`
   padding: 12px 20px;
   font-family: var(--font-sans);
   & + & { border-top: 1px solid ${SHEET_RULE}; }
+  html[data-theme='light'] && + && { border-top-color: #e6e0da; } /* light: the line between rows a little darker */
 `;
 
 const LineName = styled.div`

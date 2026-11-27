@@ -561,6 +561,8 @@ const Quad = styled.div`
   @container (max-width: 360px) { grid-template-columns: minmax(0, 1fr); & > * { padding: 20px; } }
   /* Cycle tracking off: Mood takes the whole second row */
   &[data-no-cycle] > :nth-child(3) { grid-column: 1 / -1; }
+  /* Light: no fill, just the edge (--shadow-card's ring) */
+  html[data-theme='light'] & { background: transparent; }
 `;
 
 /* Strip (home dashboard): Water | Sleep | Mood | Cycle as four equal cells
@@ -628,6 +630,8 @@ const Strip = styled.div<{ $flat?: boolean }>`
   /* Cycle tracking off: Water | Sleep | Mood across */
   &[data-no-cycle] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @container (max-width: 860px) { &[data-no-cycle] { grid-template-columns: repeat(2, minmax(0, 1fr)); } &[data-no-cycle] > :nth-child(3) { grid-column: 1 / -1; } }
+  /* Light: no fill, just the edge (--shadow-card's ring) */
+  html[data-theme='light'] & { background: transparent; }
 `;
 
 interface MeterProps {

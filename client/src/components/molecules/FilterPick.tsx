@@ -17,13 +17,16 @@ export const PickPill = styled.label<{ $set: boolean; $grow?: boolean }>`
   max-width: 100%;
   ${({ $grow }) => ($grow ? 'width: 100%; min-width: 0;' : '')}
   padding: 0 14px 0 18px;
-  border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-card)')};
+  border: 1px solid ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-control, var(--border-card))')};
   border-radius: 999px;
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text-secondary);
   cursor: pointer;
   &:hover { border-color: ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-strong)')}; }
+  /* Light: on the photo too (after glassControl), the set one keeps its accent outline; hover a step darker */
+  html[data-theme='light'] && { border-color: ${({ $set }) => ($set ? 'var(--color-accent-line)' : 'var(--border-control)')}; }
+  html[data-theme='light'] &&:hover { border-color: ${({ $set }) => ($set ? 'var(--color-accent-line)' : '#b8b1aa')}; }
   &:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   b {
     max-width: 200px;

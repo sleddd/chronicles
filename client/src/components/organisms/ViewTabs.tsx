@@ -145,7 +145,7 @@ const Menu = styled.div`
   padding: 6px;
   border: 1px solid var(--border-pop);
   border-radius: 10px;
-  background: var(--bg-tile);
+  background: var(--bg-menu, var(--bg-tile));
   box-shadow: var(--shadow-lg);
 `;
 

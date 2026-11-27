@@ -53,6 +53,10 @@ const BalanceCard = styled.section`
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   @media (max-width: 640px) { padding: 16px; }
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card-firm); } /* light: no fill on the finance cards, just their edge, as dark as the dashboard widgets' */
+  html[data-theme='light'] & { border-top: 1px solid var(--edge-card-firm) !important; }
+  /* Light: filled with the page's own colour (solid), so the photo never shows through it */
+  html[data-theme='light'] && { background: var(--bg-app); }
 `;
 
 export function BalanceSummary({ snapshot, bills, expenses, onSet }: {

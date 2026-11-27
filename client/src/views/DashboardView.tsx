@@ -538,6 +538,8 @@ const ClockStrip = styled.section`
   .card .big { display: block; margin-top: 10px; font-family: var(--font-display); font-size: 28px; font-weight: 300; line-height: 1.1; color: var(--text-primary); font-variant-numeric: tabular-nums; }
   .card .weather { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--text-muted); }
   .card .weather > span:first-child { color: var(--color-accent); }
+  /* Light: no fill, just the edge (--shadow-card's ring) */
+  html[data-theme='light'] & { background: transparent; }
 `;
 
 /* The full-width wellness check-in, between the add row and Day at a glance */
@@ -632,6 +634,7 @@ const cardShell = css`
   border-radius: 16px;
   background: var(--bg-panel);
   ${glassCard}
+  html[data-theme='light'] & { background: transparent; }
 `;
 
 /* The widget cards have no background — no fill or shadow — just a light
@@ -743,6 +746,8 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
     /* Grip and chevron centred on the folded card's one row */
     & > button { top: 50% !important; transform: translateY(-50%); }
   ` : '')}
+  /* Light: no fill, just the edge (--shadow-card's ring) — after glassCard / $open rules */
+  html[data-theme='light'] && { background: transparent; }
 `;
 
 /* The grip to drag a card by, just left of its fold chevron */

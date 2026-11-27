@@ -108,7 +108,7 @@ const SearchBox = styled.label<{ $wide?: boolean }>`
   gap: 8px;
   height: 38px;
   padding: 0 14px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control, var(--border-default));
   border-radius: 999px;
   color: var(--text-tertiary);
   &:focus-within { border-color: var(--color-accent); }
@@ -177,7 +177,7 @@ const SortBox = styled.label`
   display: inline-flex;
   align-items: center;
   height: 38px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control, var(--border-default));
   border-radius: 999px;
   color: var(--text-tertiary);
   &:focus-within { border-color: var(--color-accent); }
@@ -294,7 +294,7 @@ const NoMatch = styled.p`
 const ViewSwitch = styled.div`
   display: inline-flex;
   padding: 3px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-control, var(--border-default));
   border-radius: 999px;
   ${glassControl}
 `;

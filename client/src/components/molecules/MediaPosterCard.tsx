@@ -51,6 +51,8 @@ const Card = styled.article`
   border-radius: var(--r-lg);
   background: var(--bg-panel);
   ${glassCard}
+  /* Light: the cards' darker edge, like the dashboard widgets */
+  html[data-theme='light'] & { border-color: var(--edge-card); box-shadow: var(--shadow-soft); }
 `;
 
 /* The cover fills the card's width, 2:3; with none, the title is written on the

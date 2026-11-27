@@ -131,6 +131,8 @@ const Card = styled.section`
   border-radius: 12px;
   background: var(--bg-panel);
   @media (max-width: 768px) { padding: 24px 20px; }
+  /* Light: no fill, just the Health widgets' edge (a ring, so nothing moves) */
+  html[data-theme='light'] & { background: transparent; box-shadow: 0 0 0 1px var(--edge-card); }
 `;
 
 const CardHead = styled.div`
@@ -262,6 +264,8 @@ const TableWrap = styled.div`
   border: 1px solid var(--border-card);
   border-radius: 10px;
   background: var(--bg-panel);
+  /* Light: no fill, just the Health widgets' edge */
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card); }
 `;
 
 const WeekTable = styled.table`
@@ -362,6 +366,8 @@ const EmptyCard = styled.div`
   color: var(--text-muted);
   h2 { margin: 0 0 10px; font-family: var(--font-display); font-size: 26px; font-weight: 200; color: var(--text-primary); }
   p { margin: 0 0 20px; font-size: 15px; line-height: 1.5; max-width: 620px; }
+  /* Light: no fill, just the Health widgets' edge (a ring, so nothing moves) */
+  html[data-theme='light'] & { background: transparent; box-shadow: 0 0 0 1px var(--edge-card); }
 `;
 
 const shortDate = (d: string, year = false) =>

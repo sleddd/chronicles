@@ -139,19 +139,22 @@ function HomeRoute() {
    (tertiary ≈ 6:1, disabled/placeholder ≈ 3.7:1). */
 const LIGHT_CSS_VARS: Record<string, string> = {
   /* Light theme colours measured from the user's mockups (2026-11-26; colours
-     only): page #fef9f5, rail #faf5f0, cards #f9f4ee, chips / tiles #ede6e2,
-     the chosen item #ede6e2, card edges #eae5e1 / #ece7e1, row rules #f4efe9,
+     only): page #fef9f5, rail #faf5f0, cards #f9f4ee, chips / tiles #eee9e3,
+     the chosen item #eee9e3, card edges #eae5e1 / #ece7e1, row rules #f4efe9,
      ink #231e1a, body #575350, labels / icons #5c5753, times #837e7b,
      checkbox outlines #aca9a4. */
   /* DS semantic surfaces */
   '--bg-app':            '#fef9f5',
   '--bg-surface':        '#f9f4ee',
   '--bg-panel':          '#f9f4ee', /* report panels (Health → Reports) */
+  '--border-control':    '#cdc6bf', /* outlined controls: filter pills, switches, search boxes, month pills (dark: unset, each keeps its own) */
+  '--bg-menu':           '#fef8f2', /* floating drop-down menus (⋯ menus, pickers, type-aheads) */
+  '--bg-dash-panel':     'transparent', /* the widget panels on the dashboards other than home (Health, Kitchen, Planning's Vision): no fill, just their edge */
   '--bg-elevated':       '#fef9f5',
-  '--bg-sunken':         '#ede6e2',
+  '--bg-sunken':         '#eee9e3',
   '--bg-hover':          '#f4efe9',
-  '--bg-active':         '#ede6e2',
-  '--bg-tab-active':     '#ede6e2',  /* the chosen sub-tab / segmented option — lighter than --bg-active so its text reads */
+  '--bg-active':         '#eee9e3',
+  '--bg-tab-active':     '#eee9e3',  /* the chosen sub-tab / segmented option — lighter than --bg-active so its text reads */
   '--bg-inverse':        '#1b1d26',
   /* DS text */
   '--text-primary':      '#231e1a',
@@ -167,9 +170,9 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--bg-row-hover':      '#f4efe9',  /* a row lifting inside a card on hover */
   '--text-soft':         '#575350',  /* toolbar text buttons, chevrons */
   '--text-faint':        '#aca9a4',  /* quiet + marks in empty slots */
-  '--bg-tile':           '#ede6e2',  /* a filled tile on the canvas (menu meals) */
-  '--bg-lane':           '#ede6e2',  /* planning board swim lanes */
-  '--bg-lane-over':      '#e6dfda',  /* a lane while a card is dragged over it: the lane's own colour (#ede6e2) a step deeper */
+  '--bg-tile':           '#eee9e3',  /* a filled tile on the canvas (menu meals) */
+  '--bg-lane':           '#eee9e3',  /* planning board swim lanes */
+  '--bg-lane-over':      '#e6e0d9',  /* a lane while a card is dragged over it: the lane's own colour (#eee9e3) a step deeper */
   '--bg-lane-card':      '#fef9f5',  /* cards sitting in a lane */
   '--bg-today-col':      '#f9f4ee',  /* today's column band */
   '--border-pop':        '#eae5e1',  /* floating menus' outline */
@@ -181,7 +184,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--border-faint':      '#f4efe9', /* the lightest hairline (topic picker) */
   '--border-pill':       '#aca9a4',  /* pills, ± buttons, round controls (light only) */
   '--focus-ring':        '#837e7b',  /* keyboard focus: a neutral grey ring, never the accent (3.4:1) */
-  '--progress-track':    '#ede6e2',  /* empty part of a progress rule or roadmap bar: the agenda's tile colour, never yellow */
+  '--progress-track':    '#eee9e3',  /* empty part of a progress rule or roadmap bar: the agenda's tile colour, never yellow */
   '--bg-control':        'transparent',  /* pills, chips, the topic picker, ± buttons: outlines only — never a fill */
   '--bg-tracker':        '#f9f4ee',  /* the wellness four-square card (light only) */
   '--border-default':    '#d9d4ce',
@@ -191,7 +194,7 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   '--bg-rail':           '#faf5f0',
   /* The open section's row: a light step from the rail toward the tile
      colour, worked out from the rail's own colour — never a fixed grey */
-  '--bg-rail-logo':      'color-mix(in srgb, var(--bg-rail) 30%, var(--bg-tile))', /* a lighter shade of the tile colour (#ede6e2): about #f1eae6 */
+  '--bg-rail-logo':      'color-mix(in srgb, var(--bg-rail) 30%, var(--bg-tile))', /* a lighter shade of the tile colour (#eee9e3): about #eee7e1 */
   '--bg-rail-active':    'var(--bg-rail-logo)', /* the current page's row: the same light shade as an open section's row */
   /* Chart series — muted, same chroma as the accent presets */
   '--chart-blue':        '#4f8fd1',
@@ -213,9 +216,9 @@ const LIGHT_CSS_VARS: Record<string, string> = {
 
   /* ── Legacy aliases → DS values ── */
   '--paper':             '#fef9f5',
-  '--paper-deep':        '#ede6e2',
+  '--paper-deep':        '#eee9e3',
   '--paper-surface':     '#f9f4ee',
-  '--paper-well':        '#ede6e2',
+  '--paper-well':        '#eee9e3',
   '--paper-hover':       '#f4efe9',
   '--ink':               '#231e1a',
   '--ink-2':             '#231e1a',
@@ -241,13 +244,19 @@ const LIGHT_CSS_VARS: Record<string, string> = {
   /* Dashboard cards' soft shadow: even on every side, never offset to one corner */
   /* …with a light edge drawn round it (a 1px ring in the card-edge colour): on
      the cream page a card set off by its shadow alone had no edge to speak of */
-  '--shadow-card':       '0 0 0 1px var(--border-card), 0 0 16px rgba(0, 0, 0, 0.055)',
+  '--edge-card':         'rgba(70, 45, 20, 0.18)', /* a card's edge: see-through, so it reads darker than whatever is behind (the page ≈ #ddd4cd, the photo too) */
+  '--edge-card-firm':    '#cfc7bf', /* the finance cards' edge: one solid colour all round, firm enough to show where a card sits on the photo */
+  '--shadow-soft':       '0 2px 8px rgba(70, 45, 20, 0.05)', /* the very slight warm shadow under widgets (light) */
+  '--shadow-card':       '0 0 0 1px var(--edge-card), var(--shadow-soft)', /* the card's edge and a very slight warm shadow */
 };
 
 const DARK_CSS_VARS: Record<string, string> = {
   '--bg-app':            '#15171d',
   '--bg-surface':        '#1a1c24',
   '--bg-panel':          '#181a22', /* cards and panels (widgets): the colour the user chose. Do not retint */
+  '--bg-dash-panel':     '#181a22', /* = --bg-panel in dark */
+  '--border-control':    '',
+  '--bg-menu':           'var(--bg-tile)', /* dark: menus keep the tile colour */
   '--bg-elevated':       '#1e2029',
   '--bg-sunken':         '#0a0b0f',
   '--bg-hover':          '#1d1f28',

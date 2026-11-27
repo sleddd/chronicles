@@ -127,7 +127,7 @@ const MoreMenu = styled.div<{ $up?: boolean }>`
   z-index: 40;
   min-width: 240px;
   padding: 6px;
-  background: var(--bg-tile);
+  background: var(--bg-menu, var(--bg-tile));
   border: 1px solid var(--border-pop);
   border-radius: 10px;
   box-shadow: var(--shadow-lg);
@@ -387,10 +387,10 @@ const TaskHead = styled.div`
     pointer-events: none;
   }
   /* The journal's rule in the same tone as the hairline above its Save row (JournalFoot) */
-  &[data-journal]::after { border-bottom-color: var(--border-default); }
+  &[data-journal]::after { border-bottom-color: var(--border-subtle); }
   /* The Quick entry: the same rule under the picker row, a little room under it */
   [data-quick-open] > & { margin-bottom: 10px; }
-  [data-quick-open] > &::after { border-bottom-color: var(--border-default); } /* the Save row's hairline tone */
+  [data-quick-open] > &::after { border-bottom-color: var(--border-subtle); } /* the field rows' line tone (above Tags) */
   /* Full width: room between the topic picker / close row and the entry under it */
   @media (min-width: 1025px) { &[data-full] { margin-bottom: 32px; } }
   /* Phones / tablets: snug under the "Entry list" row above it */
@@ -702,6 +702,8 @@ const EntryCard = styled.div<{ $quick?: boolean; $flat?: boolean }>`
     -webkit-backdrop-filter: blur(16px) saturate(1.1);
     backdrop-filter: blur(16px) saturate(1.1);
     && ${EditorArea} { --editor-surface: transparent; }
+    /* Light: the page's own colour, solid (no glass) */
+    html[data-theme='light'] && { background: var(--bg-app); -webkit-backdrop-filter: none; backdrop-filter: none; }
     /* Typing in the Quick entry never highlights the writing area: no focus outline
        in the accent (the global [tabindex]:focus-visible rule) on the editor */
     && .tiptap:focus, && .tiptap:focus-visible, && [contenteditable]:focus, && [contenteditable]:focus-visible { outline: none; box-shadow: none; }
@@ -761,6 +763,8 @@ const QuickExtraBox = styled.div`
   -webkit-backdrop-filter: blur(16px) saturate(1.1);
   backdrop-filter: blur(16px) saturate(1.1);
   box-shadow: var(--shadow-card); /* even, all the way round the card */
+  /* Light: the page's own colour, like the Quick entry card */
+  html[data-theme='light'] && { background: var(--bg-app); -webkit-backdrop-filter: none; backdrop-filter: none; }
   /* Its joined switches (Bill | Subscription, Active / Paused / Cancelled): clear on the
      glass, no frosted fill of their own */
   && [role='radiogroup'], html[data-wallpaper] && [role='radiogroup'] {
@@ -961,7 +965,7 @@ const JournalHead = styled.div<{ $expanded?: boolean; $roomy?: boolean }>`
     right: 36px;
     bottom: 0;
     /* The same tone as the hairline above the Save row */
-    border-bottom: 1px solid var(--border-default);
+    border-bottom: 1px solid var(--border-subtle);
   }
   ${NAV_COMPACT} { padding-right: 24px; padding-top: 18px; }
   @media (max-width: 640px) {
@@ -1054,8 +1058,8 @@ const QuickCardPrompt = styled(PromptLine)`
     left: ${CARD_X};
     right: ${CARD_X};
     bottom: 0;
-    /* The same tone as the hairline above the Save row (QuickFoot / CardFoot) */
-    border-bottom: 1px solid var(--border-default);
+    /* The same tone as the line above the Tags row and the other field rows */
+    border-bottom: 1px solid var(--border-subtle);
     pointer-events: none;
   }
   @container entrycard (max-width: 600px) { &[data-ruled]::after { left: 20px; right: 20px; } }

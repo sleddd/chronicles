@@ -65,7 +65,7 @@ const Menu = styled.div`
   min-width: max(100%, 300px);
   max-width: min(420px, 90vw);
   padding: 14px 10px 10px;
-  background: var(--bg-tile);
+  background: var(--bg-menu, var(--bg-tile));
   border: 1px solid var(--border-pop);
   border-radius: 10px;
   box-shadow: var(--shadow-lg);

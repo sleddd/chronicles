@@ -32,7 +32,7 @@ const Trigger = styled.button<{ $open: boolean }>`
   width: 38px;
   height: 38px;
   padding: 0;
-  border: 1px solid ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--border-card)')};
+  border: 1px solid ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--border-control, var(--border-card))')};
   border-radius: 8px;
   background: ${({ $open }) => ($open ? 'var(--color-accent-subtle)' : 'transparent')};
   color: ${({ $open }) => ($open ? 'var(--color-accent-line)' : 'var(--text-secondary)')};
@@ -49,7 +49,7 @@ const List = styled.div`
   z-index: 30;
   min-width: 230px;
   padding: 6px;
-  background: var(--bg-tile);
+  background: var(--bg-menu, var(--bg-tile));
   html[data-theme='light'] & { background: #fef9f5; }
   border: 1px solid var(--border-pop);
   border-radius: 10px;

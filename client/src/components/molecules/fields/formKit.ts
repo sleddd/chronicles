@@ -70,7 +70,7 @@ export const Segments = styled.div`
   align-self: flex-start;
   max-width: 100%;
   padding: 4px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 10px;
 `;
 
@@ -374,7 +374,7 @@ export const JoinedGroup = styled.div`
   display: inline-flex;
   flex: none;
   max-width: 100%;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 8px;
   background: var(--bg-control, transparent);
   ${glassControl}

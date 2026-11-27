@@ -61,7 +61,7 @@ const Body = styled.div`
 export const TodayBtn = styled.button`
   height: 40px;
   padding: 0 16px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 999px;
   background: transparent;
   font-family: var(--font-sans);

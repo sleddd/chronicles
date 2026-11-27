@@ -55,6 +55,8 @@ const Card = styled.article<{ $on: boolean }>`
   background: var(--bg-panel);
   border: 1px solid ${({ $on }) => ($on ? 'var(--border-default)' : 'transparent')};
   border-radius: 14px;
+  /* Light: the Health widgets' edge (the chosen one keeps its grey outline) */
+  html[data-theme='light'] & { background: transparent; border-color: ${({ $on }) => ($on ? 'var(--border-default)' : 'var(--edge-card)')}; box-shadow: var(--shadow-soft); }
   @media (max-width: 480px) { padding: 18px 16px 20px; }
 `;
 
@@ -172,6 +174,8 @@ const Panel = styled.section`
   padding: 28px 32px 44px;
   background: var(--bg-panel);
   border-radius: 14px;
+  /* Light: the Health widgets' edge, as a ring so nothing moves */
+  html[data-theme='light'] & { background: transparent; box-shadow: 0 0 0 1px var(--edge-card), var(--shadow-soft); }
   @media (max-width: 560px) { padding: 22px 18px 34px; }
 `;
 

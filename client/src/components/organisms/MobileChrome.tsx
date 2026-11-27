@@ -181,7 +181,7 @@ const ViewList = styled.ul`
   background: color-mix(in srgb, var(--bg-rail) 82%, #fff);
   html[data-theme='dark'] & { background: color-mix(in srgb, var(--bg-rail) 98%, #c8d4ff); } /* a hair lighter than the menu, with a cool tint — never bright, never plain white */
   /* Light: the views sit a little lighter than the current page's row, both shades of the
-     tile colour (#ede6e2) worked out from the menu's own colour */
+     tile colour (#eee9e3) worked out from the menu's own colour */
   html[data-theme='light'] & { background: color-mix(in srgb, var(--bg-rail) 75%, var(--bg-tile)); }
   overflow: hidden;
   /* Lines only between rows: none above the first or below the last, so it sits right against

@@ -120,7 +120,7 @@ const WeekNav = styled.div`
   gap: 10px;
   height: 46px;
   padding: 0 10px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 999px;
   /* On the background photo: the same smoked glass as the page's buttons, its words and arrows white */
   ${glassPill}

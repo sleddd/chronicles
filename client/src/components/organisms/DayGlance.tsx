@@ -102,8 +102,10 @@ const Panel = styled.section`
   box-shadow: var(--shadow-card);
   /* Light: the container is the tiles' own near-white, so its cards (events, tasks, all-day) take a
      grey a step darker to show */
-  html[data-theme='light'] & { --bg-tile: #ede6e2; }
+  html[data-theme='light'] & { --bg-tile: #eee9e3; }
   @media (max-width: 760px) { padding: 30px 18px 34px; }
+  /* Light: no fill, just the edge (--shadow-card's ring) */
+  html[data-theme='light'] & { background: transparent; }
 `;
 
 /* The title, then the Meds / Move row under it (lined up with the title, a divider above and below) */
@@ -297,6 +299,8 @@ const WeekDay = styled.button<{ $on: boolean; $today: boolean }>`
   border-radius: 10px;
   /* The chosen day: a soft lifted fill */
   background: ${({ $on }) => ($on ? 'var(--bg-hover, rgba(255, 255, 255, 0.05))' : 'transparent')};
+  /* Light: the chosen day on its own warm tone, a shade darker than the row's band */
+  html[data-theme='light'] & { background: ${({ $on }) => ($on ? '#ebe6e1' : 'transparent')}; }
   text-align: left;
   cursor: pointer;
   /* The month, small, above the weekday and date */
@@ -812,6 +816,11 @@ const Pop = styled.div`
   display: flex;
   flex-direction: column;
   h4 { flex: none; margin: 0 0 8px; padding-right: 28px; ${cardLabel} }
+  /* Light: its own warm fill, and the lines between its rows a step darker so they show on it
+     (set as --border-subtle here, so the as-needed rows inside follow too) */
+  html[data-theme='light'] & { background: #efeae5; --border-subtle: #e0d9d2; }
+  /* Light, the Medications list only: near-white, its row lines lighter */
+  html[data-theme='light'] &[data-meds] { background: #fffefa; --border-subtle: #ebe5df; }
 `;
 
 /* The rows of a pop-up: they scroll inside it when there are more than fit, so the last
@@ -910,7 +919,7 @@ function MarkerList({ anchor, title, onClose, triggerRef, children }: {
     ? { left, top: anchor.bottom + GAP, maxHeight }
     : { left, bottom: window.innerHeight - anchor.top + GAP, maxHeight };
   return createPortal(
-    <Pop ref={ref} role="dialog" aria-label={title} style={place}>
+    <Pop ref={ref} role="dialog" aria-label={title} style={place} data-meds={title.startsWith('Medications') || undefined}>
       <h4>{title}</h4>
       <PopClose type="button" aria-label="Close" title="Close" onClick={onClose}>
         <Icon name="x" size={15} strokeWidth={2} />

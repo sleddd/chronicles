@@ -82,7 +82,7 @@ const Periods = styled.div`
   max-width: 100%;
   overflow-x: auto;
   padding: 4px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 10px;
   @media (max-width: 600px) { flex: none; padding: 3px; border-radius: 10px; }
   ${glassControl}

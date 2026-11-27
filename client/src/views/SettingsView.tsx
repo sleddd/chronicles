@@ -187,12 +187,15 @@ const IMPORT_BATCH = 50;
 /* Settings' section cards have no outline — the fill and a very light, even shadow
    set them off the page */
 const BorderlessCard = styled.div`
-  & > section { border: none; box-shadow: 0 0 0 1px var(--border-card), 0 0 12px rgba(0, 0, 0, 0.04); } /* light: a light edge with the shadow */
+  & > section { border: none; box-shadow: 0 0 0 1px var(--border-card), 0 0 12px rgba(0, 0, 0, 0.04); }
+  html[data-theme='light'] & > section { box-shadow: 0 0 0 1px var(--edge-card); background: transparent; } /* light: no fill, just the cards' edge */
+  /* Light: the Account section filled with the page's own colour (solid) */
+  html[data-theme='light'] &[data-section='account'] > section { background: var(--bg-app); }
   html[data-theme='dark'] & > section { box-shadow: 0 0 22px rgba(0, 0, 0, 0.12); }
 `;
 
 function Section(props: { id: string; title: string; subtitle?: string; children: ReactNode }) {
-  return <BorderlessCard><CollapsibleCard storageKey={SETTINGS_CARDS_KEY} defaultOpen={false} {...props} /></BorderlessCard>;
+  return <BorderlessCard data-section={props.id}><CollapsibleCard storageKey={SETTINGS_CARDS_KEY} defaultOpen={false} {...props} /></BorderlessCard>;
 }
 
 

@@ -63,6 +63,7 @@ const BillLine = styled.div<{ $muted?: boolean }>`
   font-family: var(--font-sans);
   color: ${({ $muted }) => ($muted ? 'var(--text-muted)' : 'var(--text-secondary)')};
   & + &, form + & { border-top: 1px solid ${SHEET_RULE}; }
+  html[data-theme='light'] && + &&, html[data-theme='light'] form + && { border-top-color: #e6e0da; } /* light: the line between rows a little darker */
   @media (max-width: 760px) {
     grid-template-columns: minmax(0, 1fr) auto;
     padding: 12px 16px;
@@ -181,6 +182,8 @@ const MonthTotals = styled.div`
   font-size: 14px;
   color: var(--text-muted);
   b { margin-left: 6px; font-size: 16px; font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  /* Light: the finance cards' firmer edge */
+  html[data-theme='light'] & { border-color: var(--edge-card-firm); }
 `;
 
 /* The Category field's name box with Add / Cancel beside it */
@@ -387,6 +390,7 @@ const NewBillCard = styled.section`
   /* The Quick entry's Bill form's fields: outlined boxes filling their column */
   ${outlinedInputs}
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { width: 100%; }
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card-firm); } /* light: no fill on the finance cards, just their edge, as dark as the dashboard widgets' */
 `;
 
 const NewBillTitle = styled.h3`

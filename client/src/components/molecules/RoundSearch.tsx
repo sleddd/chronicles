@@ -11,7 +11,7 @@ const Box = styled.label`
   gap: 12px;
   height: 44px;
   padding: 0 20px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 999px;
   color: var(--text-muted);
   &:focus-within { border-color: var(--control-border); }

@@ -30,6 +30,8 @@ export const DashPanel = styled.section`
   box-shadow: var(--shadow-card);
   @media (max-width: 480px) { padding: 14px 20px 22px; }
   ${glassCard}
+  /* The dashboards' own panel colour (after glassCard, so it holds on the photo too) */
+  html[data-theme] & { background: var(--bg-dash-panel, var(--bg-panel)); }
   /* Titles as on the home dashboard's cards: 22px thin sentence-case Work Sans on a
      40px line, 22px above the hairline and 24px below it — the panel's own head
      (DashPanelHead) and the heads the shared lists bring (Medications, Exercise

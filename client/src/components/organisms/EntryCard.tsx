@@ -50,6 +50,8 @@ const Row = styled.div<{ $active?: boolean; $hint?: boolean; $noTopic?: boolean 
   padding: 22px 20px;
   /* A faint hairline — fainter than --border-subtle on the darker list pane */
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
+  /* Light: a clear line between entries, the cards' edge colour */
+  html[data-theme='light'] & { border-bottom-color: #e5dfd9; }
   ${entryRow}
 `;
 

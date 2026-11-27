@@ -20,6 +20,7 @@ export const glassControl = css`
   html[data-wallpaper] & {
     background: color-mix(in srgb, var(--bg-app) 72%, transparent);
     border-color: color-mix(in srgb, var(--border-card) 60%, rgba(255, 255, 255, 0.4));
+    border-color: var(--border-control, color-mix(in srgb, var(--border-card) 60%, rgba(255, 255, 255, 0.4))); /* light: the controls' own firm outline, so they show on the photo */
     -webkit-backdrop-filter: blur(16px) saturate(1.1);
     backdrop-filter: blur(16px) saturate(1.1);
   }

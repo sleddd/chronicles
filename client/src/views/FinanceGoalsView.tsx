@@ -15,6 +15,8 @@ import type { FinanceGoal, FinanceRecord } from '../types/finance.js';
 const PanelCard = styled(BasePanelCard)`
   box-shadow: 0 0 14px rgba(0, 0, 0, 0.08);
   html[data-theme='dark'] & { box-shadow: 0 0 20px rgba(0, 0, 0, 0.26); }
+  /* Light: no fill and no shadow, just the edge, like the other finance cards */
+  html[data-theme='light'] && { background: transparent; box-shadow: 0 0 0 1px var(--edge-card-firm); }
 `;
 
 const Center = styled.div`

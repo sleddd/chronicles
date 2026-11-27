@@ -615,7 +615,7 @@ const SymMenu = styled.ul`
   list-style: none;
   border: 1px solid var(--border-pop, var(--border-card));
   border-radius: 10px;
-  background: var(--bg-tile, var(--bg-panel));
+  background: var(--bg-menu, var(--bg-tile, var(--bg-panel)));
   box-shadow: var(--shadow-lg);
 `;
 

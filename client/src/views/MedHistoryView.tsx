@@ -89,6 +89,8 @@ const Scroll = styled.div`
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
+  /* Light: no fill, just the Health widgets' edge */
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card); }
 `;
 
 const Table = styled.table`

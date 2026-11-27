@@ -104,6 +104,8 @@ const Backlog = styled.section<{ $over: boolean }>`
   border-radius: 14px;
   background: ${({ $over }) => ($over ? 'var(--bg-lane-over)' : 'color-mix(in srgb, var(--bg-sunken) 45%, transparent)')};
   transition: background 120ms ease;
+  /* Light: no fill at rest, just the cards' edge (a ring, so nothing moves); the lane colour while a card is dragged over */
+  html[data-theme='light'] & { background: ${({ $over }) => ($over ? 'var(--bg-lane-over)' : 'transparent')}; box-shadow: 0 0 0 1px var(--edge-card); }
   @media (max-width: 900px) { margin-left: 0; padding: 16px; height: auto; min-height: 200px; }
 `;
 
@@ -451,6 +453,9 @@ const TaskCard = styled.article<{ $dragging?: boolean }>`
   transition: border-color 120ms;
   &:hover { border-color: var(--border-strong); }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  /* Light: the planner's cards on their own warm tone; in the Unscheduled list a near-white */
+  html[data-theme='light'] & { background: #f2ede9; }
+  html[data-theme='light'] ${BacklogList} & { background: #f9f4ef; }
   /* A short card: one line, the title shortened (the full title is its tooltip) */
   &[data-tiny] { justify-content: center; }
   &[data-tiny] .card-line { flex-wrap: nowrap; align-items: center; }

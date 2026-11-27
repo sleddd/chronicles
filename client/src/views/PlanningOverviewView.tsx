@@ -78,7 +78,7 @@ const MasonryCol = styled.div`
 const Card = styled.section`
   min-width: 0;
   border-radius: 16px;
-  background: var(--bg-panel);
+  background: var(--bg-dash-panel, var(--bg-panel));
   box-shadow: var(--shadow-card);
   overflow: hidden;
 `;
@@ -597,7 +597,7 @@ const VisionCard = styled.section`
   margin-bottom: 32px;
   padding: 26px 28px 30px;
   border-radius: 16px;
-  background: var(--bg-panel);
+  background: var(--bg-dash-panel, var(--bg-panel));
   box-shadow: var(--shadow-card);
 `;
 

@@ -108,6 +108,8 @@ const Card = styled.section`
   background: var(--bg-panel);
   border-radius: 12px;
   @media (max-width: 768px) { padding: 24px 20px 28px; }
+  /* Light: no fill, just the Health widgets' edge (a ring, so nothing moves) */
+  html[data-theme='light'] & { background: transparent; box-shadow: 0 0 0 1px var(--edge-card); }
 `;
 
 const CardHead = styled.div`

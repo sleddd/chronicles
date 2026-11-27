@@ -22,6 +22,8 @@ const Tile = styled.button<{ $selected?: boolean; $static?: boolean }>`
   ${({ $static, $selected }) => (!$static && !$selected ? '&:hover { border-color: var(--border-card); }' : '')}
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
   @media (max-width: 480px) { padding: 18px; }
+  /* Light: no fill, just the Health widgets' edge (a chosen tile keeps its grey outline) */
+  html[data-theme='light'] & { background: transparent; border-color: ${({ $selected }) => ($selected ? 'var(--border-default)' : 'var(--edge-card)')}; box-shadow: var(--shadow-soft); }
 `;
 
 const Head = styled.span`

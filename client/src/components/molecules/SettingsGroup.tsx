@@ -85,6 +85,8 @@ const Panel = styled.div`
   overflow: hidden;
   & > * + * { border-top: 1px solid var(--border-subtle); }
   ${fieldInputs}
+  /* Light: no fill, its outline the cards' edge colour */
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card); }
 `;
 
 /** A tracked-caps label (optional) over one outlined panel of rows */

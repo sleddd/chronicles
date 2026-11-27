@@ -460,7 +460,7 @@ const MenuList = styled.div`
   z-index: 1000;
   min-width: 200px;
   padding: 6px;
-  background: var(--bg-tile);
+  background: var(--bg-menu, var(--bg-tile));
   border: 1px solid var(--border-pop);
   border-radius: 10px;
   box-shadow: var(--shadow-lg);
@@ -636,6 +636,8 @@ export const SheetBox = styled.div`
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   overflow: hidden;
+  /* Light: the finance cards' firmer edge */
+  html[data-theme='light'] & { border-color: var(--edge-card-firm); }
 `;
 
 /** Faint rule between sheet rows */
@@ -725,7 +727,7 @@ const MonthPillBox = styled.div`
   gap: 4px;
   height: 40px;
   padding: 0 8px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 999px;
   span {
     min-width: 120px;
@@ -783,6 +785,7 @@ export const StatBoxRow = styled.div<{ $cols: number; $flush?: boolean }>`
   @media (max-width: 640px) {
     margin: ${({ $flush }) => ($flush ? '0 -16px -16px' : '0')};
   }
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card-firm); ${({ $flush }) => ($flush ? '' : 'box-shadow: var(--shadow-soft);')} } /* light: no fill on the finance cards, just their edge and a very slight shadow */
 `;
 
 const StatCellBox = styled.div`
@@ -853,7 +856,8 @@ export const PanelCard = styled.div`
   border-radius: 12px;
   /* Light: a light edge round the card (the cream panel alone barely shows on the cream
      page). A ring, so nothing moves */
-  html[data-theme='light'] & { box-shadow: 0 0 0 1px var(--border-card); }
+  html[data-theme='light'] & { box-shadow: 0 0 0 1px var(--edge-card-firm); }
+  html[data-theme='light'] & { background: transparent; border-color: var(--edge-card-firm); } /* light: no fill on the finance cards, just their edge, as dark as the dashboard widgets' */
 `;
 
 export const CardTitle = styled.h3`
@@ -900,7 +904,7 @@ export const PickerPill = styled.label`
   display: flex;
   align-items: center;
   height: 40px;
-  border: 1px solid var(--border-card);
+  border: 1px solid var(--border-control, var(--border-card));
   border-radius: 999px;
   &:focus-within { border-color: var(--control-border); }
   position: relative;
