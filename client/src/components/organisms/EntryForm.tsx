@@ -40,7 +40,8 @@ import { TimeTracker } from '../molecules/fields/TimeTracker.js';
 import { TaskCardRows, TaskRow, TaskRowName, TaskPriorityPick, TaskFormatToggle } from '../molecules/fields/TaskCardFields.js';
 import { TimeTrackingFields, type TimeTrackingFieldValues } from '../molecules/fields/TimeTrackingFields.js';
 import { MediaFields, type MediaFieldValues } from '../molecules/fields/MediaFields.js';
-import { MEDIA_DEFAULTS, mediaTags, mediaTopicIds } from '../../utils/media.js';
+import { MEDIA_DEFAULTS, mediaTags, mediaTopicIds, entryImageRef, type MediaImageRef } from '../../utils/media.js';
+import { useDecryptedImage } from '../../hooks/useDecryptedImage.js';
 import { retagMedia } from '../../utils/retagMedia.js';
 import { useSaveFields } from '../../hooks/useSaveFields.js';
 import { showFlash } from '../../services/flashNotice.js';
@@ -66,7 +67,7 @@ import { WinsFields, type WinsFieldValues } from '../molecules/fields/WinsFields
 import { WellnessFields, type WellnessFieldValues } from '../molecules/fields/WellnessFields.js';
 import { UserFieldsForm, titleFieldOf } from '../molecules/fields/UserFieldsForm.js';
 import { useUIStore } from '../../stores/uiStore.js';
-import { EntryHeroBanner, EntryPhotos, EntryLightbox } from './EntryImageGallery.js';
+import { EntryHeroBanner, EntryPhotos, EntryLightbox, focusPosition } from './EntryImageGallery.js';
 import type { EntryImage } from '../../services/imageStorage.js';
 import { useCalorieEstimate } from '../../hooks/useCalorieEstimate.js';
 import { DEFAULT_ACCENT_COLOR } from '../../styles/accent.js';
@@ -1194,7 +1195,15 @@ function MilestoneFieldsWithTasks({ entryId, linkedTasks = [], attachableTasks =
   );
 }
 
-function MediaFieldsWithTags({ entryId, ...props }: React.ComponentProps<typeof MediaFields> & { entryId?: number | null }) {
+function MediaFieldsWithTags({ entryId, photo, onAddFiles, ...props }: React.ComponentProps<typeof MediaFields> & {
+  entryId?: number | null;
+  /** The entry's own photo (featured, else the first): shown in the cover box, as on the shelf */
+  photo?: MediaImageRef;
+  /** Upload chosen files as the entry's photos (Entry Images set up, room for another) */
+  onAddFiles?: (files: File[]) => void;
+}) {
+  const { url: photoUrl } = useDecryptedImage(photo?.key ?? null, photo?.iv ?? null, photo?.mimeType ?? null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const saveEntryFields = useSaveFields();
   // One rename at a time: a second waits for the first, so they never interleave
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -1213,7 +1222,21 @@ function MediaFieldsWithTags({ entryId, ...props }: React.ComponentProps<typeof 
     queue.current = run.catch(() => {});
     return run;
   };
-  return <MediaFields {...props} onRenameTag={(from, to) => retag(from, to)} onRemoveTag={tag => retag(tag, null)} />;
+  return (
+    <>
+      {onAddFiles && (
+        <input ref={fileRef} type="file" accept={ALLOWED_IMAGE_TYPES.join(',')} style={{ display: 'none' }}
+          onChange={e => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length > 0) onAddFiles(files);
+            e.target.value = '';
+          }} />
+      )}
+      <MediaFields {...props} photoUrl={photo ? photoUrl : null} photoPosition={photo ? focusPosition(photo) : undefined}
+        onAddImage={onAddFiles ? () => fileRef.current?.click() : undefined}
+        onRenameTag={(from, to) => retag(from, to)} onRemoveTag={tag => retag(tag, null)} />
+    </>
+  );
 }
 
 /** The Quick entry's question, now the writing area's placeholder (the topic picker sits alone on the card's first line) */
@@ -1931,7 +1954,9 @@ export function EntryForm({
               {customType === 'wins' && <WinsFields values={{ wins: [], ...(customFields as Partial<WinsFieldValues>) } as WinsFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'priorities' && <PrioritiesFields values={{ priorities: [], ...(customFields as Partial<PrioritiesFieldValues>) } as PrioritiesFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType === 'wellness' && <WellnessFields values={{ date: '', waterGlasses: 0, waterGoal: 8, moodScore: 0, sleepHours: 0, sleepQuality: 0, ...customFields } as WellnessFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} cycleTrackingEnabled={cycleTrackingEnabled} onAutoSave={onAutoSave} />}
-              {customType === 'media' && <MediaFieldsWithTags values={{ ...MEDIA_DEFAULTS, ...customFields } as MediaFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onAiDetails={aiReady && !hiddenFromAi ? aiMediaDetails : undefined} allTags={mediaTagOptions} entryId={entryId} />}
+              {customType === 'media' && <MediaFieldsWithTags values={{ ...MEDIA_DEFAULTS, ...customFields } as MediaFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} onAiDetails={aiReady && !hiddenFromAi ? aiMediaDetails : undefined} allTags={mediaTagOptions} entryId={entryId}
+                photo={entryImageRef({ _images: images, _featuredKey: featuredKey })}
+                onAddFiles={imagesReady && !imagesFull && onImagesSelected ? onImagesSelected : undefined} addingImage={imageUploading} />}
               {customType === 'time_tracking' && <TimeTrackingFields values={{ activityName: '', notes: '', ...customFields } as TimeTrackingFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} />}
               {customType && !['exercise', 'routine', 'goal', 'milestone'].includes(customType) && TIME_TRACKED_TYPES.has(customType) && quick && onSaveAndStartTimer && (
                 <div style={{ marginTop: 32 }}>

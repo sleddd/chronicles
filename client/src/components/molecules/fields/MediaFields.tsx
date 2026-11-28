@@ -120,6 +120,14 @@ interface MediaFieldsProps {
       is then changed in the form, so it never moves ahead of the rest) */
   onRenameTag?: (from: string, to: string) => Promise<boolean>;
   onRemoveTag?: (tag: string) => Promise<boolean>;
+  /** The entry's own photo (featured, else the first), opened: it stands in for the cover, as on the shelf */
+  photoUrl?: string | null;
+  /** Where in the photo to centre it (`object-position`) */
+  photoPosition?: string;
+  /** Add a photo of your own as the cover (Entry Images set up, room for another) */
+  onAddImage?: () => void;
+  /** A photo is on its way up */
+  addingImage?: boolean;
 }
 
 /* Tags: the shelf's tags as chips — tap to put one on this item or take it off, any number;
@@ -226,7 +234,7 @@ const OpenLink = styled.a`
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 `;
 
-export function MediaFields({ values, onChange, onAiDetails, allTags, onRenameTag, onRemoveTag }: MediaFieldsProps) {
+export function MediaFields({ values, onChange, onAiDetails, allTags, onRenameTag, onRemoveTag, photoUrl, photoPosition, onAddImage, addingImage = false }: MediaFieldsProps) {
   // Cover fetches finish after more typing: patch the latest values, never a stale copy
   const latest = useRef(values);
   latest.current = values;
@@ -333,10 +341,15 @@ export function MediaFields({ values, onChange, onAiDetails, allTags, onRenameTa
         <SectionHead><SectionLabel>Details</SectionLabel></SectionHead>
         <Details>
           <CoverCol>
-            <CoverBox aria-label={chosenUrl ? 'Cover' : 'No cover yet'}>
-              {chosenUrl
-                ? <img src={chosenUrl} alt="" />
-                : <MaterialIcon $size={44} aria-hidden="true">{info.glyph}</MaterialIcon>}
+            {/* The entry's own photo wins over a found cover, as on the shelf */}
+            <CoverBox aria-label={photoUrl ? 'Your photo, shown as the cover' : chosenUrl ? 'Cover' : 'No cover yet'}>
+              {photoUrl
+                ? <img src={photoUrl} alt="" style={photoPosition ? { objectPosition: photoPosition } : undefined} />
+                : chosenUrl
+                  ? <img src={chosenUrl} alt="" />
+                  : addingImage
+                    ? <Spinner size={20} />
+                    : <MaterialIcon $size={44} aria-hidden="true">{info.glyph}</MaterialIcon>}
             </CoverBox>
             <CoverActions>
               <TextAction type="button" onClick={findCover} disabled={!title || searching} title={title ? undefined : 'Type a title first'}>
@@ -348,6 +361,11 @@ export function MediaFields({ values, onChange, onAiDetails, allTags, onRenameTa
                 </TextAction>
               )}
               {/* No cover found (or not the one you want): a photo of your own */}
+              {onAddImage && !photoUrl && (
+                <TextAction type="button" onClick={onAddImage} disabled={addingImage}>
+                  {addingImage ? 'Adding…' : 'Add an image'}
+                </TextAction>
+              )}
             </CoverActions>
           </CoverCol>
 
