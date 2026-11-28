@@ -28,9 +28,10 @@ vi.mock('../../hooks/useTodayDoses.js', () => ({ DOSES_CHANGED: 'chronicles:dose
 const store = vi.hoisted(() => ({
   entries: [] as { id: number; content: string; metadata: Record<string, unknown> }[],
   update: vi.fn(),
+  add: vi.fn(),
 }));
 vi.mock('../../stores/entriesStore.js', () => ({
-  useEntriesStore: { getState: () => ({ decryptedEntries: store.entries, allTopics: [{ id: 3, name: 'task' }], updateDecryptedEntry: store.update }) },
+  useEntriesStore: { getState: () => ({ decryptedEntries: store.entries, allTopics: [{ id: 3, name: 'task' }], updateDecryptedEntry: store.update, addDecryptedEntry: store.add }) },
 }));
 
 import { describeChange, restoreChange, loadChanges, HideNotKept } from '../../services/assistantChanges.js';
@@ -97,7 +98,7 @@ describe('assistantChanges', () => {
 
   describe('putting one back', () => {
     it('never one that can’t be opened here', async () => {
-      const c = { id: 1, kind: 'entry' as const, what: 'Entry', name: '', savedAt: '', canRestore: false, wire: wire({}) };
+      const c = { id: 1, kind: 'entry' as const, what: 'Entry', deleted: false, name: '', savedAt: '', canRestore: false, wire: wire({}) };
       await expect(restoreChange(c, decryptPosts, encryptPost)).rejects.toThrow();
       expect(api.assistantChanges.restore).not.toHaveBeenCalled();
     });
@@ -137,10 +138,30 @@ describe('assistantChanges', () => {
       expect(store.update).toHaveBeenCalledWith(5, expect.objectContaining({ metadata: { _taxonomyId: 3, _aiHidden: true } }));
     });
 
+    it('an entry the AI app deleted comes back into the journal, with the times it had', async () => {
+      const deleted = wire({ id: 8, extra: { deleted: true, session: 2, createdAt: '2026-01-02T03:04:05.123456+00:00', updatedAt: '2026-11-20T10:00:00+00:00', topicIds: [] } });
+      decryptPosts.mockImplementation(async (posts: { id: number; createdAt: Date; updatedAt: Date }[]) =>
+        posts.map(p => ({ id: p.id, content: '<p>Call the dentist</p>', metadata: { _taxonomyId: 3 }, createdAt: p.createdAt, updatedAt: p.updatedAt, isEncrypted: true })));
+      const c = await describeChange(deleted, decryptPosts);
+      expect(c).toMatchObject({ what: 'Task', name: 'Call the dentist', deleted: true, canRestore: true });
+      api.assistantChanges.restore.mockResolvedValue(deleted);
+      await restoreChange(c, decryptPosts, encryptPost);
+      expect(api.assistantChanges.restore).toHaveBeenCalledWith(8);
+      expect(store.add).toHaveBeenCalledWith(expect.objectContaining({ id: 5, content: '<p>Call the dentist</p>' }));
+      const added = store.add.mock.calls[0][0];
+      expect(added.createdAt.toISOString()).toBe('2026-01-02T03:04:05.123Z');
+      expect(added.updatedAt.toISOString()).toBe('2026-11-20T10:00:00.000Z');
+      expect(store.update).not.toHaveBeenCalled();
+      expect(privacy.reconcileAiHidden).toHaveBeenCalled();
+      // An earlier version of an entry that is still there isn't one
+      opened('<p>Old</p>', { _taxonomyId: 3 });
+      expect((await describeChange(wire({}), decryptPosts)).deleted).toBe(false);
+    });
+
     it('a dose, a bill and the habit check-ins refresh what shows them', async () => {
       const seen = vi.fn();
       window.addEventListener('chronicles:doses-changed', seen);
-      const shown = (w: AssistantChangeWire) => ({ id: w.id, kind: w.kind, what: '', name: '', savedAt: '', canRestore: true, wire: w });
+      const shown = (w: AssistantChangeWire) => ({ id: w.id, kind: w.kind, what: '', deleted: false, name: '', savedAt: '', canRestore: true, wire: w });
       const dose = wire({ kind: 'dose', ref: 'u-1', extra: { date: '2026-11-25' } });
       api.assistantChanges.restore.mockResolvedValue(dose);
       await restoreChange(shown(dose), decryptPosts, encryptPost);

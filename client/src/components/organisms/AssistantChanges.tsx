@@ -12,6 +12,8 @@ import { showFlash } from '../../services/flashNotice.js';
  * overwriting something it may change. It keeps the earlier version instead
  * (14 days), and this is where one is put back. Putting one back swaps: what
  * is there now takes its place in the list, so it can be undone the same way.
+ * An entry the app deleted is kept whole for the same time, and putting it
+ * back brings it back into the journal.
  */
 
 const List = styled.div`
@@ -98,7 +100,9 @@ export function AssistantChanges() {
     setConfirming(null); setBusy(true); setError('');
     try {
       await restoreChange(change, decryptPosts, encryptPost);
-      showFlash(`Put back${change.name ? ` “${change.name}”` : ''}. The version it replaced is in this list now.`);
+      showFlash(change.deleted
+        ? `Put back${change.name ? ` “${change.name}”` : ' the entry'}. It’s in your journal again.`
+        : `Put back${change.name ? ` “${change.name}”` : ''}. The version it replaced is in this list now.`);
       await load();
     } catch (err) {
       // The version did go back, so the list has changed (loading it clears the note: it is set after)
@@ -137,7 +141,7 @@ export function AssistantChanges() {
   return (
     <SettingsActionRow
       title="Changes the app made"
-      description="Previous versions of entries, doses, bills, and habit check-ins changed by the app are saved for 14 days and can be restored here."
+      description="Previous versions of entries, doses, bills, and habit check-ins changed by the app, and entries it deleted, are saved for 14 days and can be restored here."
       action={<RowPill type="button" onClick={toggle} aria-expanded={open}>{open ? 'Hide' : 'View'}</RowPill>}
     >
       {open && (
@@ -154,7 +158,8 @@ export function AssistantChanges() {
                       <RowWhat>{c.what}{c.name ? ' · ' : ''}</RowWhat>{c.name}
                     </RowTitle>
                     <RowWhen>
-                      {c.canRestore ? `As it was before ${when(c.savedAt)}` : `From ${when(c.savedAt)}. It can’t be opened in this browser, so it can’t be put back.`}
+                      {c.deleted ? `Deleted by the AI app on ${when(c.savedAt)}` : c.canRestore ? `As it was before ${when(c.savedAt)}` : `From ${when(c.savedAt)}`}
+                      {!c.canRestore && '. It can’t be opened in this browser, so it can’t be put back.'}
                     </RowWhen>
                   </RowText>
                   {c.canRestore && (

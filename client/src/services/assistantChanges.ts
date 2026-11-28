@@ -4,9 +4,11 @@
  * The server can't see inside an encrypted save, so it can't hold the AI app
  * to "add and tick". Instead it keeps the version of anything the app
  * overwrites — an entry, a dose record, a bill, the habit log — still
- * encrypted, for 14 days (server/src/db/assistantHistory.ts). Here each kept
- * version is opened so it can be named, and one that is put back is shown in
- * this tab straight away.
+ * encrypted, for 14 days (server/src/db/assistantHistory.ts). It does the
+ * same for an entry the app deletes: a full copy is kept, and putting it back
+ * brings the entry back as it was, under the same id. Here each kept version
+ * is opened so it can be named, and one that is put back is shown in this tab
+ * straight away.
  *
  * A version this browser can't open is never offered to put back: writing it
  * over the record would leave something unreadable.
@@ -39,6 +41,8 @@ export interface ShownChange {
   kind: AssistantChangeWire['kind'];
   /** "Task", "Dose", "Bill", "Habit check-ins" */
   what: string;
+  /** The copy of an entry the AI app deleted (putting it back brings the entry back) */
+  deleted: boolean;
   /** Its name as it was ("Call the dentist"), when it has one */
   name: string;
   savedAt: string;
@@ -51,9 +55,20 @@ const FAILED = '[Decryption failed]';
 const text = (v: unknown) => (typeof v === 'string' ? v : '');
 const sentence = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
+/** The copy of an entry the AI app deleted, rather than an earlier version of one that is still there. */
+export const isDeletedEntry = (c: AssistantChangeWire): boolean => c.kind === 'entry' && c.extra?.deleted === true;
+
+/** A time the server kept with a deleted entry's copy, or the time the copy was made. */
+const keptTime = (c: AssistantChangeWire, key: 'createdAt' | 'updatedAt') => {
+  const at = isDeletedEntry(c) && typeof c.extra?.[key] === 'string' ? new Date(c.extra[key] as string) : new Date(NaN);
+  return Number.isNaN(at.getTime()) ? new Date(c.savedAt) : at;
+};
+
 function asPost(c: AssistantChangeWire): EncryptedPost {
-  const at = new Date(c.savedAt);
-  return { id: Number(c.ref), contentEncrypted: c.body, contentIv: c.bodyIv, metadataEncrypted: c.meta, metadataIv: c.metaIv, isEncrypted: true, createdAt: at, updatedAt: at };
+  return {
+    id: Number(c.ref), contentEncrypted: c.body, contentIv: c.bodyIv, metadataEncrypted: c.meta, metadataIv: c.metaIv, isEncrypted: true,
+    createdAt: keptTime(c, 'createdAt'), updatedAt: keptTime(c, 'updatedAt'),
+  };
 }
 
 async function openEntry(c: AssistantChangeWire, decryptPosts: DecryptPosts): Promise<DecryptedPost | null> {
@@ -67,7 +82,7 @@ async function openEntry(c: AssistantChangeWire, decryptPosts: DecryptPosts): Pr
 /** Open one kept version far enough to name it. */
 export async function describeChange(c: AssistantChangeWire, decryptPosts: DecryptPosts): Promise<ShownChange> {
   const shown = (what: string, name: string, canRestore: boolean): ShownChange =>
-    ({ id: c.id, kind: c.kind, what, name, savedAt: c.savedAt, canRestore, wire: c });
+    ({ id: c.id, kind: c.kind, what, deleted: isDeletedEntry(c), name, savedAt: c.savedAt, canRestore, wire: c });
   const { decryptedEntries, allTopics } = useEntriesStore.getState();
   try {
     if (c.kind === 'entry') {
@@ -123,7 +138,18 @@ export async function restoreChange(change: ShownChange, decryptPosts: DecryptPo
   const wasHidden = change.kind === 'entry'
     && (store.decryptedEntries.find(e => e.id === Number(change.wire.ref))?.metadata as Record<string, unknown> | null | undefined)?.[AI_HIDDEN_META] === true;
   const restored = await api.restore(change.id);
-  if (restored.kind === 'entry') {
+  if (isDeletedEntry(restored)) {
+    // An entry the AI app deleted, back under its own id: into the journal
+    // now (the next sync brings the same entry, by id)
+    const post = await openEntry(restored, decryptPosts);
+    if (post) {
+      const now = useEntriesStore.getState();
+      if (now.decryptedEntries.some(e => e.id === post.id)) now.updateDecryptedEntry(post.id, { content: post.content, metadata: post.metadata });
+      else now.addDecryptedEntry(post);
+    }
+    // Its topic may have been kept from AI since it was deleted: the server's list catches up
+    void reconcileAiHidden().catch(() => { /* brought in line at the next load */ });
+  } else if (restored.kind === 'entry') {
     const post = await openEntry(restored, decryptPosts);
     if (post) {
       const meta = (post.metadata ?? {}) as Record<string, unknown>;

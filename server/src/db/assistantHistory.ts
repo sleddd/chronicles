@@ -4,8 +4,18 @@
  * The server can't see inside an encrypted save, so it can't tell a ticked
  * task from an emptied one. Instead, before an AI-app session overwrites
  * anything — an entry, a dose record, a bill, the habit log — the version it
- * replaces is copied here, still encrypted. The owner (a browser session,
- * never the AI app) can list these, put one back, or throw them away.
+ * replaces is copied here, still encrypted. The owner (a browser session)
+ * can list these, put one back, or throw them away. The AI app may only put
+ * back an entry it deleted itself, within ASSISTANT_UNDO_MS (its own undo).
+ *
+ * The AI app may also delete any entry it can see (assistantDeletePost). The
+ * server can't tell a task from a journal entry, so this covers every entry
+ * that isn't hidden from AI; keeping to tasks is the app's own rule. Each
+ * delete first keeps a full copy of the entry here, kind 'entry' with
+ * `extra.deleted` (EntryDeletionExtra): its encrypted text and metadata, when
+ * it was made and its topic links, so putting it back re-creates it under the
+ * same id. At most ASSISTANT_DELETES_PER_DAY a day, and a full list refuses
+ * the delete just as it refuses a write.
  *
  * Kept for ASSISTANT_HISTORY_DAYS, at most ASSISTANT_HISTORY_ROWS versions and
  * ASSISTANT_HISTORY_BYTES of them. It has its own cap, apart from the
@@ -28,6 +38,9 @@
  * that is refused keeps nothing.
  *
  * Deleting the record deletes every version kept of it (forgetAssistantChangesFor).
+ * Not when the AI app deletes an entry: its copy is what the owner puts back,
+ * and the versions from before stay with it (an entry the app changed and
+ * then deleted can be put back as it was before either).
  *
  * Putting a version back swaps: what is there now is kept in its place, so a
  * restore can itself be undone, and the record's mark is forgotten (what is
@@ -39,7 +52,8 @@ import { tenantDb } from './shards.js';
 import { escapeSchema } from './escapeSchema.js';
 import {
   ensureAiPrivacyTables, aiPrivacyTablesExist, ensureFinanceTables, ensureDoseRecordsTable, ensurePostReservations, withTenantLock,
-  createPost, postStorageBytes, ASSISTANT_CREATES_PER_DAY, ASSISTANT_UNDO_MS, type CreatePostInput, type TenantClient, type TenantPost,
+  createPost, postStorageBytes, pruneDeletedPosts, ensurePostSync, ASSISTANT_CREATES_PER_DAY, ASSISTANT_DELETES_PER_DAY, ASSISTANT_UNDO_MS,
+  type CreatePostInput, type TenantClient, type TenantPost,
 } from './tenantQueries.js';
 
 export const ASSISTANT_HISTORY_DAYS = 14;
@@ -63,9 +77,36 @@ export interface AssistantChange {
   /** An entry's metadata. */
   meta: Buffer | null;
   metaIv: Buffer | null;
-  /** A dose record's day (`{ date }`), or a setting's sealed value (`{ value }`). */
+  /** A dose record's day (`{ date }`), a setting's sealed value (`{ value }`), or a deleted entry's (EntryDeletionExtra). */
   extra: Record<string, unknown> | null;
 }
+
+/**
+ * What a copy of an entry the AI app deleted holds besides its encrypted text
+ * and metadata: everything else the entry's row and links had, so putting it
+ * back re-creates it as it was.
+ */
+export interface EntryDeletionExtra {
+  deleted: true;
+  /** The assistant session that deleted it: only that session may undo it */
+  session: number;
+  /** The row's own times, to the microsecond */
+  createdAt: string;
+  updatedAt: string;
+  isEncrypted: boolean;
+  /** Older entries' plaintext columns (null for every encrypted entry) */
+  content: string | null;
+  metadata: unknown;
+  /** Its topic links (post_taxonomies; older entries only) */
+  topicIds: number[];
+}
+
+/** Whether a kept version is the copy of an entry the AI app deleted. */
+export const isEntryDeletion = (c: Pick<AssistantChange, 'kind' | 'extra'>): boolean =>
+  c.kind === 'entry' && c.extra?.deleted === true;
+
+/** The SQL test for the same, on an assistant_changes row `c`. */
+const DELETION_SQL = (c: string) => `(${c}.kind = 'entry' AND ${c}.extra->'deleted' = 'true'::jsonb)`;
 
 const COLUMNS = `id::int AS id, kind, ref, saved_at AS "savedAt", body, body_iv AS "bodyIv", meta, meta_iv AS "metaIv", extra`;
 const SIZE = `COALESCE(octet_length(body), 0) + COALESCE(octet_length(meta), 0) + COALESCE(octet_length(extra::text), 0)`;
@@ -306,6 +347,77 @@ export async function assistantMayDelete(schemaName: string, id: number, undoMs:
   });
 }
 
+export type AssistantDelete = { keptChangeId: number } | 'unseen' | 'limit';
+
+/**
+ * An AI-app session deleting an entry that isn't its own to remove outright
+ * (assistantMayDelete said no): any entry it can see. All under the account's
+ * lock, in one transaction:
+ *  - the entry must be there and not hidden from AI (`unseen` otherwise: to
+ *    the app, a hidden entry doesn't exist),
+ *  - the day's budget (ASSISTANT_DELETES_PER_DAY; `limit` when spent),
+ *  - room in the list (AssistantHistoryFull otherwise, and nothing deleted),
+ *  - a full copy of the entry is kept (EntryDeletionExtra),
+ *  - `beforeDelete` runs (the route removes the entry's public links: they
+ *    hold it as plaintext; if that fails the whole delete is rolled back),
+ *  - the entry is deleted. Its topic links and assistant_owned row go with it
+ *    by foreign key, and the app's mark goes too, so once it is put back the
+ *    entry is the owner's.
+ *
+ * Earlier versions kept of the entry stay: the copy is what is put back, and
+ * those can then be put back over it in turn.
+ */
+export async function assistantDeletePost(
+  schemaName: string, id: number, sessionId: number, beforeDelete: () => Promise<unknown> = async () => undefined,
+): Promise<AssistantDelete> {
+  await ensureAiPrivacyTables(schemaName);
+  const s = escapeSchema(schemaName);
+  const result = await withTenantLock<AssistantDelete>(schemaName, async (tx) => {
+    const [post] = await tx.$queryRawUnsafe<{ bytes: number | bigint }[]>(
+      `SELECT COALESCE(octet_length(content_encrypted), 0) + COALESCE(octet_length(metadata_encrypted), 0)
+                + COALESCE(octet_length(content), 0) + COALESCE(octet_length(metadata::text), 0) AS bytes
+       FROM ${s}.posts WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM ${s}.ai_hidden_posts WHERE post_id = $1)`, id);
+    if (!post) return 'unseen';
+    const [{ n }] = await tx.$queryRawUnsafe<{ n: number | bigint }[]>(
+      `SELECT COUNT(*) AS n FROM ${s}.assistant_new_records WHERE kind = 'entry-deletion' AND created_at > NOW() - interval '1 day'`);
+    if (Number(n) >= ASSISTANT_DELETES_PER_DAY) return 'limit';
+    await tx.$executeRawUnsafe(expireSql(s));
+    const [used] = await tx.$queryRawUnsafe<{ n: number | bigint; bytes: number | bigint | null }[]>(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(${SIZE}), 0) AS bytes FROM ${s}.assistant_changes`);
+    // The copy's times and links add a little to the entry's own bytes
+    if (Number(used.n) >= ASSISTANT_HISTORY_ROWS || Number(used.bytes ?? 0) + Number(post.bytes) + 512 > ASSISTANT_HISTORY_BYTES) {
+      throw new AssistantHistoryFull();
+    }
+    const [kept] = await tx.$queryRawUnsafe<{ id: number }[]>(
+      `INSERT INTO ${s}.assistant_changes (kind, ref, body, body_iv, meta, meta_iv, extra)
+       SELECT 'entry', p.id::text, p.content_encrypted, p.content_iv, p.metadata_encrypted, p.metadata_iv,
+              jsonb_build_object(
+                'deleted', TRUE, 'session', $2::int,
+                'createdAt', to_jsonb(p.created_at), 'updatedAt', to_jsonb(p.updated_at),
+                'isEncrypted', COALESCE(p.is_encrypted, FALSE), 'content', p.content, 'metadata', p.metadata,
+                'topicIds', (SELECT COALESCE(jsonb_agg(pt.tax_id ORDER BY pt.tax_id), '[]'::jsonb)
+                             FROM ${s}.post_taxonomies pt WHERE pt.post_id = p.id))
+       FROM ${s}.posts p WHERE p.id = $1
+       RETURNING id::int AS id`, id, sessionId);
+    // Counted for the day's budget, by the copy's id (each delete once)
+    await tx.$executeRawUnsafe(`INSERT INTO ${s}.assistant_new_records (kind, ref) VALUES ('entry-deletion', $1)`, String(kept.id));
+    // Old rows have no further use
+    await tx.$executeRawUnsafe(`DELETE FROM ${s}.assistant_new_records WHERE created_at < NOW() - interval '2 days'`);
+    await tx.$executeRawUnsafe(`DELETE FROM ${s}.assistant_wrote WHERE kind = 'entry' AND ref = $1`, String(id));
+    await beforeDelete();
+    // The sync trigger records the deletion, as for any other delete
+    await tx.$executeRawUnsafe(`DELETE FROM ${s}.posts WHERE id = $1`, id);
+    return { keptChangeId: kept.id };
+  });
+  if (typeof result === 'object') {
+    // Never fails the delete: the list is trimmed again at the next one
+    await pruneDeletedPosts(schemaName).catch(err => {
+      console.error('Deleted-entries trim failed:', err instanceof Error ? err.message : 'Unknown error');
+    });
+  }
+  return result;
+}
+
 /** How many dose records the AI app may make new in a day (ticking an existing one isn't counted). */
 export const ASSISTANT_NEW_DOSES_PER_DAY = 100;
 
@@ -348,11 +460,14 @@ export async function listAssistantChanges(schemaName: string, before?: number):
   // Past their days: gone before anyone is shown them
   await db.$executeRawUnsafe(expireSql(s));
   // And any kept of an entry that no longer exists (a delete normally takes
-  // them with it; this catches one that didn't). The CASE keeps the cast to
-  // entry rows: a dose's or bill's ref is not a number
+  // them with it; this catches one that didn't). Not the copy of an entry the
+  // AI app deleted, nor the versions from before it while that copy is here:
+  // they are what puts it back. The CASE keeps the cast to entry rows: a
+  // dose's or bill's ref is not a number
   await db.$executeRawUnsafe(
     `DELETE FROM ${s}.assistant_changes c WHERE c.kind = 'entry'
-       AND NOT EXISTS (SELECT 1 FROM ${s}.posts p WHERE p.id = CASE WHEN c.kind = 'entry' THEN c.ref::int END)`);
+       AND NOT EXISTS (SELECT 1 FROM ${s}.posts p WHERE p.id = CASE WHEN c.kind = 'entry' THEN c.ref::int END)
+       AND NOT EXISTS (SELECT 1 FROM ${s}.assistant_changes d WHERE d.ref = c.ref AND ${DELETION_SQL('d')})`);
   const rows = await db.$queryRawUnsafe<(AssistantChange & { bytes: number | bigint })[]>(
     `SELECT ${COLUMNS}, ${SIZE} AS bytes FROM ${s}.assistant_changes
      WHERE ($1::bigint IS NULL OR id < $1::bigint) ORDER BY id DESC LIMIT ${PAGE_ROWS + 1}`,
@@ -369,7 +484,10 @@ export async function listAssistantChanges(schemaName: string, before?: number):
   return { changes, more: changes.length < rows.length };
 }
 
-export type RestoreResult = { ok: true; change: AssistantChange } | { ok: false; reason: 'unknown' | 'gone' };
+export type RestoreResult = { ok: true; change: AssistantChange } | { ok: false; reason: 'unknown' | 'gone' | 'taken' | 'not-yours' };
+
+/** The AI app putting back an entry it deleted: only its own session's copy, and only for this long. */
+export interface AppUndo { sessionId: number; undoMs?: number }
 
 /** The statement that writes a kept version back over its record. Returns the rows it changed. */
 function writeBackSql(s: string, kind: AssistantChangeKind): string {
@@ -390,15 +508,56 @@ function writeBackSql(s: string, kind: AssistantChangeKind): string {
 }
 
 /**
+ * Re-create an entry the AI app deleted, from its copy, inside the caller's
+ * transaction: the same id (its ciphertext is bound to it, so no other would
+ * open), the same times, and its topic links to topics that are still there (a
+ * topic deleted since is left off rather than the entry kept from coming
+ * back). `taken`: an entry with that id is there, and is never written over.
+ *
+ * The id was used up when the entry was first made, so it goes straight in,
+ * not through a reservation. Its row in deleted_posts goes: a browser whose
+ * last sync was before the delete would otherwise be sent the entry and its
+ * deletion together, and drop it. One whose sync was after it is sent the
+ * entry as new (the insert trigger stamps it, like any other write).
+ */
+async function recreateDeletedEntry(tx: TenantClient, s: string, change: AssistantChange): Promise<boolean> {
+  const made = await tx.$executeRawUnsafe(
+    `INSERT INTO ${s}.posts (id, content, metadata, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
+     SELECT c.ref::int, c.extra->>'content', COALESCE(NULLIF(c.extra->'metadata', 'null'::jsonb), '{}'::jsonb),
+            c.body, c.body_iv, c.meta, c.meta_iv, COALESCE((c.extra->>'isEncrypted')::boolean, TRUE),
+            (c.extra->>'createdAt')::timestamptz, (c.extra->>'updatedAt')::timestamptz
+     FROM ${s}.assistant_changes c WHERE c.id = $1::bigint
+     ON CONFLICT (id) DO NOTHING`, change.id);
+  if (!made) return false;
+  const postId = Number(change.ref);
+  await tx.$executeRawUnsafe(`DELETE FROM ${s}.deleted_posts WHERE id = $1`, postId);
+  const topicIds = Array.isArray(change.extra?.topicIds) ? (change.extra.topicIds as unknown[]).filter(Number.isInteger) : [];
+  if (topicIds.length > 0) {
+    await tx.$executeRawUnsafe(
+      `INSERT INTO ${s}.post_taxonomies (post_id, tax_id)
+       SELECT $1, t.id FROM ${s}.taxonomies t WHERE t.id = ANY($2::int[])
+       ON CONFLICT DO NOTHING`, postId, topicIds);
+  }
+  return true;
+}
+
+/**
  * Put a kept version back. What is there now takes its place in the list, so
  * this can be undone the same way. `gone`: the record itself was deleted
  * since, and there is nothing to put it back over.
+ *
+ * The copy of an entry the AI app deleted is put back by re-creating the
+ * entry (recreateDeletedEntry), and leaves the list; there is nothing to swap.
+ * `taken`: an entry with its id is there already.
+ *
+ * With `appUndo` (the AI app's own undo): only the copy of an entry that
+ * session deleted, within the undo window. Anything else is `not-yours`.
  *
  * Not held to the journal's storage cap: the version fitted when it was
  * written, and this list has a cap of its own. Nor to this list's cap: one
  * version leaves it as the other joins.
  */
-export async function restoreAssistantChange(schemaName: string, id: number): Promise<RestoreResult> {
+export async function restoreAssistantChange(schemaName: string, id: number, appUndo?: AppUndo): Promise<RestoreResult> {
   if (!(await aiPrivacyTablesExist(schemaName))) return { ok: false, reason: 'unknown' };
   const s = escapeSchema(schemaName);
   // Its kind first, so the record's own table is known to be there before the lock is taken
@@ -406,9 +565,24 @@ export async function restoreAssistantChange(schemaName: string, id: number): Pr
   const [found] = await db.$queryRawUnsafe<{ kind: AssistantChangeKind }[]>(`SELECT kind FROM ${s}.assistant_changes WHERE id = $1::bigint`, id);
   if (!found) return { ok: false, reason: 'unknown' };
   await ensureTables(schemaName, found.kind);
+  // A deleted entry's row in deleted_posts is cleared when it comes back
+  if (found.kind === 'entry') await ensurePostSync(schemaName);
   return withTenantLock(schemaName, async (tx) => {
-    const [change] = await tx.$queryRawUnsafe<AssistantChange[]>(`SELECT ${COLUMNS} FROM ${s}.assistant_changes WHERE id = $1::bigint`, id);
+    const [change] = await tx.$queryRawUnsafe<(AssistantChange & { recent: boolean })[]>(
+      `SELECT ${COLUMNS}, saved_at > NOW() - make_interval(secs => $2::double precision / 1000) AS recent
+       FROM ${s}.assistant_changes WHERE id = $1::bigint`, id, appUndo?.undoMs ?? ASSISTANT_UNDO_MS);
     if (!change) return { ok: false as const, reason: 'unknown' as const };
+    const { recent, ...version } = change;
+    if (appUndo && !(isEntryDeletion(version) && version.extra?.session === appUndo.sessionId && recent)) {
+      return { ok: false as const, reason: 'not-yours' as const };
+    }
+    if (isEntryDeletion(version)) {
+      if (!(await recreateDeletedEntry(tx, s, version))) return { ok: false as const, reason: 'taken' as const };
+      await tx.$executeRawUnsafe(`DELETE FROM ${s}.assistant_changes WHERE id = $1::bigint`, id);
+      // The owner's entry again: the app's next write keeps this version first
+      await tx.$executeRawUnsafe(`DELETE FROM ${s}.assistant_wrote WHERE kind = 'entry' AND ref = $1`, version.ref);
+      return { ok: true as const, change: version };
+    }
     // What is there now, kept first (nothing is inserted when the record is gone)
     const kept = await tx.$executeRawUnsafe(keepSql(s, change.kind), refParam(change.kind, change.ref));
     if (!kept) return { ok: false as const, reason: 'gone' as const };
@@ -418,7 +592,7 @@ export async function restoreAssistantChange(schemaName: string, id: number): Pr
     // wrote there is no longer what it holds, so its mark goes: the app's next
     // write keeps this version, whatever bytes it carries
     await tx.$executeRawUnsafe(`DELETE FROM ${s}.assistant_wrote WHERE kind = $1 AND ref = $2`, change.kind, change.ref);
-    return { ok: true as const, change };
+    return { ok: true as const, change: version };
   });
 }
 

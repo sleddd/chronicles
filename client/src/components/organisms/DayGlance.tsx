@@ -31,6 +31,12 @@ import { builtinEntryName } from '../../utils/stripHtml.js';
 import { billOccurrences, formatCents } from '../../utils/finance.js';
 import type { ScheduledDose } from '../../types/health.js';
 import { taskFieldsForStatus } from '../../types/goals.js';
+import { FilterTabs } from '../molecules/FilterTabs.js';
+import { PlannerBoard, type PlannerCard } from './PlannerBoard.js';
+import { usePlannerBoard } from '../../hooks/usePlannerBoard.js';
+import { weekOf } from '../../utils/planner.js';
+import { blockedByText } from '../../utils/taskBlockers.js';
+import { BlockedTag, blockedBy } from '../atoms/BlockedTag.js';
 import { addDays, layoutDay, overlapColumns, startPatch, lengthPatch, dayPatch, parsePlannerOrder, plannerFacts, tasksByDay, hoursLabel, clampHours, hhmm, type PlannerOrder } from '../../utils/planner.js';
 
 /* Day at a glance (the home dashboard, under the add row): one panel for a day —
@@ -43,15 +49,9 @@ import { addDays, layoutDay, overlapColumns, startPatch, lengthPatch, dayPatch, 
 const NO_ORDER: PlannerOrder = {};
 /** One hour on the schedule, in px */
 const HOUR_PX = 84;
-/** The schedule shows 7 AM to 7 PM; the early hours and the evening (to 12 AM) fold away */
+/** The schedule always runs to 12 AM (no folding the evening); the early hours before 7 AM fold away */
 const DAY_START = 0;
 const DAY_END = 24 * 60;
-const EVENING = 19 * 60;
-/** Whether the schedule's evening is open, per browser */
-const EVENING_KEY = 'glance-evening-open-v1';
-function readEveningOpen(): boolean {
-  try { return localStorage.getItem(EVENING_KEY) === '1'; } catch { return false; }
-}
 /** …and the early hours (before 7 AM), folded until opened, per browser */
 const MORNING = 7 * 60;
 const MORNING_KEY = 'glance-early-open-v1';
@@ -60,6 +60,18 @@ function readMorningOpen(): boolean {
 }
 /** Tasks are laid out from 8 AM (or the day's first event, when earlier), as in the Planner */
 const TASK_START = 8 * 60;
+/* The schedule shows one day (with doses, the small hours and the evening), or four days / the
+   week as the Planner's board — remembered per browser */
+type ScheduleMode = 'day' | 'days' | 'week';
+const SCHEDULE_MODES: { value: ScheduleMode; label: string }[] = [
+  { value: 'day', label: 'Day' }, { value: 'days', label: '4 days' }, { value: 'week', label: 'Week' },
+];
+const MODE_KEY = 'glance-schedule-mode-v1';
+function readMode(): ScheduleMode {
+  try { const m = localStorage.getItem(MODE_KEY); return m === 'days' || m === 'week' ? m : 'day'; } catch { return 'day'; }
+}
+/* The board shows just the days here (no Unscheduled list: the right column lists the tasks with no day) */
+const NO_CARDS: PlannerCard[] = [];
 /** The shortest a card is drawn (about 20 minutes), so even a 5-minute one can be read and grabbed */
 const MIN_CARD = 30;
 const hourName = (h: number) => (h === 0 || h === 24 ? '12 AM' : h === 12 ? '12 PM' : h < 12 ? `${h} AM` : `${h - 12} PM`);
@@ -82,7 +94,7 @@ type Kind = 'meeting' | 'event' | 'task';
 const KIND_COLOR: Record<Kind, string> = { meeting: 'var(--chart-blue)', event: 'var(--chart-violet)', task: 'var(--chart-green)' };
 const KIND_NAME: Record<Kind, string> = { meeting: 'Meeting', event: 'Event', task: 'Task block' };
 
-interface Block { key: string; id: number; kind: Kind; title: string; start: number; end: number; note?: string; done?: boolean }
+interface Block { key: string; id: number; kind: Kind; title: string; start: number; end: number; note?: string; done?: boolean; /** What it's waiting on (Blocked by) */ blocked?: string }
 
 /* ── Styles: the dashboard's own card, labels and pills ── */
 
@@ -225,9 +237,6 @@ const WeekMonth = styled.div`
   line-height: 1;
   color: var(--text-muted);
   white-space: nowrap;
-  /* Phones: abbreviated ("Nov") */
-  .short { display: none; }
-  @media (max-width: 640px) { .long { display: none; } .short { display: inline; } }
 `;
 
 /* The week: a day's short name over its date, small marks for what it holds; the chosen day lifted */
@@ -238,7 +247,7 @@ const Week = styled.div`
   align-items: center;
   gap: 6px;
   /* A line between the title and the row, and one under it (room under the title first) */
-  margin-top: 28px;
+  margin-top: 32px;
   padding-top: 18px;
   border-top: 1px solid var(--border-subtle);
   container-type: inline-size;
@@ -340,14 +349,13 @@ const Marks = styled.div`
   @media (max-width: 640px) { i { width: 10px; } }
 `;
 
-/* The schedule and priorities (with the dashboard's widgets under them) beside
-   the third column — Coming up, the shopping list, wins */
+/* The schedule across two of the three columns, then the third — priorities, tasks due, wins */
 const Body = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 2.35fr) minmax(0, 0.85fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 36px 64px;
   /* Room under the date row before the schedule and lists */
-  margin-top: 56px;
+  margin-top: 24px;
   align-items: start;
   /* A hairline between the columns while they're side by side */
   @media (min-width: 1201px) {
@@ -356,24 +364,24 @@ const Body = styled.div`
   }
   @media (max-width: 1200px) { grid-template-columns: minmax(0, 1fr); }
   /* Room under each heading's line (Schedule, Priorities, Tasks due, Coming up…) before its content */
-  & > div > section > :first-child,
-  & > div > div > section > :first-child { margin-bottom: 14px; }
+  & > section > :first-child,
+  & > div > section > :first-child { margin-bottom: 14px; }
 `;
 
-/* Schedule | priorities (the widgets sit under the container) */
-const Main = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  gap: 36px 64px;
-  align-items: start;
-  min-width: 0;
-  /* A hairline between the schedule and the priorities while they're side by side */
-  @media (min-width: 761px) {
-    align-self: stretch;
-    column-gap: 32px;
-    & > :nth-child(2) { align-self: stretch; padding-left: 32px; border-left: 1px solid var(--border-subtle); }
+/* The schedule's head: the Day / 4 days / Week switch between the title and its + */
+const ModeSwitch = styled.div`
+  margin-left: auto;
+  margin-right: 12px;
+  align-self: center;
+  /* The group: no fill behind it, just its border (the chosen option keeps its own fill) */
+  &&& [role='tablist'] {
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    /* (over the photo's frosted-glass rule, which would also change its outline and text) */
+    border-color: var(--border-control, var(--border-card));
+    --text-muted: inherit;
   }
-  @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 /* The dashboard's widgets, under the schedule and priorities: a divider, then two across */
@@ -520,6 +528,8 @@ const BlockBtn = styled.button<{ $kind: Kind }>`
   /* A task card: room on the left for its tick; struck through once done */
   &[data-task='true'] { padding-left: 44px; }
   &[data-done='true'] .title { text-decoration: line-through; color: var(--text-tertiary); }
+  /* Waiting on something (Blocked by): struck through like a done one, with its Blocked tag */
+  &[data-blocked] .title { text-decoration: line-through; }
 `;
 
 /* A task card's tick, to the left of its title: an 18px circle in a 32px target, so it's
@@ -714,7 +724,7 @@ const NowLine = styled.div`
   &::before { content: ''; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--mood-1); }
 `;
 
-/* Opens / folds the schedule's evening (after 7 PM) */
+/* Opens / folds the schedule's early hours (before 7 AM) */
 /* Full width, with a hairline across the schedule above it */
 const EveningBtn = styled.button`
   display: flex;
@@ -783,22 +793,31 @@ const Muted = styled.p`
   color: var(--text-muted);
 `;
 
-/* "4 tasks with no day yet · Place them on the week" */
-const NoDay = styled.div`
-  padding: 20px 24px;
-  border: 1px dashed var(--border-dashed, var(--border-default));
-  border-radius: 12px;
+/* "4 tasks with no day yet", the list opening in place to show them all */
+/* The tasks with no day: a widget card's section (the dashboard draws the card round it) — its title
+   row, then the count, the list and Show all. A task dragged over it gets a dashed accent outline */
+const NoDay = styled.section`
+  border-radius: 10px;
+  outline: 1px dashed transparent;
+  outline-offset: 10px;
+  transition: outline-color 120ms, background 120ms;
+  &[data-over] { outline-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 6%, transparent); }
   font-family: var(--font-sans);
   font-size: 16px;
   color: var(--text-secondary);
-  > button { display: block; margin-top: 6px; padding: 0; border: none; background: none; font: inherit; font-size: 15px; color: var(--color-accent-link); cursor: pointer; }
+  /* The title row: like every widget's (the card styles its h2) */
+  > .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border-subtle); }
+  > .head h2 { margin: 0; }
+  > .count { margin: 0; font-size: 15px; color: var(--text-secondary); }
+  /* Show all / Show fewer: under a hairline */
+  > button { display: block; width: 100%; margin-top: 18px; padding: 14px 0 0; border: none; border-top: 1px solid var(--border-default); background: none; font: inherit; font-size: 15px; text-align: left; color: var(--color-accent-link); cursor: pointer; }
   > button:hover { text-decoration: underline; }
-  ul { list-style: none; margin: 14px 0 4px; padding: 0; }
+  ul { list-style: none; margin: 0 0 4px; padding: 0; }
   li { display: flex; align-items: center; gap: 10px; padding: 9px 0; font-size: 15px; }
   li + li { border-top: 1px solid var(--border-subtle); }
   li .name { flex: 1; min-width: 0; padding: 0; border: none; background: none; font: inherit; color: var(--text-secondary); text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   li .name:hover { color: var(--text-primary); }
-  p { margin: 4px 0 0; font-size: 13px; color: var(--text-muted); }
+
 `;
 
 /* The list a marker opens: a small floating panel, like the app's other menus */
@@ -930,19 +949,20 @@ function MarkerList({ anchor, title, onClose, triggerRef, children }: {
   );
 }
 
+/** Is the point over the list of tasks with no day (where a task dropped leaves its day)? */
+function overUnscheduleList(x: number, y: number): boolean {
+  const r = document.querySelector('[data-unschedule-drop]')?.getBoundingClientRect();
+  return !!r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+
 /* ── The panel ── */
 
-export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side, weather, financeOn, medsOn, exerciseOn }: {
-  /** The dashboard's own Priorities, Wins and Coming up widgets (in their compact look) */
-  priorities: ReactNode;
-  wins?: ReactNode;
-  comingUp: ReactNode;
-  /** The shopping list, under Coming up */
-  shopping?: ReactNode;
-  /** The dashboard's draggable widgets, two across under the schedule and priorities */
+export function DayGlance({ side, widgets, weather, financeOn, medsOn, exerciseOn }: {
+  /** The right column: the dashboard's cards there (Priorities, Wins… — dragged in and out), handed
+   *  the tasks-with-no-day list to place among them (null when there are none) */
+  side: (noDay: ReactNode) => ReactNode;
+  /** The dashboard's draggable widgets, under Your Agenda */
   widgets?: ReactNode;
-  /** Widgets dropped into the third column, under Coming up and the shopping list */
-  side?: ReactNode;
   /** Today's weather at home ("56° and cloudy in Portland"), shown after today's date */
   weather?: string;
   financeOn: boolean;
@@ -955,7 +975,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const createEntry = useCreateEntry();
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
-  const { goals, milestones, tasks } = usePlanData();
+  const { tasks } = usePlanData();
   const [savedOrder] = useEncryptedSetting<PlannerOrder>('plannerOrder', NO_ORDER);
   const order = useMemo(() => parsePlannerOrder(savedOrder), [savedOrder]);
   const { records: bills } = useFinance('bills', { enabled: financeOn });
@@ -979,7 +999,15 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
       return next;
     }, { replace: true, state: null });
   }, [picked]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [eveningOpen, setEveningOpen] = useState(readEveningOpen);
+  const [mode, setModeState] = useState<ScheduleMode>(readMode);
+  // A schedule card carried over the tasks-with-no-day list (shown under the pointer)
+  const [offTo, setOffTo] = useState<{ title: string; x: number; y: number } | null>(null);
+  // The tasks with no day: the first few, or all of them once opened
+  const [noDayAll, setNoDayAll] = useState(false);
+  const setMode = (m: ScheduleMode) => {
+    setModeState(m);
+    try { localStorage.setItem(MODE_KEY, m); } catch { /* per browser only */ }
+  };
   const [morningOpen, setMorningOpen] = useState(readMorningOpen);
   const toggleMorning = () => setMorningOpen(v => {
     try { localStorage.setItem(MORNING_KEY, v ? '0' : '1'); } catch { /* per browser only */ }
@@ -1007,6 +1035,10 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     const dy = e.clientY - d.y0;
     if (!d.moved && Math.abs(dy) < 4) return;
     d.moved = true;
+    // A task carried over the list of tasks with no day: let go there and it leaves its day
+    const off = d.mode === 'move' && d.b.kind === 'task' && overUnscheduleList(e.clientX, e.clientY);
+    setOffTo(off ? { title: d.b.title, x: e.clientX, y: e.clientY } : null);
+    if (off) return;
     const len = d.b.end - d.b.start;
     // Five minutes at a time, moved or stretched, as in the Planner
     const step = 5;
@@ -1030,11 +1062,16 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     }
     setDrag({ key: d.b.key, start: d.start, end: d.end, mode: d.mode, dy });
   };
-  const onCardUp = () => {
+  const onCardUp = (e: React.PointerEvent) => {
     const d = dragRef.current;
     dragRef.current = null;
     setDrag(null);
+    setOffTo(null);
     if (!d) return;
+    if (d.moved && d.mode === 'move' && d.b.kind === 'task' && e.type !== 'pointercancel' && overUnscheduleList(e.clientX, e.clientY)) {
+      unscheduleTask(d.b.id);
+      return;
+    }
     if (!d.moved) { if (d.mode === 'move') openInJournal(d.b.id); return; }
     saveCardTimes(d.b, d.mode, d.start, d.end);
   };
@@ -1066,10 +1103,6 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     const start = Math.max(0, Math.min(24 * 60 - len, b.start + (e.key === 'ArrowUp' ? -5 : 5)));
     saveCardTimes(b, 'move', start, start + len);
   };
-  const toggleEvening = () => setEveningOpen(v => {
-    try { localStorage.setItem(EVENING_KEY, v ? '0' : '1'); } catch { /* per browser only */ }
-    return !v;
-  });
   const day = picked ?? today;
   const isToday = day === today;
   // Monday to Sunday, the week holding the chosen day
@@ -1180,6 +1213,8 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
 
   /* The Planner's tasks on each day (unfinished, in the day's order) */
   const planned = useMemo(() => tasks.map(t => ({ ...t, ...plannerFacts(t.id, t.fields, t.created) })), [tasks]);
+  // What each task is waiting on (Blocked by): the other tasks, to tell which are done
+  const blockerTasks = useMemo(() => new Map(tasks.map(t => [t.id, { title: t.title, isCompleted: !!t.fields.isCompleted }])), [tasks]);
   // Done ones stay on the agenda, struck through, so a tick can be undone there
   const byDay = useMemo(() => tasksByDay(planned, week, today, order), [planned, week[0], today, order]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1202,12 +1237,13 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     ...dayTasks.map(t => {
       const start = taskAt.get(t.id) ?? taskStart;
       const end = start + Math.round(t.hours * 60);
-      return { key: `t${t.id}`, id: t.id, kind: 'task' as const, title: t.title, start, end, note: `${clock(start)} – ${clock(end)} · ${hoursLabel(t.hours)}`, done: t.done };
+      return {
+        key: `t${t.id}`, id: t.id, kind: 'task' as const, title: t.title, start, end, note: `${clock(start)} – ${clock(end)} · ${hoursLabel(t.hours)}`, done: t.done,
+        blocked: t.done ? undefined : blockedBy(blockedByText(t.fields as Record<string, unknown>, blockerTasks)),
+      };
     }),
   ];
-  const dayEnd = eveningOpen ? DAY_END : EVENING;
-  // Folded: what starts after 7 PM is hidden (counted on the toggle)
-  const eveningCount = blocks.filter(b => b.start >= EVENING).length;
+  const dayEnd = DAY_END;
   const morningCount = blocks.filter(b => b.start < MORNING).length;
   const shownBlocks = blocks.filter(b => b.start < dayEnd && b.end > dayStart);
   const hours: number[] = [];
@@ -1262,10 +1298,6 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   /* Bills due that day: one icon at the top of the day */
   const dayBills = financeOn ? billOccurrences(bills, day, day).map(o => o.bill) : [];
 
-  /* Tasks due that day (deadline), done ones struck through */
-  const due = tasks.filter(t => t.fields.deadline === day);
-  const goalName = new Map(goals.map(g => [g.id, g.title]));
-  const milestoneName = new Map(milestones.map(m => [m.id, m.title]));
   // Unfinished tasks with no day — ideas from the backlog too (a new task starts there), so any
   // task can be dragged onto the schedule from here
   const noDay = planned.filter(t => !t.done && !t.scheduled).length;
@@ -1309,10 +1341,9 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     const time = addTime;
     setAddTitle('');
     setAdding(false);
-    // Make sure it shows: a time before 7 AM or after 7 PM opens that part of the day
+    // Make sure it shows: a time before 7 AM opens the early hours
     const at = minutesOf(time);
     if (at !== undefined && at < MORNING && !morningOpen) toggleMorning();
-    if (at !== undefined && at >= EVENING && !eveningOpen) toggleEvening();
     const id = await createEntry({ name: 'Task', icon: 'circle-check' }, text, {
       taskDescription: text, ...taskFieldsForStatus('todo'), isAutoMigrating: false,
       parentGoalId: null, parentMilestoneId: null, deadline: '', priority: 'none',
@@ -1369,7 +1400,6 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   const keyAt = isToday ? Math.min(23 * 60 + 45, Math.ceil((nowMins + 1) / 15) * 15) : 9 * 60;
   const planFromKeys = async (t: { id: number; title: string }) => {
     if (keyAt < MORNING && !morningOpen) toggleMorning();
-    if (keyAt >= EVENING && !eveningOpen) toggleEvening();
     if (await planAt(t.id, keyAt)) showFlash(`Planned “${t.title}” for ${clock(keyAt)} ${dayWord}.`);
   };
   const carryProps = (t: { id: number; title: string }) => ({
@@ -1386,11 +1416,21 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
   // The tasks with no day yet, listed so they can be dragged on (a few; the Planner has the rest)
   // Ideas last, newest first within each
   const noDayTasks = planned.filter(t => !t.done && !t.scheduled).sort((x, y) => Number(x.backlog) - Number(y.backlog) || y.created - x.created);
-  const NO_DAY_SHOWN = 5;
+  const NO_DAY_SHOWN = 8;
   const tick = (t: typeof tasks[number]) =>
     void saveFields(t.entry, { ...t.fields, isCompleted: !t.fields.isCompleted, isInProgress: false, isInReview: false }).then(ok => {
       if (!ok) showFlash('Couldn’t save that task. Try again.');
     });
+
+  // Off its day: back to the tasks with no day (its time and part of the day go too, or its deadline
+  // would put it straight back), as dropping it on the Planner's Unscheduled does
+  const unscheduleTask = (id: number) => {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    void saveFields(t.entry, { ...t.fields, scheduledDate: '', scheduledPart: '', scheduledPartEnd: '', scheduledTime: '' }).then(ok => {
+      if (!ok) showFlash('Couldn’t take that task off its day. Try again.');
+    });
+  };
 
   const dayWord = isToday ? 'today' : `on ${WEEK_NAMES[dow(day)]}`;
   const [, mm, dd] = day.split('-').map(Number);
@@ -1440,10 +1480,9 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
       </Head>
 
       <Week role="group" aria-label="Days">
-        {/* The month of the days in view, at the left ("November", or "November – December") */}
+        {/* The month of the days in view, at the left, abbreviated ("Nov", or "Nov – Dec") */}
         <WeekMonth>
-          <span className="long">{[...new Set(inView.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'long' })))].join(' – ')}</span>
-          <span className="short">{[...new Set(inView.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short' })))].join('–')}</span>
+          {[...new Set(inView.map(d => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short' })))].join(' – ')}
         </WeekMonth>
         <StripBtn type="button" aria-label="Earlier days" title="Earlier" onClick={() => stripBy(-7)}>
           <Icon name="chevron-left" size={16} strokeWidth={2} />
@@ -1469,14 +1508,13 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
       </Week>
 
       <Body>
-       <Main>
         {/* The schedule */}
         <section aria-label="Schedule">
           <SubHead>
             {/* The bills due that day: one icon beside the heading */}
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <h3>Schedule</h3>
-              {dayBills.length > 0 && (
+              {mode === 'day' && dayBills.length > 0 && (
                 <Marker as="button" type="button" $due style={{ position: 'relative', left: 0, transform: 'none' }}
                   aria-label={`${dayBills.length} bill${dayBills.length === 1 ? '' : 's'} due`} title="Bills due"
                   onClick={e => openFrom('bill', e)}>
@@ -1484,12 +1522,13 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                 </Marker>
               )}
             </span>
-            <AddBtn type="button" aria-label={`Add a task to ${isToday ? 'today' : `${WEEK_NAMES[dow(day)]} ${mm}/${dd}`}`} aria-expanded={adding}
+            <ModeSwitch><FilterTabs options={SCHEDULE_MODES} active={mode} onChange={setMode} /></ModeSwitch>
+            {mode === 'day' && <AddBtn type="button" aria-label={`Add a task to ${isToday ? 'today' : `${WEEK_NAMES[dow(day)]} ${mm}/${dd}`}`} aria-expanded={adding}
               title="Add a task" onClick={openAdd}>
               <Icon name={adding ? 'x' : 'plus'} size={20} strokeWidth={2} />
-            </AddBtn>
+            </AddBtn>}
           </SubHead>
-          {adding && (
+          {adding && mode === 'day' && (
             <AddForm onSubmit={e => { e.preventDefault(); void addPlanned(); }}
               onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); setAdding(false); } }}>
               <div className="box">
@@ -1503,6 +1542,10 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
               </div>
             </AddForm>
           )}
+          {mode !== 'day' ? (
+            <AgendaBoard mode={mode} day={day} onPickDay={d => { setPicked(d === today ? null : d); setMode('day'); }}
+              onStep={dir => setPicked(addDays(day, dir * (mode === 'week' ? 7 : 4)))} />
+          ) : (
           <Timeline>
             {allDay.length + dayHolidays.length > 0 && (
               <AllDayRow>
@@ -1576,7 +1619,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                         <TickMark checked={!!b.done} size={18} />
                       </CardTick>
                     )}
-                    <BlockBtn type="button" $kind={b.kind} data-dragging={drag?.key === b.key} data-task={!!task} data-done={!!b.done}
+                    <BlockBtn type="button" $kind={b.kind} data-dragging={drag?.key === b.key} data-task={!!task} data-done={!!b.done} data-blocked={b.blocked ? '' : undefined}
                       style={{
                         // A little room above and below each card inside its time
                         top: cardTop, height: Math.max(MIN_CARD, place.height - CARD_GAP),
@@ -1591,7 +1634,7 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
                       title={`${b.title} · ${KIND_NAME[b.kind]} — drag to move, drag its foot to stretch`}>
                       {/* The card's words: as many as its time has room for (its title is its tooltip) */}
                       <span className="body">
-                        <span className="title">{b.title}</span>{moving ? <small>{`${clock(s0)} – ${clock(e0)}`}</small> : b.note && <small>{b.note}</small>}
+                        <span className="title">{b.title}</span>{b.blocked && <BlockedTag by={b.blocked} compact={place.height - CARD_GAP < 64} />}{moving ? <small>{`${clock(s0)} – ${clock(e0)}`}</small> : b.note && <small>{b.note}</small>}
                       </span>
                       <StretchGrip aria-hidden="true" onPointerDown={e => onCardDown(b, 'end', e)} />
                     </BlockBtn>
@@ -1603,61 +1646,38 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
             {laterDoses.length > 0 && (
               <LaterNote>Later · {laterDoses.map(g => `dose at ${clock(g.mins!)}`).join(', ')}</LaterNote>
             )}
-            <EveningBtn type="button" aria-expanded={eveningOpen} onClick={toggleEvening}>
-              {eveningOpen ? 'Hide after 7 PM' : `Show after 7 PM${eveningCount ? ` · ${eveningCount} ${eveningCount === 1 ? 'item' : 'items'}` : ''}`}
-              <Icon name={eveningOpen ? 'chevron-up' : 'chevron-down'} size={16} strokeWidth={1.8} aria-hidden="true" />
-            </EveningBtn>
           </Timeline>
+          )}
         </section>
 
         <Col>
-          {priorities}
-          <section aria-label={`Tasks due ${dayWord}`}>
-            <SubHead><h3>Tasks due {dayWord}</h3>{due.length > 0 && <span>{due.filter(t => !!t.fields.isCompleted).length} of {due.length}</span>}</SubHead>
-            {due.length === 0 && <Muted>Nothing due {dayWord}.</Muted>}
-            {due.map(t => {
-              const done = !!t.fields.isCompleted;
-              const where = (t.milestoneId && milestoneName.get(t.milestoneId)) || (t.goalId && goalName.get(t.goalId)) || t.category || '';
-              return (
-                <ItemRow key={t.id}>
-                  <Checkbox checked={done} aria-label={done ? `Mark "${t.title}" not done` : `Mark "${t.title}" done`} onChange={() => tick(t)} />
-                  <ItemText type="button" $done={done} onClick={() => openInJournal(t.id)}>
-                    {t.title}
-                    <small>{isToday ? 'Due today' : `Due ${WEEK_NAMES[dow(day)]} ${dd}`}{where ? ` · ${where}` : ''}</small>
-                  </ItemText>
-                  {!done && <DragGrip {...carryProps(t)}><Icon name="grip" size={16} strokeWidth={2.6} /></DragGrip>}
-                </ItemRow>
-              );
-            })}
-          </section>
-          {wins}
-        </Col>
-       </Main>
-
-        <Col>
-          {comingUp}
-          {shopping}
-          {noDay > 0 && (
-            <NoDay>
-              {noDay} {noDay === 1 ? 'task' : 'tasks'} with no day yet
-              <p>Drag one onto the schedule to plan it.</p>
-              <ul>
-                {noDayTasks.slice(0, NO_DAY_SHOWN).map(t => (
+          {side(
+            // Always there: a task dragged here from the schedule (or the 4-day / week board) leaves its day
+            <NoDay aria-label="Tasks with no day" data-unschedule-drop="" data-over={offTo ? '' : undefined}>
+              <div className="head"><h2>Tasks with no day</h2></div>
+              {noDay === 0 && <p className="count">No tasks without a day</p>}
+              {noDay > 0 && <ul>
+                {(noDayAll ? noDayTasks : noDayTasks.slice(0, NO_DAY_SHOWN)).map(t => (
                   <li key={t.id}>
-                    <DragGrip {...carryProps(t)}><Icon name="grip" size={16} strokeWidth={2.6} /></DragGrip>
+                    {mode === 'day' && <DragGrip {...carryProps(t)}><Icon name="grip" size={16} strokeWidth={2.6} /></DragGrip>}
                     <button type="button" className="name" onClick={() => openInJournal(t.id)}>{t.title}</button>
                   </li>
                 ))}
-              </ul>
-              <button type="button" onClick={() => navigate('/goals/planner')}>
-                {noDay > NO_DAY_SHOWN ? `${noDay - NO_DAY_SHOWN} more · Place them on the week` : 'Place them on the week'}
-              </button>
+              </ul>}
+              {noDay > NO_DAY_SHOWN && (
+                <button type="button" aria-expanded={noDayAll} onClick={() => setNoDayAll(v => !v)}>
+                  {noDayAll ? 'Show fewer' : `Show all ${noDay}`}
+                </button>
+              )}
             </NoDay>
           )}
-          {side}
         </Col>
       </Body>
 
+      {offTo && createPortal(
+        <Ghost style={{ left: offTo.x + 14, top: offTo.y + 10 }} aria-hidden="true">{offTo.title}</Ghost>,
+        document.body,
+      )}
       {carry && createPortal(
         <Ghost style={{ left: carry.x + 14, top: carry.y + 10 }} aria-hidden="true">{carry.title}</Ghost>,
         document.body,
@@ -1691,5 +1711,33 @@ export function DayGlance({ priorities, wins, comingUp, shopping, widgets, side,
     </Panel>
     {widgets && <Widgets>{widgets}</Widgets>}
     </>
+  );
+}
+
+/* ── Four days or the week: the Planner's own board ── */
+
+/** Four days from the chosen one, or its week (Sun–Sat), as the Planner shows them: tasks dragged
+ *  between days, up and down within one, to a time, or to and from Unscheduled (folded to its
+ *  strip until opened, per browser); a lane's name opens that day */
+function AgendaBoard({ mode, day, onPickDay, onStep }: {
+  mode: 'days' | 'week';
+  day: string;
+  onPickDay: (day: string) => void;
+  onStep: (dir: 1 | -1) => void;
+}) {
+  const openInJournal = useOpenInJournal();
+  const days = useMemo(() => (mode === 'week' ? weekOf(day) : Array.from({ length: 4 }, (_, i) => addDays(day, i))), [mode, day]);
+  const { lanes, schedule, toggleDone, resize, addTask } = usePlannerBoard(days);
+  return (
+    // Room under the Schedule heading before the days begin
+    <div style={{ marginTop: 22 }}>
+    <PlannerBoard
+      lanes={lanes} overdue={NO_CARDS} open={NO_CARDS} hideUnscheduled dropOffTo="[data-unschedule-drop]"
+      onOpen={openInJournal} onOpenEvent={openInJournal} onSchedule={schedule} onToggleDone={toggleDone} onResize={resize}
+      onAdd={(d, text) => addTask(d, text)}
+      onPrev={() => onStep(-1)} onNext={() => onStep(1)}
+      onPickDay={onPickDay}
+    />
+    </div>
   );
 }

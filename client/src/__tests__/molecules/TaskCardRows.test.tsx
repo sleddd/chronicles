@@ -33,3 +33,50 @@ describe('TaskCardRows — Category', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ parentGoalId: 2, parentMilestoneId: null }));
   });
 });
+
+describe('TaskCardRows — Blocked by', () => {
+  const tasks = [
+    { id: 5, title: 'This task', isCompleted: false },
+    { id: 7, title: 'Call the plumber', isCompleted: false },
+    { id: 8, title: 'Buy paint', isCompleted: true },
+    { id: 9, title: 'Measure the wall', isCompleted: false },
+  ];
+
+  it('offers the other open tasks only, and picking one adds it', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<TaskCardRows values={base} onChange={onChange} blockerTasks={tasks} selfId={5} />);
+    const picker = screen.getByLabelText('Blocked by a task') as HTMLSelectElement;
+    expect([...picker.options].map(o => o.textContent)).toEqual(['Pick a task', 'Call the plumber', 'Measure the wall']);
+    fireEvent.change(picker, { target: { value: '9' } });
+    const next = onChange.mock.calls.at(-1)![0] as TaskFieldValues;
+    expect(next.blockers).toEqual([{ id: expect.any(String), taskId: 9 }]);
+  });
+
+  it('a short note is added on Enter, tidied to one line', () => {
+    const onChange = vi.fn();
+    renderWithTheme(<TaskCardRows values={base} onChange={onChange} blockerTasks={tasks} selfId={5} />);
+    const box = screen.getByLabelText('Blocked by a note');
+    fireEvent.change(box, { target: { value: '  Waiting on   the landlord ' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect((onChange.mock.calls.at(-1)![0] as TaskFieldValues).blockers).toEqual([{ id: expect.any(String), note: 'Waiting on the landlord' }]);
+  });
+
+  it('lists each blocker with × to take it off; a task that is done is marked as such', () => {
+    const onChange = vi.fn();
+    const values = { ...base, blockers: [{ id: 'a', taskId: 8 }, { id: 'b', note: 'Rain' }, { id: 'c', taskId: 7 }] } as TaskFieldValues;
+    renderWithTheme(<TaskCardRows values={values} onChange={onChange} blockerTasks={tasks} selfId={5} />);
+    expect(screen.getByText('Buy paint')).toBeInTheDocument();
+    expect(screen.getByText('(done)', { exact: false })).toBeInTheDocument();
+    // A task already blocking isn't offered again
+    expect([...(screen.getByLabelText('Blocked by a task') as HTMLSelectElement).options].map(o => o.textContent)).toEqual(['Pick a task', 'Measure the wall']);
+    fireEvent.click(screen.getByLabelText('Take “Rain” off Blocked by'));
+    expect((onChange.mock.calls.at(-1)![0] as TaskFieldValues).blockers).toEqual([{ id: 'a', taskId: 8 }, { id: 'c', taskId: 7 }]);
+  });
+
+  it('nothing more can be added once there are ten', () => {
+    const blockers = Array.from({ length: 10 }, (_, i) => ({ id: `n${i}`, note: `Note ${i}` }));
+    renderWithTheme(<TaskCardRows values={{ ...base, blockers } as TaskFieldValues} onChange={vi.fn()} blockerTasks={tasks} selfId={5} />);
+    expect(screen.queryByLabelText('Blocked by a note')).toBeNull();
+    expect(screen.queryByLabelText('Blocked by a task')).toBeNull();
+  });
+});

@@ -66,6 +66,7 @@ vi.mock('../../db/assistantHistory.js', () => ({
   ASSISTANT_NEW_DOSES_PER_DAY: 100,
   assistantCreatePost: vi.fn(),
   assistantMayDelete: vi.fn().mockResolvedValue(false),
+  assistantDeletePost: vi.fn().mockResolvedValue('unseen'),
   assistantMark: { entry: (...parts: Buffer[]) => Buffer.concat(parts), record: (...parts: Buffer[]) => Buffer.concat(parts), setting: () => Buffer.from('iv') },
   AssistantHistoryFull: class AssistantHistoryFull extends Error {},
   ASSISTANT_HISTORY_FULL: { error: 'The list is full' },
@@ -84,8 +85,9 @@ import financeRouter from '../../routes/finance.js';
 import topicsRouter from '../../routes/topics.js';
 import dosesRouter from '../../routes/doses.js';
 import historyRouter from '../../routes/assistantHistory.js';
-import { assistantWrite, assistantCreatePost, assistantMayDelete, assistantNewRecordAllowed, AssistantHistoryFull, forgetAssistantChangesFor, listAssistantChanges, restoreAssistantChange, deleteAssistantChange, clearAssistantChanges } from '../../db/assistantHistory.js';
+import { assistantWrite, assistantCreatePost, assistantMayDelete, assistantDeletePost, assistantNewRecordAllowed, AssistantHistoryFull, forgetAssistantChangesFor, listAssistantChanges, restoreAssistantChange, deleteAssistantChange, clearAssistantChanges } from '../../db/assistantHistory.js';
 import { revokeAssistantSessions } from '../../middleware/auth.js';
+import { deleteSharesForEntry } from '../../db/shareQueries.js';
 import type { AiPrivacy } from '@chronicles/shared';
 import {
   getPostPage, getPost, getPostChanges, createPostCapped, updatePostCapped, deletePost, isAiHidden, getPostUpdatedAt,
@@ -197,19 +199,50 @@ describe('Entries, for the AI app', () => {
     expect(res.status).toBe(400);
   });
 
-  it('deletes only what the one check allows: its own new entry or its own data, while the version there is its own', async () => {
-    (assistantMayDelete as any).mockResolvedValue(false);
-    const refused = await request(smith).delete('/api/entries/5');
-    expect(refused.status).toBe(403);
-    expect(assistantMayDelete).toHaveBeenCalledWith(SCHEMA, 5);
-    expect(deletePost).not.toHaveBeenCalled();
-
+  it('deletes outright only what the one check allows: its own new entry or its own data, while the version there is its own', async () => {
     (assistantMayDelete as any).mockResolvedValue(true);
     const removed = await request(smith).delete('/api/entries/5');
     expect(removed.status).toBe(200);
-    // The same delete as any other: kept versions forgotten, the entry gone
+    // The same delete as any other, and the same answer: kept versions forgotten, the entry gone, no copy
+    expect(removed.body).toEqual({ success: true });
     expect(forgetAssistantChangesFor).toHaveBeenCalledWith(SCHEMA, 'entry', '5');
     expect(deletePost).toHaveBeenCalledWith(SCHEMA, 5);
+    expect(assistantDeletePost).not.toHaveBeenCalled();
+  });
+
+  it('deletes any other entry it can see only with a copy kept first, and says which', async () => {
+    (assistantMayDelete as any).mockResolvedValue(false);
+    (assistantDeletePost as any).mockImplementation(async (_s: string, _id: number, _session: number, beforeDelete: () => Promise<unknown>) => {
+      await beforeDelete();
+      return { keptChangeId: 42 };
+    });
+    const res = await request(smith).delete('/api/entries/5');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ keptChangeId: 42 });
+    // The session is recorded with the copy (only it may undo the delete)
+    expect(assistantDeletePost).toHaveBeenCalledWith(SCHEMA, 5, 1, expect.any(Function));
+    // Public links go, inside the locked delete and once more after it
+    expect(deleteSharesForEntry).toHaveBeenCalledTimes(2);
+    expect(deleteSharesForEntry).toHaveBeenCalledWith(1, 5);
+    // Never the plain delete, which would forget the copy just kept
+    expect(deletePost).not.toHaveBeenCalled();
+    expect(forgetAssistantChangesFor).not.toHaveBeenCalled();
+  });
+
+  it('a hidden or missing entry is refused as before; so is a delete past the day’s budget or with the list full, deleting nothing', async () => {
+    (assistantMayDelete as any).mockResolvedValue(false);
+    (assistantDeletePost as any).mockResolvedValue('unseen');
+    expect((await request(smith).delete('/api/entries/5')).status).toBe(403);
+    (assistantDeletePost as any).mockResolvedValue('limit');
+    const limit = await request(smith).delete('/api/entries/5');
+    expect(limit.status).toBe(429);
+    expect(limit.body.error).toMatch(/as many entries as it may in a day/);
+    (assistantDeletePost as any).mockRejectedValue(new AssistantHistoryFull());
+    const full = await request(smith).delete('/api/entries/5');
+    expect(full.status).toBe(429);
+    expect(full.body).toEqual({ error: 'The list is full' });
+    expect(deletePost).not.toHaveBeenCalled();
+    expect(deleteSharesForEntry).not.toHaveBeenCalled();
   });
 
   it('takes a few entry ids at a time, whatever it asks for; a browser gets what it asks for', async () => {
@@ -234,7 +267,9 @@ describe('Entries, for the AI app', () => {
   it('a browser deletes as before, never asking whether the app owns the entry', async () => {
     const res = await request(browser).delete('/api/entries/5');
     expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
     expect(assistantMayDelete).not.toHaveBeenCalled();
+    expect(assistantDeletePost).not.toHaveBeenCalled();
     expect(deletePost).toHaveBeenCalledWith(SCHEMA, 5);
   });
 
@@ -493,14 +528,33 @@ describe('The list of what the AI app changed', () => {
   beforeEach(() => vi.clearAllMocks());
   const change = { id: 7, kind: 'entry', ref: '5', savedAt: new Date(), body: Buffer.from('c'), bodyIv: Buffer.alloc(12), meta: Buffer.from('m'), metaIv: Buffer.alloc(12), extra: null };
 
-  it('is never for the AI app itself', async () => {
+  it('is never for the AI app itself, but for its own undo', async () => {
     expect((await request(smith).get('/api/assistant-changes')).status).toBe(403);
-    expect((await request(smith).post('/api/assistant-changes/7/restore')).status).toBe(403);
     expect((await request(smith).delete('/api/assistant-changes/7')).status).toBe(403);
     expect((await request(smith).delete('/api/assistant-changes')).status).toBe(403);
     expect(listAssistantChanges).not.toHaveBeenCalled();
-    expect(restoreAssistantChange).not.toHaveBeenCalled();
+    expect(deleteAssistantChange).not.toHaveBeenCalled();
     expect(clearAssistantChanges).not.toHaveBeenCalled();
+  });
+
+  it('the AI app may put back only what its own session deleted, in the window (checked under the lock)', async () => {
+    (restoreAssistantChange as any).mockResolvedValue({ ok: true, change: { ...change, extra: { deleted: true, session: 1 } } });
+    const ok = await request(smith).post('/api/assistant-changes/7/restore');
+    expect(ok.status).toBe(200);
+    expect(ok.body.restored).toMatchObject({ id: 7, ref: '5', extra: { deleted: true } });
+    expect(restoreAssistantChange).toHaveBeenCalledWith(SCHEMA, 7, { sessionId: 1 });
+    (restoreAssistantChange as any).mockResolvedValue({ ok: false, reason: 'not-yours' });
+    const refused = await request(smith).post('/api/assistant-changes/7/restore');
+    expect(refused.status).toBe(403);
+    // The owner's restore carries no such limit
+    (restoreAssistantChange as any).mockResolvedValue({ ok: true, change });
+    await request(browser).post('/api/assistant-changes/7/restore');
+    expect(restoreAssistantChange).toHaveBeenLastCalledWith(SCHEMA, 7, undefined);
+  });
+
+  it('an entry already back is never written over', async () => {
+    (restoreAssistantChange as any).mockResolvedValue({ ok: false, reason: 'taken' });
+    expect((await request(browser).post('/api/assistant-changes/7/restore')).status).toBe(409);
   });
 
   it('lists them for the owner, still encrypted', async () => {

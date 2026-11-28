@@ -31,7 +31,28 @@ function isTodaysCheckIn(meta: Record<string, unknown>, day: string): boolean {
  * (debounced 600ms, optimistic store updates), so values stay in sync both
  * ways.
  */
-export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?: string; quad?: boolean; bare?: boolean; strip?: boolean; foldable?: boolean } = {}) {
+/* The home dashboard's title row (the widget card styles its h2 and draws its fold arrow and grip) */
+const TitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  h2 { margin: 0; }
+`;
+
+/* The titled card: the widget card's own padding is the room under it — Your day's bar (its last
+   row) adds none of its own */
+const Titled = styled.section`
+  /* …and less of the card's padding under it, too */
+  margin-bottom: -16px;
+  & [role='region'][aria-label='Your day'] > button:first-child { padding-bottom: 0; }
+`;
+
+/** `titled` (home dashboard): a section with its title row, the strip flat under it — the widget card
+ *  around it is the panel */
+export function WellnessCheckIn({ title, quad, bare, strip, foldable, titled }: { title?: string; quad?: boolean; bare?: boolean; strip?: boolean; foldable?: boolean; titled?: boolean } = {}) {
   const { encryptPost, encryptNewPost } = useEncryption();
   const decryptedEntries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
@@ -232,12 +253,19 @@ export function WellnessCheckIn({ title, quad, bare, strip, foldable }: { title?
       showCycle={cycleTracking}
       compact={!quad && !strip}
       strip={strip}
-      flat={strip && foldable}
+      flat={strip && (foldable || titled)}
       quad={!strip && quad && (bare || foldable || !title)}
       row={!strip && !!title && !bare && !foldable}
       smallFaces={bare}
       footer={<DayInventory values={day} onChange={setDay} inside />}
     />
+  );
+  // Titled (the home dashboard's widget card): its title row, then the strip
+  if (titled) return (
+    <Titled aria-label={title ?? 'Wellness check-in'}>
+      <TitleRow><h2>{title ?? 'Wellness check-in'}</h2></TitleRow>
+      {panel}
+    </Titled>
   );
   // Foldable (the Health dashboard): the four squares in a panel with its title, folded by its chevron
   if (foldable) return (

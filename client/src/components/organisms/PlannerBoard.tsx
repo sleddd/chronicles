@@ -6,6 +6,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { BlockedTag } from '../atoms/BlockedTag.js';
 import { TickMark } from '../atoms/TickMark.js';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
 import { usePagePan } from '../../hooks/usePagePan.js';
@@ -31,6 +32,8 @@ export interface PlannerCard {
   due?: string;
   /** A quiet note ("From Nov 10" on a task that rolled forward) */
   note?: string;
+  /** What it's waiting on ("Call the plumber +1"): struck through with a Blocked tag */
+  blocked?: string;
   done: boolean;
   /** The day it is planned for ('' = none) — the calendar button's value */
   day: string;
@@ -76,10 +79,10 @@ const hourName = (h: number) => (h === 0 || h === 24 ? '12 AM' : h === 12 ? '12 
 
 /* ── Styles ── */
 
-const Wrap = styled.div<{ $day: boolean; $folded: boolean }>`
+const Wrap = styled.div<{ $day: boolean; $folded: boolean; $solo?: boolean }>`
   display: grid;
-  /* The days first, Unscheduled on the right (and under them on narrow screens) */
-  grid-template-columns: minmax(0, 1fr) ${({ $day, $folded }) => ($folded ? '48px' : $day ? '320px' : '264px')};
+  /* The days first, Unscheduled on the right (and under them on narrow screens); just the days without it */
+  grid-template-columns: minmax(0, 1fr) ${({ $day, $folded, $solo }) => ($solo ? '' : $folded ? '48px' : $day ? '320px' : '264px')};
   /* Unscheduled runs the days' height (it scrolls inside), so it never reaches past them */
   align-items: stretch;
   & > :first-child { order: 2; }
@@ -684,11 +687,13 @@ function CardBody({ card, onSchedule, onToggleDone, compact }: { card: PlannerCa
         )}
         <Text>
           {card.kicker && !compact && <Kicker>{card.kicker}</Kicker>}
-          <Title $done={card.done}>{card.title}</Title>
+          <Title $done={card.done || !!card.blocked}>{card.title}</Title>
         </Text>
       </TickRow>
+      {compact && card.blocked && <BlockedTag by={card.blocked} compact />}
       {compact && card.day && <Note data-len>{hoursLabel(card.hours)}</Note>}
     </Line>
+    {!compact && card.blocked && <BlockedTag by={card.blocked} />}
     {!compact && (
       <Foot>
         {card.due && <Chip><MaterialIcon $size={15} aria-hidden="true">flag</MaterialIcon>{card.due}</Chip>}
@@ -792,6 +797,11 @@ interface PlannerBoardProps extends CardActions {
   folded?: boolean;
   /** Fold or open Unscheduled; omitted = no fold button */
   onFold?: (folded: boolean) => void;
+  /** No Unscheduled list at all, just the days (the dashboard's Your Agenda) */
+  hideUnscheduled?: boolean;
+  /** A selector for an element outside the board (Your Agenda's tasks-with-no-day list): a card let go
+   *  over it leaves its day. Marked `data-over` while a card is over it */
+  dropOffTo?: string;
   /** The previous / next week (or day): dragging or swiping the days sideways */
   onPrev?: () => void;
   onNext?: () => void;
@@ -799,7 +809,7 @@ interface PlannerBoardProps extends CardActions {
 
 const NO_CARDS: PlannerCard[] = [];
 
-export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARDS, tools, toolsSet = 0, onOpen, onSchedule, onToggleDone, onResize, onOpenEvent, onAdd, onPickDay, folded = false, onFold, onPrev, onNext }: PlannerBoardProps) {
+export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARDS, tools, toolsSet = 0, onOpen, onSchedule, onToggleDone, onResize, onOpenEvent, onAdd, onPickDay, folded = false, onFold, hideUnscheduled = false, dropOffTo, onPrev, onNext }: PlannerBoardProps) {
   const [filtersOpen, setFiltersOpen] = useState(loadFiltersOpen);
   const toggleFilters = () => setFiltersOpen(v => {
     try { localStorage.setItem(FILTERS_OPEN_KEY, v ? '0' : '1'); } catch { /* per browser only */ }
@@ -993,13 +1003,30 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
     // this timer on every page, so a held card raced through the weeks instead of waiting
   }, [dragging, scrollEl, canPage]);
 
+  /** Is the dragged card's centre over the `dropOffTo` element? (marks it while it is) */
+  const overDropOff = (rect: { left: number; top: number; width: number; height: number } | null | undefined) => {
+    const el = dropOffTo ? document.querySelector<HTMLElement>(dropOffTo) : null;
+    if (!el || !rect) return false;
+    const r = el.getBoundingClientRect();
+    const x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    const inside = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    el.toggleAttribute('data-over', inside);
+    return inside;
+  };
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     dragUntil.current = Date.now() + 300;
     setDragging(null);
-    if (!over) return;
     const id = Number(active.id);
     const held = dragCard.current;
     const from = placeOf(id) ?? (held?.card.id === id ? held.from : undefined);
+    // Let go over the list outside the board: off its day
+    if (dropOffTo && overDropOff(active.rect.current.translated)) {
+      document.querySelector(dropOffTo)?.removeAttribute('data-over');
+      dragCard.current = null;
+      if (from) onSchedule(id, '', null);
+      return;
+    }
+    if (!over) return;
     dragCard.current = null;
     if (from === undefined) return;
     const target = String(over.id);
@@ -1150,9 +1177,10 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
 
   return (
     <DndContext sensors={sensors} collisionDetection={collisions} onDragStart={handleDragStart}
-      onDragCancel={() => { dragUntil.current = Date.now() + 300; dragCard.current = null; setDragging(null); }} onDragEnd={handleDragEnd}>
-      <Wrap $day={single} $folded={folded}>
-        <DropZone id={UNSCHEDULED}>
+      onDragMove={dropOffTo ? ({ active }) => { overDropOff(active.rect.current.translated); } : undefined}
+      onDragCancel={() => { if (dropOffTo) document.querySelector(dropOffTo)?.removeAttribute('data-over'); dragUntil.current = Date.now() + 300; dragCard.current = null; setDragging(null); }} onDragEnd={handleDragEnd}>
+      <Wrap $day={single} $folded={folded} $solo={hideUnscheduled}>
+        {!hideUnscheduled && <DropZone id={UNSCHEDULED}>
           {(over, ref) => (folded ? (
             <Folded ref={ref} $over={over} aria-label="Unscheduled">
               <FoldBtn type="button" aria-expanded={false} aria-label="Show unscheduled tasks" title="Show unscheduled tasks" onClick={() => onFold?.(false)}>
@@ -1194,7 +1222,7 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
               </BacklogList>
             </Backlog>
           ))}
-        </DropZone>
+        </DropZone>}
 
         <DaysArea>
           {dragging !== null && onPrev && onNext && (['prev', 'next'] as const).map(side => (

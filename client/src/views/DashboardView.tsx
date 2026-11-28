@@ -5,11 +5,12 @@ import {
   type CollisionDetection, type DragEndEvent, type DragOverEvent, type UniqueIdentifier,
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { gridFrom, flattenGrid, dropOnCard, dropOnGap, type GridRow } from '../utils/dashboardGrid.js';
+import { gridFrom, flattenGrid, dropOnCard, dropOnGap, setWidth, type GridRow, type GridCell } from '../utils/dashboardGrid.js';
 import { CSS } from '@dnd-kit/utilities';
 import styled, { css } from 'styled-components';
 import { glassCard, glassPill, onPhoto } from '../styles/wallpaper.js';
 import { DayGlance } from '../components/organisms/DayGlance.js';
+import { useScrollMemory } from '../hooks/useScrollMemory.js';
 import { cardLabel } from '../styles/cardLabel.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ContentTemplate } from '../components/templates/ContentTemplate.js';
@@ -96,7 +97,7 @@ import { topicEntries } from '../utils/topicIndex.js';
 
 /* ── Config ── */
 
-type SectionKey = 'glance' | 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time' | 'habits' | 'focus' | 'shortcuts';
+type SectionKey = 'glance' | 'quickEntry' | 'nextUp' | 'wellness' | 'clocks' | 'quote' | 'priorities' | 'wins' | 'comingUp' | 'exercise' | 'recent' | 'symptom' | 'menu' | 'meds' | 'shopping' | 'quickLog' | 'tasks' | 'mantra' | 'stats' | 'time' | 'habits' | 'focus' | 'shortcuts' | 'noDay';
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'shortcuts', label: 'Shortcuts' },
@@ -107,6 +108,11 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'quickLog', label: 'Quick meal log' },
   { key: 'symptom', label: 'Log a symptom' },
   { key: 'menu', label: 'On the menu' },
+  { key: 'priorities', label: 'Priorities' },
+  { key: 'wins', label: 'Wins' },
+  { key: 'noDay', label: 'Tasks with no day' },
+  { key: 'comingUp', label: 'Coming up' },
+  { key: 'shopping', label: 'Shopping list' },
   { key: 'recent', label: 'Recent entries' },
   { key: 'stats', label: 'Stats' },
   { key: 'time', label: 'Time tracked' },
@@ -144,6 +150,8 @@ interface DashboardConfig {
   glanceWinsSetup?: boolean;
   /** …and the Shopping list card, once it moved inside it too */
   glanceShoppingSetup?: boolean;
+  /** Priorities, Wins, Coming up and the Shopping list became cards again: switched back on once */
+  agendaCardsSetup?: boolean;
   /** The zones in thirds (under the Quick entry, Your Agenda's top row): their rows of columns,
       each column a stack of cards (utils/dashboardGrid) */
   grids?: { head?: GridRow[]; top?: GridRow[] };
@@ -151,37 +159,51 @@ interface DashboardConfig {
 
 
 
-/** The columns cards are dragged between */
-const COLS = ['head', 'top', 'left', 'right', 'side'] as const;
+/** The zones cards are dragged between */
+const COLS = ['head', 'top', 'agenda'] as const;
 /** The zones laid out in thirds, where a drop also sets a card's width */
 const THIRDS: ReadonlySet<string> = new Set(['head', 'top']);
 type ColId = typeof COLS[number];
-/** `head`: full width above the world clocks (empty until a card is dragged there);
-    `top`: across both columns under the schedule and priorities; `left` / `right`: the two columns;
-    `side`: Your Agenda's third column, under Coming up and the shopping list */
-type Layout = { head?: SectionKey[]; top?: SectionKey[]; left: SectionKey[]; right: SectionKey[]; side?: SectionKey[] };
+/** `head`: full width above Your Agenda (the world clocks to start); `top`: the widgets under Your
+    Agenda, in rows of thirds; `agenda`: Your Agenda's right column (Priorities, Wins, the tasks with
+    no day, and anything dragged in). `left` / `right` / `side` are older layouts' zones: their cards
+    go into the widgets (three across) */
+type Layout = { head?: SectionKey[]; top?: SectionKey[]; agenda?: SectionKey[]; left?: SectionKey[]; right?: SectionKey[]; side?: SectionKey[] };
+type FullLayout = Record<ColId, SectionKey[]>;
 
-/** The cards that can be dragged (in Your Agenda), and where they start */
-const DEFAULT_LAYOUT: Required<Layout> = {
+/** The widgets that were the two columns: three across under the ones at the top */
+const DEFAULT_LEFT: SectionKey[] = ['tasks', 'nextUp', 'habits', 'comingUp', 'quickLog', 'exercise', 'symptom'];
+const DEFAULT_RIGHT: SectionKey[] = ['recent', 'shopping', 'mantra', 'time', 'meds'];
+/** Your Agenda's right column to start */
+const AGENDA_KEYS: SectionKey[] = ['priorities', 'wins', 'noDay'];
+const interleave = (a: SectionKey[], b: SectionKey[]) =>
+  Array.from({ length: Math.max(a.length, b.length) }, (_, i) => [a[i], b[i]]).flat().filter((k): k is SectionKey => !!k);
+
+/** The cards that can be dragged, and where they start */
+const DEFAULT_LAYOUT: FullLayout = {
   head: ['clocks'],
-  top: ['shortcuts', 'wellness', 'quote', 'menu', 'focus'],
-  left: ['priorities', 'tasks', 'nextUp', 'wins', 'habits', 'comingUp', 'quickLog', 'exercise', 'symptom'],
-  right: ['recent', 'shopping', 'mantra', 'time', 'meds'],
-  side: [],
+  top: ['shortcuts', 'wellness', 'quote', 'menu', 'focus', ...interleave(DEFAULT_LEFT, DEFAULT_RIGHT), 'stats'],
+  agenda: AGENDA_KEYS,
 };
 
-/** The saved layout with any card it doesn't know put back in its default place. One saved before
-    the top row (no `top`) leaves the wellness check-in, the quote and On the menu to their default
-    place at the top */
-function fullLayout(saved?: Layout): Required<Layout> {
-  const base: Layout = !saved ? DEFAULT_LAYOUT : saved.top ? saved
-    : { left: saved.left.filter(k => !DEFAULT_LAYOUT.top.includes(k)), right: saved.right.filter(k => !DEFAULT_LAYOUT.top.includes(k)) };
+/** An older layout's column cards (or the default ones), in turn left / right: dealt three across */
+function columnKeys(saved?: Layout): SectionKey[] {
+  if (!saved || saved.agenda) return interleave(DEFAULT_LEFT, DEFAULT_RIGHT);
+  const legacy = (k: SectionKey) => !AGENDA_KEYS.includes(k);
+  return [...interleave((saved.left ?? []).filter(legacy), (saved.right ?? []).filter(legacy)), ...(saved.side ?? []).filter(legacy)];
+}
+
+/** The saved layout with any card it doesn't know put back in its default place. An older one's
+    two columns (and Your Agenda's old third column) join the widgets; its Priorities and Wins go to
+    Your Agenda's right column */
+function fullLayout(saved?: Layout): FullLayout {
+  const base: Partial<FullLayout> = !saved ? DEFAULT_LAYOUT : saved.agenda ? saved
+    : { head: saved.head, top: [...(saved.top ?? []), ...columnKeys(saved)] };
   const all = COLS.flatMap(c => DEFAULT_LAYOUT[c]);
   const seen = new Set<SectionKey>();
-  const out = {} as Required<Layout>;
+  const out = {} as FullLayout;
   for (const c of COLS) {
-    // The clocks strip never sits in one of the two narrow columns (older layouts had it there): back to its place
-    out[c] = (base[c] ?? []).filter(k => all.includes(k) && !seen.has(k) && !(k === 'clocks' && (c === 'left' || c === 'right')));
+    out[c] = (base[c] ?? []).filter(k => all.includes(k) && !seen.has(k) && (k !== 'noDay' || c === 'agenda'));
     out[c].forEach(k => seen.add(k));
   }
   for (const c of COLS) DEFAULT_LAYOUT[c].forEach((k, i) => {
@@ -198,6 +220,8 @@ const PHOTO_PAST_TOP = 120;
 /* ── Layout ── */
 
 const Page = styled.div`
+  /* Light: the widget cards have no fill, and their edge is a little lighter than other cards' (--edge-card is 0.18) */
+  --edge-widget-light: rgba(70, 45, 20, 0.12);
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -477,6 +501,38 @@ const QuoteText = styled.blockquote`
   @media (max-width: 480px) { font-size: 18px; }
 `;
 
+/* Under the quote: the author on the left, the ‹ › arrows in the bottom-right corner */
+const QuoteFoot = styled.div`
+  display: flex;
+  /* The author stays right under the quote; the arrows sit lower, with room above and below them */
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  & > p { min-width: 0; }
+`;
+const QuoteNav = styled.div`
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding-top: 34px;
+  /* Tucked into the card's bottom-right corner */
+  margin: 0 -16px -14px 0;
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  button:hover { color: var(--text-primary); }
+  button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+`;
 const QuoteBy = styled.p`
   margin: 10px 0 0;
   font-family: var(--font-sans);
@@ -486,15 +542,20 @@ const QuoteBy = styled.p`
 
 /* The world clocks' card: a row per city — the name (home in the accent) with
    Local / +3h under it, the weather, the time on the right */
+/* A city in the list of clocks (a narrow card — the agenda's column, a third): its name on a line of
+   its own, then its weather and the time under it */
 const ClockRow = styled.div<{ $home: boolean }>`
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'city city' 'weather time';
   align-items: center;
-  gap: 14px;
-  min-height: 56px;
+  gap: 4px 14px;
+  padding: 12px 0;
   font-family: var(--font-sans);
   & + & { border-top: 1px solid var(--border-subtle); }
-  .city { flex: 1; min-width: 0; font-size: 16px; color: ${({ $home }) => ($home ? 'var(--color-accent-link)' : 'var(--text-secondary)')}; }
-  .city small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-muted); }
+  .city { grid-area: city; min-width: 0; font-size: 16px; color: ${({ $home }) => ($home ? 'var(--color-accent-link)' : 'var(--text-secondary)')}; }
+  .weather { grid-area: weather; min-width: 0; overflow: hidden; }
+  .time { grid-area: time; }
   .weather { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-muted); white-space: nowrap; }
   .weather > span:first-child { color: var(--color-accent); }
   .time { flex: none; min-width: 84px; text-align: right; font-size: 16px; font-weight: 500; color: var(--text-primary); font-variant-numeric: tabular-nums; }
@@ -546,41 +607,20 @@ const ClockStrip = styled.section`
 
 /* Three columns over shared rows (each column a subgrid spanning them, --rows),
    so the cards side by side in a row are the same height */
-/* Stats at the foot of Your Agenda's widgets: the widgets' gap above it, not its own margin */
-const StatsSpan = styled.div`
-  & > section { margin-top: 0; }
-`;
-
 /* The zone above the clocks: no room of its own until a card is in it */
 const HeadZone = styled.div<{ $filled: boolean }>`
   margin: ${({ $filled }) => ($filled ? '14px 0' : '0')};
 `;
 
-const Columns = styled.div<{ $rows: number }>`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(${({ $rows }) => $rows}, auto);
-  gap: 36px 44px;
-  && > * {
-    grid-row: 1 / span ${({ $rows }) => $rows};
-    display: grid;
-    grid-template-rows: subgrid;
-    align-content: start;
-  }
-  align-items: start;
-  /* One column: each column's cards stack, no shared rows */
-  @media (max-width: 760px) {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-    && > * { grid-row: auto; display: flex; grid-template-rows: none; }
-  }
-`;
 
 const Col = styled.div`
   display: flex;
   flex-direction: column;
   gap: 36px;
   min-width: 0;
+  border-radius: 16px;
+  /* A card dragged over it (Your Agenda's column, an empty zone): a dashed outline where it will go */
+  &[data-over] { outline: 1px dashed var(--color-accent); outline-offset: 8px; }
   /* A zone in thirds (under the Quick entry, the top row): one wrapper across all three
      columns, its rows (ThirdsRow) laying out the thirds — one column on phones */
   &[data-grid] {
@@ -594,6 +634,10 @@ const Col = styled.div`
 
 /* A row of a zone in thirds: up to three columns, each a stack of cards (one column on phones) */
 const ThirdsRow = styled.div`
+  position: relative;
+  border-radius: 16px;
+  /* A card dragged into the row's free space: a dashed outline round the row */
+  &[data-over] { outline: 1px dashed var(--color-accent); outline-offset: 6px; }
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   column-gap: 32px;
@@ -602,6 +646,7 @@ const ThirdsRow = styled.div`
   @media (max-width: 760px) { grid-template-columns: minmax(0, 1fr); row-gap: var(--zone-gap); }
 `;
 const ThirdsCellBox = styled.div<{ $span: number; $over: boolean }>`
+  position: relative;
   grid-column: span ${({ $span }) => $span};
   display: flex;
   flex-direction: column;
@@ -613,6 +658,35 @@ const ThirdsCellBox = styled.div<{ $span: number; $over: boolean }>`
   outline: ${({ $over }) => ($over ? '1px dashed var(--color-accent)' : 'none')};
   outline-offset: 4px;
   @media (max-width: 760px) { grid-column: 1 / -1; }
+`;
+/* A column's right edge: drag it to a third, two thirds or the full width. Nothing shows until the
+   pointer is on it — then the resize cursor and a faint accent line */
+const ResizeEdge = styled.div`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -22px;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 3;
+  &::after { content: ''; position: absolute; top: 12px; bottom: 12px; left: 5px; width: 2px; border-radius: 1px; background: transparent; transition: background 120ms; }
+  &:hover::after, &[data-active]::after, &:focus-visible::after { background: var(--color-accent-line, var(--color-accent)); }
+  &:focus-visible { outline: none; }
+  /* The row's last column: just inside its right edge (past it is the page's edge) */
+  &[data-last] { right: 0; }
+  @media (max-width: 760px) { display: none; }
+`;
+/* While an edge is dragged: the width it will snap to, outlined */
+const ResizeGhost = styled.div`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border: 1px dashed var(--color-accent);
+  border-radius: 16px;
+  pointer-events: none;
+  z-index: 2;
 `;
 /* Between two rows: the rows' gap — and, while a card is dragged, a strip to drop it on as a full-width row */
 const ThirdsGap = styled.div<{ $dragging: boolean; $over: boolean; $edge: boolean }>`
@@ -634,7 +708,8 @@ const cardShell = css`
   border-radius: 16px;
   background: var(--bg-panel);
   ${glassCard}
-  html[data-theme='light'] & { background: transparent; }
+  /* Light: no fill, just a lighter edge */
+  html[data-theme='light'] & { background: transparent; box-shadow: 0 0 0 1px var(--edge-widget-light), var(--shadow-soft); }
 `;
 
 /* The widget cards have no background — no fill or shadow — just a light
@@ -654,8 +729,9 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
   /* Light: the edge is the ring drawn with the shadow (--shadow-card), on every card alike */
   html[data-theme='light'] & { border-color: transparent; }
   /* The title row is the chevron's 30px tall, its link centred, so the link and chevron line up */
-  & > section > :first-child { align-items: center; padding-right: 64px; }
-  @media (max-width: 480px) { & > section > :first-child { padding-right: 58px; } }
+  /* Room for the grip and fold arrow only, so the title row's link sits right beside them */
+  & > section > :first-child { align-items: center; padding-right: 54px; }
+  @media (max-width: 480px) { & > section > :first-child { padding-right: 56px; } }
 
   && > section > :first-child { margin-bottom: 6px; }
   /* Titles: the dashboards' card label (small tracked grey capitals), on the chevron's 30px line */
@@ -664,11 +740,12 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
     line-height: 30px;
     ${cardLabel}
   }
-  /* $open (every card but the daily quote and the wellness check-in): its panel as usual,
-     with a thin sentence-case Work Sans title over the hairline (not the small capitals) */
+  /* $open (every card but the daily quote and the wellness check-in): its panel as usual, with
+     its title in the style of Your Agenda's Schedule heading — the card label (small tracked grey
+     capitals, cardLabel) over the hairline */
   ${({ $open }) => ($open ? `
-    /* Room above and below the title's hairline */
-    && > section > :first-child { margin-bottom: 24px; padding-bottom: 22px; }
+    /* Room above and below the title's hairline (as under Schedule) */
+    && > section > :first-child { margin-bottom: 14px; padding-bottom: 12px; }
     /* In a narrow column the title stays on one line and its links and controls
        (View journal, All 7 cities, Meal | Exercise…) drop under it, left-aligned */
     && > section > :first-child { flex-wrap: wrap; row-gap: 6px; }
@@ -683,21 +760,20 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
     }
     && > section > :first-child h2,
     && > section > :first-child label > span {
-      font-family: var(--font-display);
-      font-size: 22px;
-      font-weight: 300;
-      letter-spacing: 0;
-      text-transform: none;
-      line-height: 40px;
-      /* A step back from full strength, so the cards' content leads */
-      color: color-mix(in srgb, var(--text-primary) 68%, transparent);
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      line-height: 30px;
+      color: var(--text-muted);
     }
     /* A little less room above the title than the card's usual padding */
     padding-top: 20px;
     @media (max-width: 480px) { padding-top: 14px; }
-    /* Grip and chevron centred on the title's 40px line */
-    & > button { top: 25px; }
-    @media (max-width: 480px) { & > button { top: 19px; } }
+    /* Grip and chevron on the title's 30px line */
+    & > button { top: 20px; }
+    @media (max-width: 480px) { & > button { top: 14px; } }
   ` : '')}
   /* $plain (Wellness check-in): no panel, title or fold — its four-square box as it is,
      with only the grip, tucked into the box's top-right corner */
@@ -747,10 +823,11 @@ const WidgetCard = styled.div<{ $collapsed: boolean; $plain?: boolean; $open?: b
     & > button { top: 50% !important; transform: translateY(-50%); }
   ` : '')}
   /* Light: no fill, just the edge (--shadow-card's ring) — after glassCard / $open rules */
-  html[data-theme='light'] && { background: transparent; }
+  html[data-theme='light'] && { background: transparent; box-shadow: 0 0 0 1px var(--edge-widget-light), var(--shadow-soft); }
 `;
 
-/* The grip to drag a card by, just left of its fold chevron */
+/* The grip to drag a card by, at the right end of its title row, just inside its fold arrow (the arrow
+   always outermost, on every card) */
 /* The wellness check-in's holder: nothing of its own (no padding, fill or outline) — the box is
    the card — with the grip inside the box's top-right corner */
 const PlainCard = styled.div`
@@ -758,12 +835,16 @@ const PlainCard = styled.div`
   min-width: 0;
   & > section { width: 100%; }
   && > button[aria-label^="Move"] { top: 14px; right: 14px; z-index: 1; }
+  /* In Your Agenda's right column: room at the right for the grip, level with the list's heading */
+  &[data-agenda] { padding-right: 34px; }
+  &[data-agenda] > button[aria-label^="Move"] { top: 0; right: 0; }
 `;
+
 
 const DragHandle = styled.button`
   position: absolute;
   top: 34px;
-  right: 56px;
+  right: 52px;
   display: grid;
   place-items: center;
   width: 26px;
@@ -779,7 +860,7 @@ const DragHandle = styled.button`
   &:hover { color: var(--text-primary); }
   &:active { cursor: grabbing; }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-  @media (max-width: 480px) { top: 24px; right: 46px; }
+  @media (max-width: 480px) { top: 24px; right: 44px; }
 `;
 
 const FoldBtn = styled.button<{ $collapsed: boolean }>`
@@ -1019,12 +1100,11 @@ function WorldClocks({ places, now, open, onToggle, strip }: { places: Place[]; 
       </SectionHead>
       {list.length === 0 ? <Muted>Add your city under Theme and layout (the sliders button) for the weather and world clocks.</Muted> : shown.map((p, i) => {
         const [t, ampm] = clockParts(p.timezone, now);
-        const diff = hoursFromLocal(p.timezone, now);
         const w = weather[p.name];
         const d = w ? describeWeather(w.code, w.isDay) : null;
         return (
           <ClockRow key={`${p.name}-${i}`} $home={i === 0}>
-            <span className="city">{p.name}<small>{diff === 0 ? 'Local' : `${diff > 0 ? '+' : ''}${diff}h`}</small></span>
+            <span className="city">{p.name}</span>
             {d && <span className="weather"><MaterialIcon $size={18} aria-hidden="true">{d.icon}</MaterialIcon><span>{w!.tempF}°<span className="label"> · {d.label}</span></span></span>}
             <span className="time">{t} {ampm}</span>
           </ClockRow>
@@ -2266,7 +2346,9 @@ const STAT_PERIODS: { value: StatsPeriod; label: string }[] = [
   { value: 'all', label: 'All time' },
 ];
 
-function Stats({ meals, meds, exercise, phoneLast, folded, onToggleFold }: { meals: boolean; meds: boolean; exercise: boolean; phoneLast: boolean; folded?: boolean; onToggleFold?: () => void }) {
+/** `asCard` (a widget card on the home dashboard): the period picker is the card's title row and the
+ *  figures sit under it — the card folds it like any other */
+function Stats({ meals, meds, exercise, phoneLast, folded, onToggleFold, asCard }: { meals: boolean; meds: boolean; exercise: boolean; phoneLast: boolean; folded?: boolean; onToggleFold?: () => void; asCard?: boolean }) {
   const entries = useEntriesStore(s => s.decryptedEntries);
   const allTopics = useEntriesStore(s => s.allTopics);
   const [period, setPeriod] = useState<StatsPeriod>('month');
@@ -2293,22 +2375,32 @@ function Stats({ meals, meds, exercise, phoneLast, folded, onToggleFold }: { mea
     { label: 'Check-ins', value: stats.checkIns, on: true },
   ];
 
+  const picker = (wrap: boolean) => (
+    <LabelPick $wrap={wrap}>
+      <span>{STAT_PERIODS.find(p => p.value === period)?.label}</span>
+      <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
+      <select aria-label="Stats for" value={period} onChange={e => setPeriod(e.target.value as StatsPeriod)}>
+        {STAT_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+      </select>
+    </LabelPick>
+  );
+  const grid = (
+    <StatGrid>
+      {figures.filter(f => f.on).map(f => (
+        <StatFig key={f.label}><b>{f.value.toLocaleString()}</b><span>{f.label}</span></StatFig>
+      ))}
+    </StatGrid>
+  );
+  if (asCard) return (
+    <section aria-label="Stats">
+      <SectionHead>{picker(false)}</SectionHead>
+      {grid}
+    </section>
+  );
   return (
-    <StatsBar aria-label="Stats" $phoneLast={phoneLast} $folded={!!folded}>
-      <LabelPick $wrap>
-        <span>{STAT_PERIODS.find(p => p.value === period)?.label}</span>
-        <Icon name="chevron-down" size={14} strokeWidth={2} aria-hidden="true" />
-        <select aria-label="Stats for" value={period} onChange={e => setPeriod(e.target.value as StatsPeriod)}>
-          {STAT_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
-      </LabelPick>
-      {!folded && (
-        <StatGrid>
-          {figures.filter(f => f.on).map(f => (
-            <StatFig key={f.label}><b>{f.value.toLocaleString()}</b><span>{f.label}</span></StatFig>
-          ))}
-        </StatGrid>
-      )}
+    <StatsBar aria-label="Stats" $phoneLast={phoneLast} $folded={!!folded} data-folded={folded || undefined}>
+      {picker(true)}
+      {!folded && grid}
       {onToggleFold && (
         <StatsFold type="button" aria-expanded={!folded} aria-label={folded ? 'Show the stats' : 'Fold the stats'} title={folded ? 'Show' : 'Fold'} onClick={onToggleFold}>
           <Icon name={folded ? 'chevron-down' : 'chevron-up'} size={18} strokeWidth={1.8} />
@@ -2726,24 +2818,26 @@ export function Shopping({ show: savedShow, onShow: saveShow, compact }: { show:
 /** Cards drawn with no outline wherever they sit */
 const NO_OUTLINE: ReadonlySet<SectionKey> = new Set<SectionKey>(['habits', 'time']);
 
-function SortableCard({ id, collapsed, label, plain, open, wide, spaced, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; open?: boolean; wide?: boolean; spaced?: boolean; children: ReactNode }) {
+function SortableCard({ id, collapsed, label, plain, open, wide, spaced, agenda, children }: { id: SectionKey; collapsed: boolean; label: string; plain?: boolean; open?: boolean; wide?: boolean; spaced?: boolean; agenda?: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
-  // The wellness check-in: none of a card's padding or look — the box is the card, the grip inside its corner
+  // The wellness check-in (and the other cards with a look of their own): none of a card's padding
+  // or look — the box is the card, the grip inside its corner. In Your Agenda's right column, the
+  // grip sits in the gutter at its right, clear of the list's own links
   if (plain) return (
-    <PlainCard ref={setNodeRef}
+    <PlainCard ref={setNodeRef} data-agenda={agenda || undefined}
       // The wellness check-in gets extra room above and below
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined, ...(spaced ? { margin: '28px 0 0' } : {}) }}>
       {children}
-      <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
+            <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
         <Icon name="grip" size={18} strokeWidth={2.6} />
       </DragHandle>
     </PlainCard>
   );
   return (
-    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $plain={plain} $open={open} $wide={wide}
+    <WidgetCard ref={setNodeRef} $collapsed={collapsed} $plain={plain} $open={open} $wide={wide} data-agenda={agenda || undefined}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1, zIndex: isDragging ? 2 : undefined }}>
       {children}
-      <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
+            <DragHandle ref={setActivatorNodeRef} type="button" aria-label={`Move ${label}`} {...attributes} {...listeners}>
         <Icon name="grip" size={18} strokeWidth={2.6} />
       </DragHandle>
     </WidgetCard>
@@ -2758,17 +2852,71 @@ const dashCollision: CollisionDetection = args => {
   const hits = pointerWithin(args);
   const strip = hits.find(h => String(h.id).startsWith('gap:'));
   if (strip) return [strip];
-  const onCard = hits.find(h => !(COLS as readonly UniqueIdentifier[]).includes(h.id) && !String(h.id).startsWith('cell:'));
+  const onCard = hits.find(h => !(COLS as readonly UniqueIdentifier[]).includes(h.id) && !String(h.id).startsWith('row:'));
   if (onCard) return [onCard];
-  const inColumn = hits.find(h => String(h.id).startsWith('cell:'));
-  if (inColumn) return [inColumn];
+  const inRow = hits.find(h => String(h.id).startsWith('row:'));
+  if (inRow) return [inRow];
   return hits.length ? hits : closestCorners(args);
 };
 
-/* A column of a zone in thirds: let go in the space under its cards and the card goes at its foot */
-function ThirdsCell({ zone, span, keys, children }: { zone: ColId; span: number; keys: string[]; children: ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `cell:${zone}:${keys[keys.length - 1]}` });
-  return <ThirdsCellBox ref={setNodeRef} $span={span} $over={isOver}>{children}</ThirdsCellBox>;
+/* A column of a zone in thirds (one card). Its right edge drags to a third, two thirds or the full
+   width (Arrow keys on it too) */
+function ThirdsCell({ zone, span, keys, onResize, label, last, children }: { zone: ColId; span: number; keys: string[]; last?: boolean; onResize?: (key: SectionKey, w: 1 | 2 | 3) => void; label?: string; children: ReactNode }) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const [preview, setPreview] = useState<{ w: number; px: number } | null>(null);
+  const measure = useRef<{ left: number; col: number; gap: number } | null>(null);
+  const widthPx = (w: number) => (measure.current ? w * measure.current.col + (w - 1) * measure.current.gap : 0);
+  const widthAt = (x: number) => {
+    const m = measure.current!;
+    return Math.max(1, Math.min(3, Math.round((x - m.left + m.gap) / (m.col + m.gap)))) as 1 | 2 | 3;
+  };
+  const onDown = (e: React.PointerEvent) => {
+    if (e.button !== 0 || !onResize) return;
+    const box = boxRef.current;
+    const row = box?.parentElement;
+    if (!box || !row) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    const gap = parseFloat(getComputedStyle(row).columnGap) || 0;
+    measure.current = { left: box.getBoundingClientRect().left, col: (row.getBoundingClientRect().width - 2 * gap) / 3, gap };
+    setPreview({ w: span, px: widthPx(span) });
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!measure.current) return;
+    const w = widthAt(e.clientX);
+    setPreview(p => (p?.w === w ? p : { w, px: widthPx(w) }));
+  };
+  const onUp = () => {
+    const w = preview?.w;
+    measure.current = null;
+    setPreview(null);
+    if (w && w !== span) onResize?.(keys[0] as SectionKey, w as 1 | 2 | 3);
+  };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const w = Math.max(1, Math.min(3, span + (e.key === 'ArrowRight' ? 1 : -1))) as 1 | 2 | 3;
+    if (w !== span) onResize?.(keys[0] as SectionKey, w);
+  };
+  return (
+    <ThirdsCellBox ref={boxRef} $span={span} $over={false} data-cell-key={keys[0]} data-zone={zone}>
+      {children}
+      {onResize && (
+        <ResizeEdge role="separator" aria-orientation="vertical" tabIndex={0} aria-valuemin={1} aria-valuemax={3} aria-valuenow={span}
+          aria-label={`Width of ${label ?? 'this column'}: ${span} of 3. Arrow keys change it`} data-active={preview ? '' : undefined} data-last={last || undefined}
+          onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { measure.current = null; setPreview(null); }} onKeyDown={onKey} />
+      )}
+      {preview && <ResizeGhost style={{ width: preview.px }} aria-hidden="true" />}
+    </ThirdsCellBox>
+  );
+}
+
+/* A row of a zone in thirds: let go anywhere in it (beside a card, under a shorter one, in the room
+   it leaves empty) and the card goes beside the nearest card in it */
+function ThirdsRowDrop({ zone, index, children }: { zone: ColId; index: number; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `row:${zone}:${index}` });
+  return <ThirdsRow ref={setNodeRef} data-row-id={`${zone}:${index}`} data-over={isOver || undefined}>{children}</ThirdsRow>;
 }
 
 /* A strip between two rows of a zone in thirds: drop a card here for a full-width row */
@@ -2778,21 +2926,22 @@ function GapDrop({ zone, index, dragging, edge }: { zone: ColId; index: number; 
 }
 
 /* A zone in thirds: its rows of columns, a drop strip between rows while dragging */
-function ThirdsZone({ id, rows, gap, dragging, render }: { id: ColId; rows: GridRow[]; gap: number; dragging: boolean; render: (k: SectionKey, full: boolean) => ReactNode }) {
+function ThirdsZone({ id, rows, gap, dragging, overZone, render, onResize, label }: { id: ColId; rows: GridRow[]; gap: number; dragging: boolean; overZone?: ColId | null; render: (k: SectionKey, cell: GridCell) => ReactNode; onResize?: (key: SectionKey, w: 1 | 2 | 3) => void; label?: (k: SectionKey) => string }) {
   const items = flattenGrid(rows) as SectionKey[];
   return (
-    <DropCol id={id} items={items} dragging={dragging} grid>
+    <DropCol id={id} items={items} dragging={dragging} grid over={overZone === id && dragging && !items.length}>
       <div style={{ '--zone-gap': `${gap}px`, gridColumn: '1 / -1' } as CSSProperties}>
         {rows.map((row, r) => (
           <Fragment key={row.map(c => c.keys.join('+')).join('|')}>
             <GapDrop zone={id} index={r} dragging={dragging} edge={r === 0} />
-            <ThirdsRow>
-              {row.map(cell => (
-                <ThirdsCell key={cell.keys.join('+')} zone={id} span={cell.w} keys={cell.keys}>
-                  {cell.keys.map(k => render(k as SectionKey, cell.w === 3))}
+            <ThirdsRowDrop zone={id} index={r}>
+              {row.map((cell, i) => (
+                <ThirdsCell key={cell.keys.join('+')} zone={id} span={cell.w} keys={cell.keys} onResize={onResize} label={label?.(cell.keys[0] as SectionKey)}
+                  last={i === row.length - 1 && row.reduce((n, c) => n + c.w, 0) === 3}>
+                  {cell.keys.map(k => render(k as SectionKey, cell))}
                 </ThirdsCell>
               ))}
-            </ThirdsRow>
+            </ThirdsRowDrop>
           </Fragment>
         ))}
         {rows.length > 0 && <GapDrop zone={id} index={rows.length} dragging={dragging} edge />}
@@ -2802,7 +2951,7 @@ function ThirdsZone({ id, rows, gap, dragging, render }: { id: ColId; rows: Grid
 }
 
 /* A column cards can be dropped into — even when it's empty */
-function DropCol({ id, items, gap, dragging, grid, children }: { id: ColId; items: SectionKey[]; gap?: number; dragging?: boolean; grid?: boolean; children: ReactNode }) {
+function DropCol({ id, items, gap, dragging, grid, over, children }: { id: ColId; items: SectionKey[]; gap?: number; dragging?: boolean; grid?: boolean; over?: boolean; children: ReactNode }) {
   const { setNodeRef } = useDroppable({ id });
   // A zone in thirds doesn't shuffle cards while one is dragged — where it's let go decides
   // (beside a card, or a row of its own)
@@ -2810,7 +2959,9 @@ function DropCol({ id, items, gap, dragging, grid, children }: { id: ColId; item
     <SortableContext id={id} items={items} strategy={grid ? stayPut : verticalListSortingStrategy}>
       {/* Empty, it still takes a drop: a strip while a card is being dragged */}
       {/* A grid zone keeps its column gap; `gap` sets the space between its rows */}
-      <Col ref={setNodeRef} data-grid={grid || undefined} style={{ minHeight: items.length ? undefined : dragging ? 80 : 0, ...(grid ? { rowGap: gap } : { gap }) }}>{children}</Col>
+      {/* While a card is over it (Your Agenda's column), a dashed outline says that's where it goes */}
+      <Col ref={setNodeRef} data-grid={grid || undefined} data-over={over || undefined} data-zone={id}
+        style={{ minHeight: dragging && !grid ? 120 : items.length ? undefined : dragging ? 80 : 0, ...(grid ? { rowGap: gap } : { gap }) }}>{children}</Col>
     </SortableContext>
   );
 }
@@ -2841,42 +2992,31 @@ export function DashboardView() {
   );
   const colOf = (id: UniqueIdentifier, l = layout): ColId | null =>
     (COLS as readonly UniqueIdentifier[]).includes(id) ? id as ColId : COLS.find(c => l[c].includes(id as SectionKey)) ?? null;
-  // A card just moved to another zone settles before it can move again: moving a tall card (the
-  // wellness check-in, the quote) reshapes the page under the pointer, and without this pause it
-  // flipped back and forth between two zones on every render until React gave up (the page failed)
-  const justMoved = useRef(0);
-  // Into the other zone as soon as the card is over it
-  const onDragOver = ({ active, over }: DragOverEvent) => {
-    if (!over) return;
-    const now = performance.now();
-    if (now - justMoved.current < 250) return;
-    const from = colOf(active.id), to = colOf(over.id);
-    if (!from || !to || from === to) return;
-    justMoved.current = now;
-    setLayout(l => {
-      const from = colOf(active.id, l), to = colOf(over.id, l);
-      if (!from || !to || from === to) return l;
-      const key = active.id as SectionKey;
-      const target = l[to].filter(k => k !== key);
-      const at = over.id === to ? target.length : target.indexOf(over.id as SectionKey);
-      target.splice(at < 0 ? target.length : at, 0, key);
-      return { ...l, [from]: l[from].filter(k => k !== key), [to]: target };
-    });
+  // While dragging, the zone under the pointer (outlined). Nothing moves until the card is let go:
+  // moving it between zones mid-drag reshaped the page under the pointer and the drop missed
+  const [overZone, setOverZone] = useState<ColId | null>(null);
+  const onDragOver = ({ over }: DragOverEvent) => {
+    const id = over ? String(over.id) : '';
+    const z = id.startsWith('gap:') || id.startsWith('row:') ? id.split(':')[1] as ColId : over ? colOf(over.id) : null;
+    setOverZone(prev => (prev === z ? prev : z));
   };
   // Where the dragged card started (a zone in thirds needs it to free its old partner)
   const dragFrom = useRef<ColId | null>(null);
   const onDragEnd = ({ active, over, delta, activatorEvent }: DragEndEvent) => {
     setDragging(false);
+    setOverZone(null);
     const from = dragFrom.current;
     dragFrom.current = null;
     const key = active.id as SectionKey;
     const gap = over && typeof over.id === 'string' && over.id.startsWith('gap:') ? over.id.split(':') : null;
-    // The space under a column's cards: at the foot of that column (under its last card)
-    const foot = over && typeof over.id === 'string' && over.id.startsWith('cell:') ? over.id.split(':') : null;
+    // A row's free space (beside a card, under a shorter one, the room it leaves empty)
+    const rowHit = over && typeof over.id === 'string' && over.id.startsWith('row:') ? over.id.split(':') : null;
     // Where it was let go decides the zone — read from what it's over, not from where the card
     // sits in `layout`, which onDragOver's pause can leave a zone behind on a quick drop
-    const zone = ((gap ? gap[1] : foot ? foot[1] : null) as ColId | null)
+    const zone = ((gap ? gap[1] : rowHit ? rowHit[1] : null) as ColId | null)
       ?? (over ? colOf(over.id) : null) ?? colOf(active.id);
+    // The tasks with no day stay in Your Agenda's column (it draws them)
+    if (key === 'noDay' && zone !== 'agenda') { setLayout(fullLayout(config.layout)); return; }
     // The zones in thirds (under the Quick entry, the top row): where it's let go decides its place —
     // on a card's left / right side a column beside it, on its top / bottom half above / below it,
     // on the strip between rows a full-width row (utils/dashboardGrid)
@@ -2887,12 +3027,17 @@ export function DashboardView() {
       const saved = fullLayout(config.layout);
       // The zone's rows as they were, without the card if it came from elsewhere
       const shownIn = (z: ColId) => saved[z].filter(k => visible(k) && (z === zone || k !== key));
-      let rows = gridFrom(config.grids?.[zone as 'head' | 'top'], shownIn(zone));
+      let rows = gridFrom(config.grids?.[zone as 'head' | 'top'], shownIn(zone), zone === 'top' ? columnKeys(config.layout) : []);
       if (gap) rows = dropOnGap(rows, key, Number(gap[2]));
-      else if (foot) {
-        const last = foot.slice(2).join(':');
-        if (last === key) { setLayout(saved); return; }
-        rows = dropOnCard(rows, key, last, 'below');
+      else if (rowHit) {
+        // Beside the nearest card in that row (by where it was let go across the row)
+        const cells = [...document.querySelectorAll<HTMLElement>(`[data-row-id="${rowHit[1]}:${rowHit[2]}"] > [data-cell-key]`)]
+          .map(el => ({ key: el.dataset.cellKey as SectionKey, r: el.getBoundingClientRect() }))
+          .filter(c => c.key !== key);
+        if (!cells.length) { setLayout(saved); return; }
+        const x = point?.x ?? Infinity;
+        const near = cells.reduce((a, c) => (Math.abs(x - (c.r.left + c.r.width / 2)) < Math.abs(x - (a.r.left + a.r.width / 2)) ? c : a));
+        rows = dropOnCard(rows, key, near.key, x < near.r.left + near.r.width / 2 ? 'before' : 'after');
       } else {
         const target = over.id !== zone && over.id !== key && layout[zone].includes(over.id as SectionKey) ? over.id as SectionKey : null;
         if (!target) {
@@ -2902,9 +3047,13 @@ export function DashboardView() {
         } else if (point) {
           const r = over.rect;
           const inside = point.y >= r.top && point.y <= r.top + r.height;
-          const place = inside && point.x < r.left + r.width * 0.3 ? 'before'
-            : inside && point.x > r.left + r.width * 0.7 ? 'after'
-            : point.y < r.top + r.height / 2 ? 'above' : 'below';
+          // Its top / bottom edge (a quarter of it, at most 70px): a full-width row above / below its row
+          const edge = Math.min(70, r.height * 0.25);
+          // Anywhere else on it: beside it, on the side it was let go
+          const place = !inside ? (point.y < r.top ? 'rowAbove' : 'rowBelow')
+            : point.y < r.top + edge ? 'rowAbove'
+            : point.y > r.top + r.height - edge ? 'rowBelow'
+            : point.x < r.left + r.width / 2 ? 'before' : 'after';
           rows = dropOnCard(rows, key, target, place);
         } else {
           // From the keyboard (no pointer): above or below the card, the way it was travelling
@@ -2921,7 +3070,7 @@ export function DashboardView() {
       next[zone] = [...order, ...next[zone].filter(k => !order.includes(k))];
       // Left another zone in thirds: that zone's rows close up without it
       for (const z of ['head', 'top'] as const) {
-        if (z !== zone && from === z) grids[z] = gridFrom(config.grids?.[z], next[z].filter(visible));
+        if (z !== zone && from === z) grids[z] = gridFrom(config.grids?.[z], next[z].filter(visible), z === 'top' ? columnKeys(config.layout) : []);
       }
       setLayout(next);
       void saveConfig({ ...config, layout: next, grids });
@@ -3041,15 +3190,14 @@ export function DashboardView() {
     return () => ro.disconnect();
   });
 
-  // Day at a glance holds the priorities and what's coming up, so the separate cards are
-  // switched off once when it arrives (they can be switched back on in Theme and layout)
+  // Priorities, Wins, Coming up and the Shopping list are cards again (Your Agenda's right column
+  // and the widgets): an earlier version switched them off, so they're switched back on once
   useEffect(() => {
-    if (!configLoaded || (config.glanceSetup && config.glanceWinsSetup && config.glanceShoppingSetup)) return;
-    const moving: SectionKey[] = [...(config.glanceSetup ? [] : ['priorities', 'comingUp'] as SectionKey[]), ...(config.glanceWinsSetup ? [] : ['wins'] as SectionKey[]),
-      ...(config.glanceShoppingSetup ? [] : ['shopping'] as SectionKey[])];
-    const hidden = [...new Set([...(config.hidden ?? []), ...(!(config.hidden ?? []).includes('glance') ? moving : [])])];
-    void saveConfig({ ...config, hidden, glanceSetup: true, glanceWinsSetup: true, glanceShoppingSetup: true }).catch(() => {});
-  }, [configLoaded, config.glanceSetup, config.glanceWinsSetup, config.glanceShoppingSetup]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!configLoaded || config.agendaCardsSetup) return;
+    const back: SectionKey[] = ['priorities', 'wins', 'comingUp', 'shopping'];
+    const hidden = (config.hidden ?? []).filter(k => !back.includes(k));
+    void saveConfig({ ...config, hidden, agendaCardsSetup: true }).catch(() => {});
+  }, [configLoaded, config.agendaCardsSetup]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A passkey is offered only where this browser can open the journal with one.
   // Every hook sits above the early return below: these two once came after
@@ -3059,6 +3207,9 @@ export function DashboardView() {
 
   // The daily quote (above the early return, like every hook here)
   const dailyQuote = useDailyQuote(now, myQuotes, isReady);
+
+  // Back from editing an entry opened here (the journal's modal or editor): the same place on the page
+  useScrollMemory(pageRef, 'dashboard', !isLoading && isReady && configLoaded);
 
   if (isLoading || !isReady || !configLoaded) return (
     <ContentTemplate><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}><Spinner size={40} /></div></ContentTemplate>
@@ -3137,8 +3288,6 @@ export function DashboardView() {
     }
   };
 
-  const left: ReactNode[] = [];
-  const right: ReactNode[] = [];
   // Phones start with every card folded (their own list of opened cards); wider screens keep `collapsed`
   const openOnPhone = new Set(config.openOnPhone ?? []);
   const collapsed = new Set(onPhone ? COLS.flatMap(c => DEFAULT_LAYOUT[c]).filter(k => !openOnPhone.has(k)) : config.collapsed ?? []);
@@ -3160,17 +3309,20 @@ export function DashboardView() {
               Folded, it's just its title, "Daily quote", like the other folded cards */}
           {collapsed.has('quote') && <div style={{ display: 'flex' }}><h2>Daily quote</h2></div>}
           <QuoteText>{quote.text}</QuoteText>
-          {quote.author && <QuoteBy>~ {quote.author}</QuoteBy>}
-          {!collapsed.has('quote') && dailyQuote.count > 1 && (
-            <MantraNav>
-              <button type="button" aria-label="Previous quote" onClick={() => stepQuote(-1)}>
-                <Icon name="chevron-left" size={16} strokeWidth={2} />
-              </button>
-              <button type="button" aria-label="Next quote" onClick={() => stepQuote(1)}>
-                <Icon name="chevron-right" size={16} strokeWidth={2} />
-              </button>
-            </MantraNav>
-          )}
+          {/* The author, and ‹ › in the bottom-right corner (plain arrows, no circles) */}
+          <QuoteFoot>
+            {quote.author ? <QuoteBy>~ {quote.author}</QuoteBy> : <span />}
+            {!collapsed.has('quote') && dailyQuote.count > 1 && (
+              <QuoteNav>
+                <button type="button" aria-label="Previous quote" onClick={() => stepQuote(-1)}>
+                  <Icon name="chevron-left" size={18} strokeWidth={2} />
+                </button>
+                <button type="button" aria-label="Next quote" onClick={() => stepQuote(1)}>
+                  <Icon name="chevron-right" size={18} strokeWidth={2} />
+                </button>
+              </QuoteNav>
+            )}
+          </QuoteFoot>
         </section>
       ),
     },
@@ -3178,15 +3330,22 @@ export function DashboardView() {
     // The world clocks strip: a card of its own above Your Agenda (the head row), draggable like the others
     clocks: { label: 'world clocks', on: shown('clocks'), node: <WorldClocks strip places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} /> },
     // The wellness check-in sits full width above Day at a glance, not in the columns
-    wellness: { label: 'wellness check-in', on: shown('wellness'), node: <WellnessCheckIn title="Wellness check-in" strip bare /> },
+    wellness: { label: 'wellness check-in', on: shown('wellness'), node: <WellnessCheckIn title="Wellness check-in" strip titled /> },
     // Next up, Wins and Tasks are no longer cards on the home dashboard (Wins lives in Day at a glance)
     nextUp: { label: 'next up', on: false, node: null },
-    // Priorities and Wins live in Day at a glance (always on), not as cards
-    priorities: { label: "today's priorities", on: false, node: null },
-    wins: { label: "today's wins", on: false, node: null },
+    // Priorities and Wins: Your Agenda's right column to start (compact there), or anywhere
+    priorities: { label: 'priorities', on: shown('priorities'), node: <Priorities /> },
+    wins: { label: 'wins', on: shown('wins'), node: <Wins /> },
+    // The tasks with no day: drawn by Your Agenda (it carries them onto the schedule), placed like a card
+    noDay: { label: 'tasks with no day', on: shown('noDay'), node: null },
+    stats: {
+      label: 'stats', on: shown('stats'),
+      // A widget card like the others: the period picker its title, folded by the card's arrow
+      node: <Stats asCard meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} phoneLast={false} />,
+    },
     tasks: { label: 'tasks', on: false, node: null },
-    // Coming up lives in Day at a glance, not as a card
-    comingUp: { label: 'coming up', on: false, node: null },
+    // Coming up: a widget card again (out of Your Agenda)
+    comingUp: { label: 'coming up', on: shown('comingUp'), node: <ComingUp financeOn={financeOn} showBills={!config.comingUpHideBills} /> },
     habits: { label: 'habits', on: shown('habits'), node: <HabitsToday /> },
     // Chips to the pages used most; across both columns to start, or in either column
     shortcuts: { label: 'shortcuts', on: shown('shortcuts'), node: <Shortcuts links={config.shortcuts} onChange={next => void saveConfig({ ...config, shortcuts: next }).catch(() => {})} /> },
@@ -3203,8 +3362,8 @@ export function DashboardView() {
     focus: { label: 'focus sounds', on: shown('focus') && canFocus, node: <FocusSounds /> },
     // Mantras are no longer on the home dashboard
     mantra: { label: 'mantra', on: false, node: null },
-    // The shopping list lives in Day at a glance now, not as a card
-    shopping: { label: 'shopping list', on: false, node: null },
+    // The shopping list: a widget card again (out of Your Agenda)
+    shopping: { label: 'shopping list', on: shown('shopping'), node: <Shopping show={config.shoppingShow ?? 'latest'} onShow={next => saveConfig({ ...config, shoppingShow: next }).catch(err => console.warn('Couldn’t save the Shopping list card’s choice:', err))} /> },
     menu: { label: 'on the menu', on: shown('menu') && kitchenOn, node: <Menu /> },
     meds: { label: 'medications', on: false, node: null },
     symptom: { label: 'log a symptom', on: shown('symptom'), node: <LogSymptom /> },
@@ -3213,44 +3372,58 @@ export function DashboardView() {
   // fullLayout again at render: a card the in-memory order doesn't know yet (a new
   // card, or an order kept across a reload of the code) still shows, in its default place
   const placed = fullLayout(layout);
-  const cols = { head: placed.head.filter(visible), top: placed.top.filter(visible), left: placed.left.filter(visible), right: placed.right.filter(visible), side: placed.side.filter(visible) };
-  // `wide`: across both columns (the top row) — no outline
-  // Habits and Time tracked: no outline wherever they sit (the panel and light shadow only)
-  // `fullRow`: the card has its row to itself (the wellness check-in gets room above it then, not beside another card)
-  const card = (k: SectionKey, wide = false, fullRow = true) => {
-    const w = widgets[k]!;
-    // The wellness check-in keeps its own look: moved by its grip, never folded
-    if (k === 'wellness' || k === 'clocks') return <SortableCard key={k} id={k} collapsed={false} label={w.label} plain spaced={k === 'wellness' && fullRow}>{w.node}</SortableCard>;
+  const cols = { head: placed.head.filter(visible), top: placed.top.filter(visible), agenda: placed.agenda.filter(visible) };
+  const legacyColumns = columnKeys(config.layout);
+  /** A zone in thirds' rows, kept to the cards showing there */
+  const zoneRows = (z: 'head' | 'top', keys: SectionKey[]) => gridFrom(config.grids?.[z], keys, z === 'top' ? legacyColumns : []);
+  /** A column's width (a third, two thirds, full), from dragging its right edge */
+  const setCardWidth = (z: 'head' | 'top', k: SectionKey, w: 1 | 2 | 3) => {
+    const saved = fullLayout(config.layout);
+    const rows = setWidth(zoneRows(z, saved[z].filter(visible)), k, w);
+    const order = flattenGrid(rows) as SectionKey[];
+    const next = { ...saved, [z]: [...order, ...saved[z].filter(x => !order.includes(x))] };
+    setLayout(next);
+    void saveConfig({ ...config, layout: next, grids: { ...config.grids, [z]: rows } });
+  };
+  /** One card. `zone` / `w`: where it sits and its width there; `node`: what Your Agenda draws for
+   *  it (the tasks with no day) */
+  const card = (k: SectionKey, zone: ColId, w = 3, fullRow = true, node?: ReactNode) => {
+    const wd = widgets[k]!;
+    const inAgenda = zone === 'agenda';
+    // Your Agenda's own lists keep its look there: Priorities and Wins compact, no card of their own
+    const body = node ?? (inAgenda && k === 'priorities' ? <Priorities compact />
+      : inAgenda && k === 'wins' ? <Wins compact />
+      // The clocks as a list of cities in a column (the strip is for a wide row)
+      : k === 'clocks' && (inAgenda || w === 1) ? <WorldClocks places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} />
+      : wd.node);
+    // Every card has its panel, title and fold (Priorities and Wins in their compact rows in Your
+    // Agenda's column, the wellness check-in with its title row); only the clocks strip and Stats keep their own look
+    const plain = k === 'clocks' && !(inAgenda || w === 1);
+    // Those keep their own look: moved by their grip, never folded here
+    if (plain) return <SortableCard key={k} id={k} collapsed={false} label={wd.label} plain agenda={inAgenda}>{body}</SortableCard>;
     return (
-      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={w.label} open={k !== 'quote' || collapsed.has(k)}
-        wide={wide || NO_OUTLINE.has(k)}>
-        {w.node}
+      <SortableCard key={k} id={k} collapsed={collapsed.has(k)} label={wd.label} open={k !== 'quote' || collapsed.has(k)}
+        wide={!inAgenda || NO_OUTLINE.has(k)} agenda={inAgenda}>
+        {body}
         <FoldBtn type="button" $collapsed={collapsed.has(k)} aria-expanded={!collapsed.has(k)}
-          aria-label={collapsed.has(k) ? `Show ${w.label}` : `Fold ${w.label}`} onClick={() => toggleFold(k)}>
+          aria-label={collapsed.has(k) ? `Show ${wd.label}` : `Fold ${wd.label}`} onClick={() => toggleFold(k)}>
           <Icon name="chevron-down" size={18} strokeWidth={1.8} />
         </FoldBtn>
       </SortableCard>
     );
   };
-  left.push(...cols.left.map(k => card(k)));
-  right.push(...cols.right.map(k => card(k)));
 
   // The zones in thirds: their rows of columns, kept to the cards showing there
-  const topRows = gridFrom(config.grids?.top, cols.top);
-  const headRows = gridFrom(config.grids?.head, cols.head);
-  // The widgets inside Your Agenda: a row across both columns, the two columns, and its third column —
-  // cards drag between all four (one DndContext around the whole panel)
-  const widgetColumns = (<>
-    <ThirdsZone id="top" rows={topRows} gap={32} dragging={dragging} render={(k, full) => card(k, true, full)} />
-    <Columns $rows={Math.max(1, cols.left.length, cols.right.length)}>
-      <DropCol id="left" items={cols.left} dragging={dragging}>{left}</DropCol>
-      <DropCol id="right" items={cols.right} dragging={dragging}>{right}</DropCol>
-    </Columns>
-    {/* Stats: across both columns, at the foot of the widgets */}
-    {shown('stats') && <StatsSpan><Stats meals={ff.foodEnabled !== false} meds={medsOn} exercise={ff.exerciseEnabled !== false} phoneLast={false}
-      folded={collapsed.has('stats')} onToggleFold={() => toggleFold('stats')} /></StatsSpan>}
-  </>);
-  const sideWidgets = <DropCol id="side" items={cols.side} gap={34} dragging={dragging}>{cols.side.map(k => card(k))}</DropCol>;
+  const topRows = zoneRows('top', cols.top);
+  const headRows = zoneRows('head', cols.head);
+  // The widgets under Your Agenda, in rows of thirds
+  const widgetColumns = <ThirdsZone id="top" rows={topRows} gap={32} dragging={dragging} overZone={overZone} render={(k, cell) => card(k, 'top', cell.w, cell.w === 3)}
+    onResize={(k, w) => setCardWidth('top', k, w)} label={k => widgets[k]?.label ?? 'card'} />;
+  // Your Agenda's right column: its cards, the tasks with no day drawn by the agenda itself
+  const agendaColumn = (noDay: ReactNode) => {
+    const keys = cols.agenda.filter(k => k !== 'noDay' || noDay);
+    return <DropCol id="agenda" items={keys} gap={34} dragging={dragging} over={overZone === 'agenda'}>{keys.map(k => card(k, 'agenda', 3, true, k === 'noDay' ? noDay : undefined))}</DropCol>;
+  };
 
   const voiceBtnLabel = voice.open ? 'Close voice commands' : 'Voice commands';
 
@@ -3379,23 +3552,21 @@ export function DashboardView() {
           {/* One drag-and-drop for every card from here down: a zone above the clocks, then Your Agenda's */}
           <DndContext sensors={sensors} collisionDetection={dashCollision}
             onDragStart={({ active }) => { dragFrom.current = colOf(active.id); setDragging(true); setLayout(l => fullLayout(l)); }} onDragOver={onDragOver} onDragEnd={onDragEnd}
-            onDragCancel={() => { setDragging(false); setLayout(fullLayout(config.layout)); }}>
+            onDragCancel={() => { setDragging(false); setOverZone(null); setLayout(fullLayout(config.layout)); }}>
           {/* Under the Quick entry, full width: the world clocks to start with, and any card dragged here
               (the wellness check-in, say) — in whatever order they're dragged into */}
           <HeadZone $filled={cols.head.length > 0}>
             {/* In thirds, like the top row: rows of up to three columns, a column a stack of cards */}
-            <ThirdsZone id="head" rows={headRows} gap={14} dragging={dragging} render={(k, full) => card(k, true, full)} />
+            <ThirdsZone id="head" rows={headRows} gap={14} dragging={dragging} overZone={overZone} render={(k, cell) => card(k, 'head', cell.w, cell.w === 3)}
+              onResize={(k, w) => setCardWidth('head', k, w)} label={k => widgets[k]?.label ?? 'card'} />
           </HeadZone>
 
 
           {/* Day at a glance (always on): the day's schedule, priorities, tasks due and what's coming up, in one panel */}
             <DayGlance financeOn={financeOn} medsOn={medsOn} exerciseOn={ff.exerciseEnabled !== false}
               weather={homeWeather && hd ? `${homeWeather.tempF}° and ${hd.label.toLowerCase()}${home ? ` in ${home.name}` : ''}` : undefined}
-              side={sideWidgets}
-              priorities={<Priorities compact />} wins={<Wins compact />}
-              comingUp={<ComingUp compact financeOn={financeOn} showBills={!config.comingUpHideBills} />}
-              widgets={widgetColumns}
-              shopping={<Shopping compact show={config.shoppingShow ?? 'latest'} onShow={next => saveConfig({ ...config, shoppingShow: next }).catch(err => console.warn('Couldn’t save the Shopping list card’s choice:', err))} />} />
+              side={agendaColumn}
+              widgets={widgetColumns} />
           </DndContext>
 
 

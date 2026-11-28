@@ -16,12 +16,16 @@ import { ChecklistSection } from './ChecklistSection.js';
 import { taskStatusOf, taskFieldsForStatus, type TaskStatus } from '../../../types/goals.js';
 import { toDateStr } from '../../../utils/dateUtils.js';
 import { estimateLabel, estimateOf, parseEstimate } from '../../../utils/planner.js';
+import {
+  blockersOf, withBlocker, withoutBlocker, isBlockerCleared, blockerLabel, BLOCKERS_PER_TASK, BLOCKER_NOTE_MAX,
+  type BlockerTask, type TaskBlocker,
+} from '../../../utils/taskBlockers.js';
 
 /* The task card (journal and Quick entry): a header with the topic picker and the
    Single task | To-do list switch, the title in a box with its Priority and tools, then
    label-left rows — To-dos (a to-do list's items), Status, Contributes to (goal, milestone
-   and the task's type), Time estimate, When (starts and ends, All day, Auto-migrate and the
-   timer) and Notes. Props only. */
+   and the task's type), Blocked by (other tasks or short notes it's waiting on), Time
+   estimate, When (starts and ends, All day, Auto-migrate and the timer) and Notes. Props only. */
 
 const PRIORITIES: { value: TaskFieldValues['priority']; label: string }[] = [
   { value: 'none', label: 'None' },
@@ -370,11 +374,128 @@ export function TaskFormatToggle({ values, onChange }: { values: TaskFieldValues
 }
 
 
+/* ── Blocked by: what the task is waiting on ── */
+
+const Blockers = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+`;
+
+const BlockerList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  & > li + li { border-top: 1px solid var(--border-card); }
+`;
+
+/* One blocker: its name, and × to take it off. A task that's done (or gone) is shown muted and struck through */
+const BlockerItem = styled.li<{ $cleared: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 6px 4px 16px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: ${({ $cleared }) => ($cleared ? 'var(--text-muted)' : 'var(--text-primary)')};
+  .label {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-decoration: ${({ $cleared }) => ($cleared ? 'line-through' : 'none')};
+  }
+`;
+
+const BlockerAdd = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  min-width: 0;
+  & > input { flex: 1 1 220px; min-width: 0; }
+`;
+
+/** Blocked by: the tasks and notes this task is waiting on, each with × to take it off, then a
+    picker of the other open tasks and a box for a short note. At most BLOCKERS_PER_TASK */
+export function BlockedBy({ values, onChange, tasks = [], selfId = null }: {
+  values: TaskFieldValues;
+  onChange: (values: TaskFieldValues) => void;
+  /** Every task (the open ones are offered; the rest say whether a blocker has cleared) */
+  tasks?: BlockerTask[];
+  /** This task's own id: never offered as its own blocker */
+  selfId?: number | null;
+}) {
+  const [note, setNote] = useState('');
+  const blockers = blockersOf(values as unknown as Record<string, unknown>);
+  const byId = new Map(tasks.map(t => [t.id, t]));
+  const save = (next: TaskBlocker[]) => { if (next !== blockers) onChange({ ...values, blockers: next }); };
+  const offered = tasks.filter(t => !t.isCompleted && t.id !== selfId && !blockers.some(b => b.taskId === t.id));
+  const addNote = () => {
+    if (note.trim()) save(withBlocker(blockers, { note }));
+    setNote('');
+  };
+  const full = blockers.length >= BLOCKERS_PER_TASK;
+  return (
+    <Blockers>
+      {blockers.length > 0 && (
+        <BlockerList aria-label="Blocked by">
+          {blockers.map(b => {
+            const cleared = isBlockerCleared(b, byId);
+            const label = blockerLabel(b, byId);
+            return (
+              <BlockerItem key={b.id} $cleared={cleared}>
+                <span className="label">
+                  {label}
+                  {cleared && byId.has(b.taskId ?? -1) && <span className="sr-only"> (done)</span>}
+                </span>
+                <ClearType type="button" aria-label={`Take “${label}” off Blocked by`} title="Remove"
+                  onClick={() => save(withoutBlocker(blockers, b.id))}>
+                  <Icon name="x" size={14} strokeWidth={2} />
+                </ClearType>
+              </BlockerItem>
+            );
+          })}
+        </BlockerList>
+      )}
+      {!full && (
+        <BlockerAdd>
+          {offered.length > 0 && (
+            <PillPick>
+              <span className="name">Task:</span>
+              <span className="value">Pick one</span>
+              <Icon name="chevron-down" size={14} strokeWidth={2} />
+              <select aria-label="Blocked by a task" value=""
+                onChange={e => { if (e.target.value) save(withBlocker(blockers, { taskId: parseInt(e.target.value, 10) }, { selfId })); }}>
+                <option value="">Pick a task</option>
+                {offered.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+              </select>
+            </PillPick>
+          )}
+          <BoxInput aria-label="Blocked by a note" placeholder="Or a short note, e.g. Waiting on the landlord" value={note}
+            maxLength={BLOCKER_NOTE_MAX} onChange={e => setNote(e.target.value)} onBlur={addNote}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); addNote(); }
+              if (e.key === 'Escape') { e.preventDefault(); setNote(''); }
+            }} />
+        </BlockerAdd>
+      )}
+    </Blockers>
+  );
+}
+
 interface TaskCardRowsProps {
   values: TaskFieldValues;
   onChange: (values: TaskFieldValues) => void;
   goalOptions?: GoalOption[];
   milestoneOptions?: MilestoneOption[];
+  /** Every task, for Blocked by (the open ones are offered) */
+  blockerTasks?: BlockerTask[];
+  /** This task's id, so it isn't offered as its own blocker */
+  selfId?: number | null;
   types?: string[];
   onAddType?: (label: string) => void;
   /** The timer (view time, start, add time), shown from the stopwatch under When */
@@ -382,8 +503,8 @@ interface TaskCardRowsProps {
   timerRunning?: boolean;
 }
 
-/** The task card's rows under the title: To-dos (a to-do list's items), Status, Contributes to, Time estimate, When, Notes */
-export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOptions = [], types = [], onAddType, timer, timerRunning = false }: TaskCardRowsProps) {
+/** The task card's rows under the title: To-dos (a to-do list's items), Status, Contributes to, Blocked by, Time estimate, When, Notes */
+export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOptions = [], blockerTasks, selfId = null, types = [], onAddType, timer, timerRunning = false }: TaskCardRowsProps) {
   const set = (patch: Partial<TaskFieldValues>) => onChange({ ...values, ...patch });
   const isList = values.taskFormat === 'list';
   const goalOf = (m: MilestoneOption) => (m as MilestoneOption & { parentGoalId?: number | null }).parentGoalId ?? null;
@@ -489,6 +610,12 @@ export function TaskCardRows({ values, onChange, goalOptions = [], milestoneOpti
             </PillPick>
           )}
         </Picks>
+      </TaskRow>
+
+      {/* Blocked by: other tasks or short notes it's waiting on (a quiet line on its cards while any is open) */}
+      <TaskRow style={{ alignItems: 'start', paddingTop: 16, paddingBottom: 18 }}>
+        <TaskRowName style={{ paddingTop: 12 }}>Blocked by</TaskRowName>
+        <BlockedBy values={values} onChange={onChange} tasks={blockerTasks} selfId={selfId} />
       </TaskRow>
 
       {/* Estimate: how long it should take (shown on its board card; the Planner sizes it by this

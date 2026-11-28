@@ -12,6 +12,8 @@ import { isDefaultTaskType, sameTaskType } from '../../../utils/taskTypes.js';
 import { checklistOf } from '../../../utils/taskLists.js';
 import { DAY_PARTS, chosenPart, partEndOf, partOf, partsCovered } from '../../../utils/planner.js';
 import { ChecklistSection } from './ChecklistSection.js';
+import { BlockedBy } from './TaskCardFields.js';
+import type { BlockerTask } from '../../../utils/taskBlockers.js';
 import { taskStatusOf, taskFieldsForStatus, type TaskStatus } from '../../../types/goals.js';
 import { toDateStr } from '../../../utils/dateUtils.js';
 
@@ -26,7 +28,8 @@ export type { TaskFieldValues } from '../../../types/fields.js';
    owner's own — tap the chosen one again to clear it; + Add saves a new type,
    Edit removes the owner's own), Planned for (the day it sits on in the
    planner and on the calendar) and, once it has a day, Time of day (Morning /
-   Noon / Night; Morning until another is chosen), Deadline, Status chips (Idea / Backlog, To do, In progress, Completed) and an Auto-migrate
+   Noon / Night; Morning until another is chosen), Deadline, Status chips (Idea / Backlog, To do, In progress, Completed), Blocked by
+   (other tasks or short notes it's waiting on) and an Auto-migrate
    switch — then, for a todo list, its items (no limit, ticked off in place),
    then Notes. Props only. */
 
@@ -105,6 +108,10 @@ interface TaskFieldsProps {
   onChange: (values: TaskFieldValues) => void;
   goalOptions?: GoalOption[];
   milestoneOptions?: MilestoneOption[];
+  /** Every task, for Blocked by (the open ones are offered) */
+  blockerTasks?: BlockerTask[];
+  /** This task's id, so it isn't offered as its own blocker */
+  selfId?: number | null;
   /** The types to offer (built-in + the owner's own) */
   types?: string[];
   /** Save a new type; omitted = no + Add / Edit */
@@ -112,7 +119,7 @@ interface TaskFieldsProps {
   onRemoveType?: (label: string) => void;
 }
 
-export function TaskFields({ values, onChange, goalOptions = [], milestoneOptions = [], types = [], onAddType, onRemoveType }: TaskFieldsProps) {
+export function TaskFields({ values, onChange, goalOptions = [], milestoneOptions = [], blockerTasks, selfId = null, types = [], onAddType, onRemoveType }: TaskFieldsProps) {
   const set = (patch: Partial<TaskFieldValues>) => onChange({ ...values, ...patch });
   const [editingTypes, setEditingTypes] = useState(false);
   const [addingType, setAddingType] = useState(false);
@@ -328,6 +335,11 @@ export function TaskFields({ values, onChange, goalOptions = [], milestoneOption
             </LabelledRow>
           );
         })()}
+
+        <LabelledRow style={{ alignItems: 'start' }}>
+          <RowLabel style={{ paddingTop: 12 }}>Blocked by</RowLabel>
+          <BlockedBy values={values} onChange={onChange} tasks={blockerTasks} selfId={selfId} />
+        </LabelledRow>
 
         <LabelledRow>
           <RowLabel>Auto-migrate</RowLabel>

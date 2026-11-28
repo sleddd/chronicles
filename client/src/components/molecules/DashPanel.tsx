@@ -2,23 +2,23 @@ import styled, { css } from 'styled-components';
 import { glassCard } from '../../styles/wallpaper.js';
 import type { ReactNode } from 'react';
 
-/* The home dashboard cards' title (WidgetCard $open in DashboardView) */
+/* The home dashboard cards' title (WidgetCard $open in DashboardView): the card label — small
+   tracked grey capitals — on a 30px line, as Your Agenda's Schedule heading */
 const dashTitle = css`
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 300;
-  letter-spacing: 0;
-  text-transform: none;
-  line-height: 40px;
-  /* A step back from full strength, so the cards' content leads */
-  color: color-mix(in srgb, var(--text-primary) 68%, transparent);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 30px;
+  color: var(--text-muted);
 `;
 
 /* Health dashboard panel — the home dashboard's widget card: a --bg-panel card
-   (14px corners, no outline), the title as on the home dashboard's cards (22px
-   thin Work Sans) over a light rule with a muted note or control on the right,
-   16px above the content. Props only. */
+   (16px corners, no outline), the title as on the home dashboard's cards (the card
+   label — small tracked grey capitals) over a light rule with a muted note or control
+   on the right, 14px above the content. Props only. */
 
 export const DashPanel = styled.section`
   min-width: 0;
@@ -32,11 +32,10 @@ export const DashPanel = styled.section`
   ${glassCard}
   /* The dashboards' own panel colour (after glassCard, so it holds on the photo too) */
   html[data-theme] & { background: var(--bg-dash-panel, var(--bg-panel)); }
-  /* Titles as on the home dashboard's cards: 22px thin sentence-case Work Sans on a
-     40px line, 22px above the hairline and 24px below it — the panel's own head
-     (DashPanelHead) and the heads the shared lists bring (Medications, Exercise
-     schedule, Habits) */
-  && > :first-child:has(> h2) { min-height: 40px; padding-bottom: 22px; margin-bottom: 24px; }
+  /* Titles as on the home dashboard's cards: the card label on a 30px line, 12px above the
+     hairline and 14px below it — the panel's own head (DashPanelHead) and the heads the shared
+     lists bring (Medications, Exercise schedule, Habits) */
+  && > :first-child:has(> h2) { min-height: 30px; padding-bottom: 12px; margin-bottom: 14px; }
   && > :first-child > h2 { ${dashTitle} }
 `;
 
@@ -84,7 +83,7 @@ export const FoldableBox = styled(DashPanel)<{ $folded: boolean }>`
 /* The chevron at the top right that folds the panel to its title row */
 export const FoldBtn = styled.button<{ $folded: boolean }>`
   position: absolute;
-  top: 25px;
+  top: 20px;
   right: 22px;
   display: grid;
   place-items: center;
@@ -99,8 +98,8 @@ export const FoldBtn = styled.button<{ $folded: boolean }>`
   svg { transition: transform 150ms ease; transform: rotate(${({ $folded }) => ($folded ? 0 : 180)}deg); }
   &:hover { color: var(--text-primary); }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-  @media (max-width: 480px) { top: 19px; right: 14px; }
-  ${({ $folded }) => ($folded ? 'top: 21px !important; right: -6px !important;' : '')}
+  @media (max-width: 480px) { top: 14px; right: 14px; }
+  ${({ $folded }) => ($folded ? 'top: 16px !important; right: -6px !important;' : '')}
 `;
 
 const Head = styled.div`
@@ -109,9 +108,9 @@ const Head = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px 24px;
-  min-height: 40px;
-  padding-bottom: 22px;
-  margin-bottom: 24px;
+  min-height: 30px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
   border-bottom: 1px solid var(--border-subtle);
 `;
 

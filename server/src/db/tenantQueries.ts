@@ -1066,7 +1066,9 @@ export function aiPrivacyStatements(s: string): string[] {
     `CREATE TABLE IF NOT EXISTS ${s}.assistant_wrote (kind TEXT NOT NULL, ref TEXT NOT NULL, mark BYTEA NOT NULL, PRIMARY KEY (kind, ref))`,
     // Records other than entries that the AI app made new (a dose record), for
     // its day's budget: it can't delete them, and there is no earlier version
-    // to put back (assistantNewRecordAllowed, db/assistantHistory.ts)
+    // to put back (assistantNewRecordAllowed, db/assistantHistory.ts). Also the
+    // entries it deleted, kind 'entry-deletion', for that day's budget
+    // (ASSISTANT_DELETES_PER_DAY, assistantDeletePost)
     `CREATE TABLE IF NOT EXISTS ${s}.assistant_new_records (kind TEXT NOT NULL, ref TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (kind, ref))`,
     // Entries that are the AI app's own data (created with assistantOwned): it
     // may edit and delete these at any age. Kept for as long as the entry is,
@@ -1212,6 +1214,9 @@ export const ASSISTANT_UNDO_MS = 2 * 60 * 1000;
 
 /** How many entries the AI app may create in a day: a runaway or misled app can't fill the journal (counted and recorded by assistantCreatePost, db/assistantHistory.ts). */
 export const ASSISTANT_CREATES_PER_DAY = 300;
+
+/** How many entries the AI app may delete in a day, a copy of each kept for the owner (assistantDeletePost, db/assistantHistory.ts): a runaway or misled app can't empty the journal in one go. */
+export const ASSISTANT_DELETES_PER_DAY = 50;
 
 /** How many topics the AI app may create in a day (its memories, letters and conversations need three). */
 export const ASSISTANT_TOPICS_PER_DAY = 5;

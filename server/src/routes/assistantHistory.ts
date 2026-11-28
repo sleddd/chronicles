@@ -4,13 +4,17 @@ import { parseId } from '../middleware/parseId.js';
 import { listAssistantChanges, restoreAssistantChange, deleteAssistantChange, clearAssistantChanges, type AssistantChange } from '../db/assistantHistory.js';
 
 /* What the Chronicles AI app changed, for the owner to look over and put back
-   (db/assistantHistory.ts). For browser sessions only: these paths are not on
-   the AI app's allowlist, and it is refused here as well. */
+   (db/assistantHistory.ts). For browser sessions, with one exception: the AI
+   app may put back an entry its own session deleted, within the undo window
+   (its own undo; checked in restoreAssistantChange). Everything else here is
+   off its allowlist, and refused here as well. */
 
 const router = Router();
 
+const APP_UNDO = /^\/[0-9]+\/restore\/?$/;
+
 router.use((req, res, next) => {
-  if (req.auth?.assistant) {
+  if (req.auth?.assistant && !(req.method === 'POST' && APP_UNDO.test(req.path))) {
     res.status(403).json({ error: 'Not available to the Chronicles AI app' });
     return;
   }
@@ -44,11 +48,17 @@ router.post('/:id/restore', async (req, res) => {
   try {
     const id = parseId(String(req.params.id));
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid id' }); return; }
-    const result = await restoreAssistantChange(req.auth!.tenantSchemaName, id);
+    // The AI app: only an entry its own session deleted, within the undo window
+    const appUndo = req.auth!.assistant ? { sessionId: req.auth!.sessionId } : undefined;
+    const result = await restoreAssistantChange(req.auth!.tenantSchemaName, id, appUndo);
     if (!result.ok) {
-      res.status(result.reason === 'gone' ? 410 : 404).json({
-        error: result.reason === 'gone' ? 'That item has been deleted since, so there is nothing to put it back over' : 'Change not found',
-      });
+      const [status, error] = {
+        gone: [410, 'That item has been deleted since, so there is nothing to put it back over'],
+        taken: [409, 'That entry is already back in the journal, so nothing was changed'],
+        'not-yours': [403, 'The Chronicles AI app can only put back an entry it deleted itself, in the last two minutes'],
+        unknown: [404, 'Change not found'],
+      }[result.reason] as [number, string];
+      res.status(status).json({ error });
       return;
     }
     res.json({ restored: serialize(result.change) });

@@ -14,7 +14,7 @@ import { createPostSchema, createPostsBatchSchema, updatePostSchema, reservePost
 import { parseId } from '../middleware/parseId.js';
 import { assistantIdLimiter } from '../middleware/rateLimiter.js';
 import { deleteSharesForEntry, deleteSharesForEntries } from '../db/shareQueries.js';
-import { assistantWrite, assistantCreatePost, assistantMayDelete, assistantMark, forgetAssistantChangesFor, expireAssistantChanges, AssistantHistoryFull, ASSISTANT_HISTORY_FULL } from '../db/assistantHistory.js';
+import { assistantWrite, assistantCreatePost, assistantMayDelete, assistantDeletePost, assistantMark, forgetAssistantChangesFor, expireAssistantChanges, AssistantHistoryFull, ASSISTANT_HISTORY_FULL } from '../db/assistantHistory.js';
 
 const router = Router();
 
@@ -499,12 +499,29 @@ router.delete('/:id', async (req, res) => {
   try {
     const id = parseId(req.params.id);
     if (Number.isNaN(id)) { res.status(400).json({ error: 'Invalid entry ID' }); return; }
-    // The AI app never removes anything — except undoing an entry it created
-    // itself, within the undo window, and its own data (assistantOwned) at any
-    // age: both only while it can see the entry and the version there is the
-    // one it last wrote. One the owner has edited since is the owner's
+    // The AI app deletes outright only an entry it created itself, within the
+    // undo window, and its own data (assistantOwned) at any age: both only
+    // while it can see the entry and the version there is the one it last
+    // wrote. Any other entry it can see is deleted with a full copy kept first,
+    // for the owner to put back (and for the app to undo for a short while)
     if (req.auth!.assistant && !(await assistantMayDelete(req.auth!.tenantSchemaName, id))) {
-      res.status(403).json({ error: 'The Chronicles AI app can only undo what it just created, or remove its own data' });
+      const accountId = req.auth!.accountId;
+      // The day's budget, room in the list, the copy, the public links and the
+      // delete, all under one lock: a refused delete removes nothing
+      const kept = await assistantDeletePost(req.auth!.tenantSchemaName, id, req.auth!.sessionId,
+        () => deleteSharesForEntry(accountId, id));
+      if (kept === 'unseen') {
+        // Hidden from AI, or not there: the same answer as before, so the two can't be told apart
+        res.status(403).json({ error: 'The Chronicles AI app can’t delete that entry' });
+        return;
+      }
+      if (kept === 'limit') {
+        res.status(429).json({ error: 'The Chronicles AI app has deleted as many entries as it may in a day' });
+        return;
+      }
+      // Again: a link made while the delete ran would outlive the entry
+      await deleteSharesForEntry(accountId, id);
+      res.json({ keptChangeId: kept.keptChangeId });
       return;
     }
     // Public links hold the entry as plaintext — they go first, so a failure
@@ -520,6 +537,8 @@ router.delete('/:id', async (req, res) => {
     await forgetAssistantChangesFor(req.auth!.tenantSchemaName, 'entry', String(id));
     res.json({ success: true });
   } catch (err) {
+    // The list of changes is full: nothing was deleted
+    if (err instanceof AssistantHistoryFull) { res.status(429).json(ASSISTANT_HISTORY_FULL); return; }
     console.error('Delete entry error:', err instanceof Error ? err.message : 'Unknown error');
     res.status(500).json({ error: 'Failed to delete entry' });
   }

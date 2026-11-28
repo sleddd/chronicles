@@ -440,4 +440,132 @@ describe.skipIf(!local)('AI app change history and hidden list (real Postgres)',
     expect(await appSavesDose('budget-1', 'a2', 44)).toMatchObject({ id: 'budget-1' });
     expect(await counted()).toBe(2);
   });
+  describe('the app deleting entries it can see, with a copy kept', () => {
+    const timesOf = async (id: number) => (await db.$queryRawUnsafe<{ c: string; u: string }[]>(
+      `SELECT created_at::text AS c, updated_at::text AS u FROM ${SCHEMA}.posts WHERE id = $1`, id))[0];
+    const topicsOf = async (id: number) => (await db.$queryRawUnsafe<{ tax_id: number }[]>(
+      `SELECT tax_id FROM ${SCHEMA}.post_taxonomies WHERE post_id = $1 ORDER BY tax_id`, id)).map(r => r.tax_id);
+    const newTopic = async () => (await db.$queryRawUnsafe<{ id: number }[]>(`INSERT INTO ${SCHEMA}.taxonomies (name) VALUES (NULL) RETURNING id`))[0].id;
+    const keptId = (r: Awaited<ReturnType<History['assistantDeletePost']>>) => {
+      if (typeof r !== 'object') throw new Error(`not deleted: ${r}`);
+      return r.keptChangeId;
+    };
+
+    it('keeps a full copy and deletes; the owner puts it back with the same id, times and topic links', async () => {
+      await h.clearAssistantChanges(SCHEMA);
+      const id = await newEntry('owner task', 120);
+      await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.posts SET created_at = '2026-01-02 03:04:05.123456+00' WHERE id = $1`, id);
+      const topic = await newTopic();
+      const goneTopic = await newTopic();
+      await q.addTaxonomyToPost(SCHEMA, id, topic);
+      await q.addTaxonomyToPost(SCHEMA, id, goneTopic);
+      // The app changes it first: the owner's version is kept as usual
+      await appSavesEntry(id, 'app ticked it', 121);
+      const before = await timesOf(id);
+      const cursor = await q.getSyncCursor(SCHEMA);
+
+      const links = vi.fn().mockResolvedValue(0);
+      const changeId = keptId(await h.assistantDeletePost(SCHEMA, id, 77, links));
+      expect(links).toHaveBeenCalledTimes(1);
+      expect(await q.getPost(SCHEMA, id)).toBeNull();
+      // The copy, and the version from before the app's change, both stay
+      const versions = (await kept()).filter(c => c.ref === String(id));
+      expect(versions.map(c => [text(c.body), h.isEntryDeletion(c)])).toEqual([['app ticked it', true], ['owner task', false]]);
+      expect(versions[0].id).toBe(changeId);
+      expect(versions[0].extra).toMatchObject({ deleted: true, session: 77, topicIds: [topic, goneTopic].sort((a, b) => a - b) });
+      // Restoring the older version over nothing says so
+      expect(await h.restoreAssistantChange(SCHEMA, versions[1].id)).toEqual({ ok: false, reason: 'gone' });
+
+      // A topic deleted since: the entry comes back without that link
+      await db.$executeRawUnsafe(`DELETE FROM ${SCHEMA}.taxonomies WHERE id = $1`, goneTopic);
+      expect(await h.restoreAssistantChange(SCHEMA, changeId)).toMatchObject({ ok: true, change: { id: changeId, ref: String(id) } });
+      expect(await contentOf(id)).toBe('app ticked it');
+      expect(await timesOf(id)).toEqual(before);
+      expect(await topicsOf(id)).toEqual([topic]);
+      // A browser whose last sync was before the delete gets the entry back, not its deletion
+      const changes = await q.getPostChanges(SCHEMA, cursor);
+      if (changes.reset) throw new Error('reset');
+      expect(changes.entries.map(e => e.id)).toContain(id);
+      expect(changes.deleted).not.toContain(id);
+      // The owner's entry now: no mark, so the app can't delete it outright, and its next write keeps a version
+      expect(await db.$queryRawUnsafe<unknown[]>(`SELECT 1 FROM ${SCHEMA}.assistant_wrote WHERE kind = 'entry' AND ref = $1`, String(id))).toEqual([]);
+      expect(await h.assistantMayDelete(SCHEMA, id)).toBe(false);
+      // The copy has left the list; the older version can now be put back over it
+      const left = (await kept()).filter(c => c.ref === String(id));
+      expect(left.map(c => text(c.body))).toEqual(['owner task']);
+      expect(await h.restoreAssistantChange(SCHEMA, left[0].id)).toMatchObject({ ok: true });
+      expect(await contentOf(id)).toBe('owner task');
+    });
+
+    it('a hidden or missing entry is unseen and nothing goes; an entry already back is never written over', async () => {
+      await h.clearAssistantChanges(SCHEMA);
+      const hidden = await newEntry('hidden', 130);
+      await q.setAiHidden(SCHEMA, [hidden], true);
+      expect(await h.assistantDeletePost(SCHEMA, hidden, 77)).toBe('unseen');
+      expect(await contentOf(hidden)).toBe('hidden');
+      expect(await h.assistantDeletePost(SCHEMA, hidden + 99999, 77)).toBe('unseen');
+      expect(await kept()).toEqual([]);
+
+      const id = await newEntry('task', 131);
+      const changeId = keptId(await h.assistantDeletePost(SCHEMA, id, 77));
+      // Something is under that id again (never by the app's own paths: the id is spent)
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${SCHEMA}.posts (id, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted) VALUES ($1, 'other', $2, 'meta', $2, TRUE)`, id, iv(1));
+      expect(await h.restoreAssistantChange(SCHEMA, changeId)).toEqual({ ok: false, reason: 'taken' });
+      expect(await contentOf(id)).toBe('other');
+      expect((await kept()).map(c => c.id)).toContain(changeId);
+      // A spent id can't be created through the usual path either
+      expect(await q.createPost(SCHEMA, { id: id + 1_000_000, contentEncrypted: bytes('x'), contentIv: iv(1), metadataEncrypted: bytes('m'), metadataIv: iv(2) })).toBeNull();
+    });
+
+    it('a full list refuses and deletes nothing; so does the day’s budget', async () => {
+      await h.clearAssistantChanges(SCHEMA);
+      const id = await newEntry('keep me', 140);
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${SCHEMA}.assistant_changes (kind, ref, body) SELECT 'dose', 'filler-' || g, 'x'::bytea FROM generate_series(1, ${h.ASSISTANT_HISTORY_ROWS}) g`);
+      await expect(h.assistantDeletePost(SCHEMA, id, 77)).rejects.toBeInstanceOf(h.AssistantHistoryFull);
+      expect(await contentOf(id)).toBe('keep me');
+      await h.clearAssistantChanges(SCHEMA);
+
+      await db.$executeRawUnsafe(`DELETE FROM ${SCHEMA}.assistant_new_records WHERE kind = 'entry-deletion'`);
+      await db.$executeRawUnsafe(
+        `INSERT INTO ${SCHEMA}.assistant_new_records (kind, ref) SELECT 'entry-deletion', 'spent-' || g FROM generate_series(1, $1::int) g`, q.ASSISTANT_DELETES_PER_DAY);
+      expect(await h.assistantDeletePost(SCHEMA, id, 77)).toBe('limit');
+      expect(await contentOf(id)).toBe('keep me');
+      expect(await kept()).toEqual([]);
+      // A day on, the budget is back
+      await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.assistant_new_records SET created_at = NOW() - interval '25 hours' WHERE kind = 'entry-deletion'`);
+      keptId(await h.assistantDeletePost(SCHEMA, id, 77));
+      // Owner clearing the list doesn't give the budget back
+      await h.clearAssistantChanges(SCHEMA);
+      const counted = await db.$queryRawUnsafe<{ n: bigint }[]>(
+        `SELECT COUNT(*) AS n FROM ${SCHEMA}.assistant_new_records WHERE kind = 'entry-deletion' AND created_at > NOW() - interval '1 day'`);
+      expect(Number(counted[0].n)).toBe(1);
+      await db.$executeRawUnsafe(`DELETE FROM ${SCHEMA}.assistant_new_records WHERE kind = 'entry-deletion'`);
+    });
+
+    it('the app’s own undo: only its session’s delete, only within the window, only a deletion', async () => {
+      await h.clearAssistantChanges(SCHEMA);
+      const id = await newEntry('task', 150);
+      const changeId = keptId(await h.assistantDeletePost(SCHEMA, id, 77));
+      // Another session (or the app signed in again)
+      expect(await h.restoreAssistantChange(SCHEMA, changeId, { sessionId: 78 })).toEqual({ ok: false, reason: 'not-yours' });
+      // Past the window
+      await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.assistant_changes SET saved_at = NOW() - interval '3 minutes' WHERE id = $1`, changeId);
+      expect(await h.restoreAssistantChange(SCHEMA, changeId, { sessionId: 77 })).toEqual({ ok: false, reason: 'not-yours' });
+      expect(await q.getPost(SCHEMA, id)).toBeNull();
+      // Within it
+      await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.assistant_changes SET saved_at = NOW() WHERE id = $1`, changeId);
+      expect(await h.restoreAssistantChange(SCHEMA, changeId, { sessionId: 77 })).toMatchObject({ ok: true });
+      expect(await contentOf(id)).toBe('task');
+      // An overwrite is the owner's to put back, however recent
+      await appSavesEntry(id, 'app ticked it', 151);
+      const [overwrite] = (await kept()).filter(c => c.ref === String(id));
+      expect(h.isEntryDeletion(overwrite)).toBe(false);
+      expect(await h.restoreAssistantChange(SCHEMA, overwrite.id, { sessionId: 77 })).toEqual({ ok: false, reason: 'not-yours' });
+      expect(await contentOf(id)).toBe('app ticked it');
+      // Unknown stays unknown
+      expect(await h.restoreAssistantChange(SCHEMA, 987654321, { sessionId: 77 })).toEqual({ ok: false, reason: 'unknown' });
+    });
+  });
 });

@@ -111,6 +111,8 @@ export interface TaskFieldValues {
   notes?: string;
   /** How long it's expected to take, in minutes (the Estimate row); unset = no estimate */
   estimatedMinutes?: number;
+  /** What it's waiting on ("Blocked by"): other tasks or short notes, at most ten (utils/taskBlockers.ts; read with blockersOf) */
+  blockers?: { id: string; taskId?: number; note?: string }[];
 }
 
 export interface HabitFieldValues {

@@ -235,10 +235,15 @@ describe('authMiddleware with an assistant session', () => {
 
 describe('what the AI app changed is the owner’s to look over, never its own', () => {
   const on: AiPrivacy = { appEnabled: true, hiddenTopicIds: [], hiddenFeatures: [] };
-  it.each([['GET', '/api/assistant-changes'], ['POST', '/api/assistant-changes/3/restore'], ['DELETE', '/api/assistant-changes/3'], ['DELETE', '/api/assistant-changes']])(
+  it.each([['GET', '/api/assistant-changes'], ['DELETE', '/api/assistant-changes/3'], ['DELETE', '/api/assistant-changes'], ['POST', '/api/assistant-changes/3/restore/extra']])(
     '%s %s is refused', (method, path) => {
       expect(assistantMay(method, path, on).ok).toBe(false);
     });
+  it('except its own undo: putting back an entry it deleted (which one, and how recently, is checked in the route)', () => {
+    expect(assistantMay('POST', '/api/assistant-changes/3/restore', on).ok).toBe(true);
+    const source = readFileSync(new URL('../routes/assistantHistory.ts', import.meta.url), 'utf8');
+    expect(source).toContain('req.auth!.assistant ? { sessionId: req.auth!.sessionId } : undefined');
+  });
 });
 
 describe('assistantMayReadSetting', () => {
@@ -266,13 +271,14 @@ describe('Every write the AI app may make is held to its rule in the route', () 
   // file. A new write rule without them there fails here.
   const routeFile = (path: RegExp) => {
     const name = /api\\?\/([a-z-]+)/.exec(path.source)?.[1];
-    return readFileSync(new URL(`../routes/${name}.ts`, import.meta.url), 'utf8');
+    const file = name === 'assistant-changes' ? 'assistantHistory' : name;
+    return readFileSync(new URL(`../routes/${file}.ts`, import.meta.url), 'utf8');
   };
   // (In-App AI's consent and declined requests aren't journal records: their own test below)
   const writes = ASSISTANT_RULES.filter(r => r.method !== 'GET' && !/auth|ai-chat/.test(r.path.source) && !/ids/.test(r.path.source));
 
   it('finds them', () => {
-    expect(writes.map(r => r.method).sort()).toEqual(['DELETE', 'POST', 'POST', 'PUT', 'PUT', 'PUT', 'PUT']);
+    expect(writes.map(r => r.method).sort()).toEqual(['DELETE', 'POST', 'POST', 'POST', 'PUT', 'PUT', 'PUT', 'PUT']);
   });
 
   it.each(writes.map(r => [`${r.method} ${r.path.source}`, r] as const))('%s', (_name, rule) => {
@@ -286,8 +292,12 @@ describe('Every write the AI app may make is held to its rule in the route', () 
       expect(source).toContain('recordAssistantTopic(');
     }
     if (rule.method === 'DELETE') {
+      // Outright only its own; anything else with a copy kept first
       expect(source).toContain('assistantMayDelete(');
+      expect(source).toContain('assistantDeletePost(');
     }
+    // Its undo: only its own session's delete, within the window
+    if (rule.method === 'POST' && /assistant-changes/.test(rule.path.source)) expect(source).toContain('appUndo');
   });
 
   it('the AI-chat routes are the status, consent and declined requests only — and a declined request is checked as its own in the route', () => {

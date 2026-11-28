@@ -98,6 +98,18 @@ const ShadowCard = styled.div`
   html[data-theme='light'] & > section { background: transparent; }
   /* A little room between the card's title and the line under it (the list's name, the day) */
   && > section > p { margin-top: 14px; }
+  /* Titles as on the home dashboard's widgets: the card label (small tracked grey capitals) on a
+     30px line over a hairline */
+  && > section > h3 { min-height: 30px; padding-bottom: 12px; border-bottom: 1px solid var(--border-subtle); }
+  && > section > h3 > button:first-child {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    line-height: 30px;
+    color: var(--text-muted);
+  }
 `;
 
 function DashCard(props: { id: string; title: string; subtitle?: ReactNode; action?: ReactNode; children: ReactNode }) {

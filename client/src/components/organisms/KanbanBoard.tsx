@@ -24,6 +24,8 @@ export interface BoardItem {
   title: string;
   /** One line of detail under the title (parent goal, description, …) */
   detail?: string;
+  /** A task still waiting on something: "Blocked by Call the plumber +1" (utils/taskBlockers) */
+  blockedBy?: string;
   /** Small outlined pill above the title, in its own colour */
   badge?: { label: string; color: string };
   /** Small tracked-caps line above the title in the accent (a milestone's goal) — no pill */
@@ -240,6 +242,18 @@ const Detail = styled.p`
   overflow: hidden;
 `;
 
+/* Blocked by: one quiet line, cut off with "…" */
+const Blocked = styled.p`
+  margin: -4px 0 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
 const Foot = styled.div`
   display: flex;
   align-items: center;
@@ -320,6 +334,7 @@ function BoardCard({ item, onOpen, timeTracking }: { item: BoardItem; onOpen: (i
         {item.image && <CardAvatar image={item.image} />}
       </Top>
       {item.detail && <Detail>{item.detail}</Detail>}
+      {item.blockedBy && !item.completed && <Blocked title={item.blockedBy}>{item.blockedBy}</Blocked>}
       {(hasFoot || timed) && (
         <Foot>
           {item.date && <Chip><MaterialIcon $size={15} aria-hidden="true">flag</MaterialIcon>{item.date}</Chip>}

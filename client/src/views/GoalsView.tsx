@@ -40,6 +40,7 @@ import {
 } from '../types/goals.js';
 import { taskTypeList, taskTypeOf, taskTypeRank, sameTaskType } from '../utils/taskTypes.js';
 import { taskPassesFilter, checklistProgress } from '../utils/taskLists.js';
+import { blockedByText } from '../utils/taskBlockers.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 import {
   EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, goalCategoryOf, categoriesInUse, sameCategory,
@@ -438,6 +439,9 @@ export function GoalsView() {
       });
   }, [entries, taskTopicId]);
 
+  // What a task's blockers need to know about the others (done, or gone): its "Blocked by" line
+  const blockerTasks = useMemo(() => new Map(tasks.map(t => [t.id, { title: t.title, isCompleted: t.isCompleted }])), [tasks]);
+
   // Todos have no parent goal or milestone connection
   const todos = useMemo(() => tasks.filter(t => !t.parentMilestoneId && !t.parentGoalId), [tasks]);
 
@@ -819,6 +823,7 @@ export function GoalsView() {
       estimate: estimateText(t.customFields as unknown as Record<string, unknown>),
       // A todo list shows how far along it is
       progress: checklistProgress(t.customFields),
+      blockedBy: blockedByText(t.customFields as unknown as Record<string, unknown>, blockerTasks),
       completed: t.isCompleted,
     };
   };
@@ -876,6 +881,7 @@ export function GoalsView() {
   /* ── List view: a table per tab (molecules/PlanTable, organisms/PlanningLists) ── */
   const today = toDateStr(new Date());
   const taskTitle = (t: TaskEntryData) => taskItem(t).title;
+  const taskBlockedBy = (t: TaskEntryData) => blockedByText(t.customFields, blockerTasks);
   // The tick on a task row: done, or back to To do (rolling up to its milestone and goal, like the board)
   const toggleTask = (id: number, done: boolean) => void persistTaskStatus(id, done ? 'done' : 'todo');
   const tableProps = { today, accentColor, onOpen: openInJournal, onDelete: (id: number) => void handleDeleteEntry(id), onToggleTask: toggleTask };
@@ -1137,7 +1143,7 @@ export function GoalsView() {
                     onAdd={key => addIn({ ...taskFieldsForStatus(key), ...filterLink })()} />
                 : shownTasks.length > 0 && (
                   <TaskTable tasks={shownTasks} allTasks={tasks} goals={orderedGoals} milestones={orderedMilestones}
-                    group={groups.tasks} titleOf={taskTitle} {...tableProps} />
+                    group={groups.tasks} titleOf={taskTitle} blockedByOf={taskBlockedBy} {...tableProps} />
                 ))}
 
             {tab === 'todos' && (todos.length === 0
@@ -1148,7 +1154,7 @@ export function GoalsView() {
                     onAdd={key => addIn({ ...taskFieldsForStatus(key) })()} />
                 : shownTodos.length > 0 && (
                   <TaskTable tasks={shownTodos} allTasks={todos} goals={orderedGoals} milestones={orderedMilestones}
-                    group="none" titleOf={taskTitle} {...tableProps} />
+                    group="none" titleOf={taskTitle} blockedByOf={taskBlockedBy} {...tableProps} />
                 ))}
           </Body>
         </Inner>

@@ -105,7 +105,7 @@ const Slot = styled.div<{ $bare: boolean; $over: boolean }>`
 const Grip = styled.button<{ $bare: boolean }>`
   position: absolute;
   z-index: 2;
-  top: ${({ $bare }) => ($bare ? '10px' : '25px')};
+  top: ${({ $bare }) => ($bare ? '10px' : '20px')};
   right: ${({ $bare }) => ($bare ? '10px' : '54px')};
   display: grid;
   place-items: center;
@@ -121,7 +121,7 @@ const Grip = styled.button<{ $bare: boolean }>`
   &:hover { color: var(--text-primary); }
   &:active { cursor: grabbing; }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-  @media (max-width: 480px) { top: ${({ $bare }) => ($bare ? '8px' : '19px')}; right: ${({ $bare }) => ($bare ? '8px' : '46px')}; }
+  @media (max-width: 480px) { top: ${({ $bare }) => ($bare ? '8px' : '14px')}; right: ${({ $bare }) => ($bare ? '8px' : '46px')}; }
 `;
 
 /* What's under the pointer; with the keyboard (no pointer), what the moved widget overlaps */

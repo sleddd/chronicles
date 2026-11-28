@@ -8,13 +8,24 @@
  *   calendar or analytics route. Of the AI-chat routes only the account's
  *   status (consent, pause, block, anonymous AI user id), giving consent and
  *   reporting a declined request as 'smith' (checked in the route).
- * - Add and tick, never remove: it can create entries, record doses, check off
- *   habits, record bill payments and change a task's status. The only deletes
- *   are undoing an entry it created itself, within ASSISTANT_UNDO_MS, and its
- *   own data: entries it created with `assistantOwned` (assistant_owned), at
- *   any age — both only while the version there is the one it last wrote. An
- *   entry the owner has edited is the owner's (assistantMayDelete). It may create a few topics for that data (ASSISTANT_TOPICS_PER_DAY),
- *   never rename, reorder or delete one.
+ * - Add, tick and delete, always with a way back: it can create entries,
+ *   record doses, check off habits, record bill payments and change a task's
+ *   status. It may delete two kinds of entry outright: one it created itself,
+ *   within ASSISTANT_UNDO_MS, and its own data — entries it created with
+ *   `assistantOwned` (assistant_owned), at any age — both only while the
+ *   version there is the one it last wrote. An entry the owner has edited is
+ *   the owner's (assistantMayDelete).
+ *   It may also delete any other entry it can see (not hidden from AI), but
+ *   only with a copy kept first in the list of changes, for
+ *   ASSISTANT_HISTORY_DAYS, which the owner can put back under the same id
+ *   (assistantDeletePost, db/assistantHistory.ts). At most
+ *   ASSISTANT_DELETES_PER_DAY a day, and none while that list is full. The
+ *   server can't tell a task from a journal entry, so keeping these deletes to
+ *   tasks is the app's own rule. It may undo such a delete itself, within
+ *   ASSISTANT_UNDO_MS, and only one its own session made (checked in the
+ *   route); everything else in the list of changes is the owner's.
+ *   It may create a few topics for its data (ASSISTANT_TOPICS_PER_DAY), never
+ *   rename, reorder or delete one.
  * - Limited reading: entries hidden from AI are left out (routes/entries.ts),
  *   topics on the "Don't share with AI" list are left out (routes/topics.ts),
  *   settings come back filtered (assistantMayReadSetting), finance is bills only,
@@ -90,9 +101,13 @@ export const ASSISTANT_RULES: Rule[] = [
   { method: 'POST', path: /^\/api\/entries\/ids$/ },
   { method: 'POST', path: /^\/api\/entries$/ },
   { method: 'PUT', path: new RegExp(`^/api/entries/${ID}$`) },
-  // Only its own creation within the undo window, or its own data
-  // (assistantOwned) at any age (checked in the route)
+  // Its own creation within the undo window, or its own data (assistantOwned)
+  // at any age, deleted outright. Any other entry it can see only with a copy
+  // kept first for the owner to put back, a few a day (checked in the route)
   { method: 'DELETE', path: new RegExp(`^/api/entries/${ID}$`) },
+  // Its own undo: putting back an entry its own session deleted, within the
+  // undo window (checked in the route). The rest of the list is the owner's
+  { method: 'POST', path: new RegExp(`^/api/assistant-changes/${ID}/restore$`) },
 
   { method: 'GET', path: /^\/api\/topics$/ },
   // New topics for its own data, the sealed way (reserve an id, then create),

@@ -17,6 +17,11 @@ describe('duplicateEntryFields', () => {
     });
   });
 
+  it('a copy of a task keeps what it was waiting on (Blocked by)', () => {
+    const blockers = [{ id: 'a', taskId: 7 }, { id: 'b', note: 'Waiting on the landlord' }];
+    expect(duplicateEntryFields({ taskDescription: 'Paint the hall', blockers, isCompleted: true })).toEqual({ taskDescription: 'Paint the hall', blockers });
+  });
+
   it('unticks shopping items and drops links to other records', () => {
     const copy = duplicateEntryFields({
       title: 'Groceries', items: [{ id: '1', name: 'Milk', checked: true }],

@@ -38,7 +38,7 @@ const task = (id: number, title: string, fields: Record<string, unknown>) => ({
 
 const renderGlance = (medsOn = false) => render(
   <ThemeProvider theme={lightTheme}><MemoryRouter>
-    <DayGlance priorities={null} comingUp={null} financeOn={false} medsOn={medsOn} exerciseOn={false} />
+    <DayGlance side={noDay => noDay} financeOn={false} medsOn={medsOn} exerciseOn={false} />
   </MemoryRouter></ThemeProvider>,
 );
 
@@ -69,6 +69,18 @@ describe('Your Agenda', () => {
     expect(saveFields).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.objectContaining({ isCompleted: true }));
   });
 
+  it('a task waiting on another is struck through, with a Blocked tag and what it waits on', () => {
+    useEntriesStore.setState({ decryptedEntries: [
+      task(1, 'Paint the hall', { scheduledDate: today, scheduledTime: '09:00', scheduledHours: 2, blockers: [{ id: 'b1', taskId: 3 }] }),
+      task(3, 'Buy paint', {}),
+    ] as never });
+    renderGlance();
+    const card = screen.getByTitle(/^Paint the hall · /);
+    expect(card).toHaveAttribute('data-blocked');
+    expect(card).toHaveTextContent('Blocked');
+    expect(card.querySelector('[title="Blocked by Buy paint"]')).not.toBeNull();
+  });
+
   it('a done task stays on the schedule, ticked, so it can be undone', () => {
     useEntriesStore.setState({ decryptedEntries: [task(1, 'Write report', { scheduledDate: today, scheduledTime: '09:00', isCompleted: true })] as never });
     renderGlance();
@@ -78,7 +90,7 @@ describe('Your Agenda', () => {
   it('a task with no day can be dragged onto the schedule, which plans it at that time', () => {
     useEntriesStore.setState({ decryptedEntries: [task(2, 'Tidy desk', {})] as never });
     renderGlance();
-    expect(screen.getByText('1 task with no day yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tidy desk' })).toBeInTheDocument();
     const grip = screen.getByRole('button', { name: /^Drag “Tidy desk” onto the schedule/ });
     // jsdom has no layout: give the schedule a box and drop inside it
     const hours = document.querySelector('[style*="padding-top: 7px"]') as HTMLElement;
@@ -88,6 +100,21 @@ describe('Your Agenda', () => {
     fireEvent.pointerUp(grip, { clientX: 100, clientY: 300 });
     expect(saveFields).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }),
       expect.objectContaining({ scheduledDate: today, scheduledTime: expect.stringMatching(/^\d{2}:\d{2}$/) }));
+  });
+
+  it('a task dragged off the schedule onto the tasks with no day leaves its day', () => {
+    useEntriesStore.setState({ decryptedEntries: [task(1, 'Write report', { scheduledDate: today, scheduledTime: '09:00' })] as never });
+    renderGlance();
+    // Shown even with none to list, so there's somewhere to drop one
+    const list = screen.getByText('No tasks without a day').closest('[data-unschedule-drop]') as HTMLElement;
+    list.getBoundingClientRect = () => ({ left: 700, right: 1000, top: 0, bottom: 400, width: 300, height: 400, x: 700, y: 0, toJSON: () => ({}) });
+    const card = screen.getByTitle(/^Write report · /);
+    fireEvent.pointerDown(card, { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(card, { clientX: 800, clientY: 200 });
+    expect(list).toHaveAttribute('data-over');
+    fireEvent.pointerUp(card, { clientX: 800, clientY: 200 });
+    expect(saveFields).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }),
+      expect.objectContaining({ scheduledDate: '', scheduledTime: '' }));
   });
 
   it('from the keyboard, a task with no day is planned on the schedule at once', async () => {

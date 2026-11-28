@@ -1550,6 +1550,19 @@ export function EntryForm({
     })
     .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Task #${e.id}` })), [entries, topics, entryId]);
 
+  // Every task, for a task's Blocked by: the open ones are offered, and the rest
+  // say whether a blocker has cleared (done, or not there any more)
+  const blockerTasks = useMemo(() => customType !== 'task' ? [] : entries
+    .filter(e => {
+      const tid = (e.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
+      const t = tid ? topics.find(tp => tp.id === tid) : undefined;
+      return t && topicKind(t.name) === 'task';
+    })
+    .map(e => {
+      const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
+      return { id: e.id, title: stripHtml(e.content).trim().slice(0, 80) || builtinEntryName(cf ?? {}) || `Task #${e.id}`, isCompleted: !!cf?.isCompleted };
+    }), [entries, topics, customType]);
+
   const userFieldValues = (customFields._userFields as Record<string, unknown>) ?? {};
   // Any filled-in field makes an entry saveable — topics without a text area
   // (books, exercise, custom topics with only yes/no fields…) must still save
@@ -1889,6 +1902,7 @@ export function EntryForm({
             <CustomFieldsBody $nameInText={!!nameTarget}>
               <FieldRowLayoutContext.Provider value={true}>
               {customType === 'task' && <TaskFields values={{ isInProgress: false, isCompleted: false, isAutoMigrating: false, parentGoalId: null, parentMilestoneId: null, priority: 'none', deadline: '', ...customFields } as TaskFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)} goalOptions={goalOptions} milestoneOptions={milestoneOptions}
+                blockerTasks={blockerTasks} selfId={entryId ?? null}
                 types={taskTypeList(taskTypes)} onAddType={taskTypesLoaded ? l => { void saveTaskTypes(addTaskType(taskTypes, l)); } : undefined}
                 onRemoveType={taskTypesLoaded ? l => { void saveTaskTypes(removeTaskType(taskTypes, l)); } : undefined} />}
               {customType === 'goal' && <GoalFields categoryInFoot values={{ goalType: 'short_term', goalStatus: 'new', targetDate: '', ...customFields } as GoalFieldValues} onChange={v => onCustomFieldsChange(v as unknown as Record<string, unknown>)}
@@ -2150,6 +2164,7 @@ export function EntryForm({
         </PhotosRow>
       )}
       <TaskCardRows values={taskValues} onChange={setTask} goalOptions={goalOptions} milestoneOptions={milestoneOptions}
+        blockerTasks={blockerTasks} selfId={entryId ?? null}
         types={taskTypeList(taskTypes)} onAddType={taskTypesLoaded ? l => { void saveTaskTypes(addTaskType(taskTypes, l)); } : undefined}
         timer={taskTimer} timerRunning={timer.running} />
     </TaskBody>

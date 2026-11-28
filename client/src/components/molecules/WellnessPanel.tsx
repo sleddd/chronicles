@@ -204,8 +204,8 @@ const Fill = styled.div<{ $pct: number; $color: string }>`
 `;
 
 /* Water as glasses and nothing else (no figure, no + / −): one small outlined
-   glass per glass of the goal, the ones drunk filled solid in the accent, the
-   rest grey outlines. A tap fills up to that glass; tapping the last full one again empties it */
+   glass per glass of the goal — outlines only: the ones drunk in the accent with a
+   water line about halfway up, the rest grey. A tap fills up to that glass; tapping the last full one again empties it */
 /* Full size always: short of room, the icons go on to a second line rather than shrink */
 const GlassRow = styled.div`
   display: flex;
@@ -232,24 +232,23 @@ const GlassBtn = styled.button<{ $full: boolean }>`
   @media (prefers-reduced-motion: reduce) { transition: none; &:active:not(:disabled) { transform: none; } }
 `;
 
-/** A tumbler, 22 × 28: an outline, filled solid about three-quarters up once it's drunk */
+/** A tumbler, 22 × 28: an outline only — drunk, it's in the accent with a line about halfway up
+ *  for the water (never filled) */
 function Glass({ full }: { full: boolean }) {
   return (
     <svg viewBox="0 0 22 28" fill="none" aria-hidden="true">
-      {/* The water: the glass's own sides from the bottom up to three-quarters of its height */}
-      {full && <path d="M2.95 8.25 H19.05 L17.9 24.4 A2.6 2.6 0 0 1 15.3 27 H6.7 A2.6 2.6 0 0 1 4.1 24.4 Z" fill="currentColor" />}
+      {/* The water's surface: across the glass from side to side, about halfway up */}
+      {full && <path d="M3.4 14 H18.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />}
       <path d="M2.5 2 H19.5 L17.9 24.4 A2.6 2.6 0 0 1 15.3 27 H6.7 A2.6 2.6 0 0 1 4.1 24.4 Z"
         stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
   );
 }
 
-/* Sleep the same way: one Partly Cloudy Night icon per hour of the goal, the
-   hours slept filled solid in the accent (the icon font's FILL axis), the rest
-   grey outlines */
-const NightIcon = styled(MaterialIcon)<{ $full: boolean }>`
+/* Sleep the same way: one Partly Cloudy Night icon per hour of the goal — outlines
+   only: the hours slept in the accent, the rest grey */
+const NightIcon = styled(MaterialIcon)`
   font-size: 24px;
-  ${({ $full }) => ($full ? "font-variation-settings: 'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 24;" : '')}
 `;
 
 const NightBtn = styled(GlassBtn)`
@@ -274,7 +273,7 @@ function TapIcons({ kind, label, value, goal, onChange }: { kind: TapKind; label
           <Btn key={n} type="button" $full={full} aria-pressed={full}
             aria-label={`${Name} ${n} of ${goal}`} title={value === n ? `Take away ${one} ${n}` : `${n} ${n === 1 ? one : many}`}
             onClick={() => onChange(value === n ? n - 1 : n)}>
-            {kind === 'glass' ? <Glass full={full} /> : <NightIcon $full={full} aria-hidden="true">partly_cloudy_night</NightIcon>}
+            {kind === 'glass' ? <Glass full={full} /> : <NightIcon aria-hidden="true">partly_cloudy_night</NightIcon>}
           </Btn>
         );
       })}

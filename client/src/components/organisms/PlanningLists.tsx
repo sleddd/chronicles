@@ -286,13 +286,15 @@ const TASK_COLUMNS: PlanColumn[] = [
   { label: 'Deadline', width: '220px' }, { label: 'Estimate', width: '90px', end: true },
 ];
 
-export function TaskTable({ tasks, allTasks, goals, milestones, group, titleOf, ...shared }: Shared & {
+export function TaskTable({ tasks, allTasks, goals, milestones, group, titleOf, blockedByOf, ...shared }: Shared & {
   /** The tasks the tab shows (search, filters and sort applied) */
   tasks: TaskEntryData[];
   /** Every task, for a group's "16 of 20" */
   allTasks: TaskEntryData[];
   goals: GoalEntry[]; milestones: MilestoneEntryData[]; group: TaskGroup;
   titleOf: (t: TaskEntryData) => string;
+  /** "Blocked by …" while something it's waiting on is still open (utils/taskBlockers) */
+  blockedByOf?: (t: TaskEntryData) => string | undefined;
 }) {
   const { today, onOpen, onToggleTask } = shared;
   const goalOfTask = useTaskGoal(milestones);
@@ -307,10 +309,13 @@ export function TaskTable({ tasks, allTasks, goals, milestones, group, titleOf, 
     const note = (group !== 'milestone' && t.parentMilestoneId ? milestoneById.get(t.parentMilestoneId)?.title : undefined)
       ?? (group === 'none' && t.parentGoalId ? goalById.get(t.parentGoalId)?.title : undefined)
       ?? (taskTypeOf(t.customFields) || undefined);
+    // Still waiting on something: said after the rest, quietly (not once it's done)
+    const blocked = t.isCompleted ? undefined : blockedByOf?.(t);
+    const muted = [note, blocked].filter(Boolean).join(' · ') || undefined;
     return (
       <SwipeActions key={t.id} accentColor={shared.accentColor} onDelete={() => shared.onDelete(t.id)}>
         <PlanRow lead={<PlanTick done={t.isCompleted} title={title} onToggle={() => onToggleTask(t.id, !t.isCompleted)} />}
-          title={title} note={note} done={t.isCompleted} onOpen={() => onOpen(t.id)}
+          title={title} note={muted} done={t.isCompleted} onOpen={() => onOpen(t.id)}
           cells={[
             <PriorityCell key="p" priority={t.priority} />,
             <PlannedCell key="s" day={dayOrNone(t.customFields.scheduledDate)} today={today} done={t.isCompleted} />,
