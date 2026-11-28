@@ -16,8 +16,8 @@
  *   version there is the one it last wrote. An entry the owner has edited is
  *   the owner's (assistantMayDelete).
  *   It may also delete any other entry it can see (not hidden from AI), but
- *   only with a copy kept first in the list of changes, for
- *   ASSISTANT_HISTORY_DAYS, which the owner can put back under the same id
+ *   only with a copy kept first in the list of changes, until the owner puts
+ *   it back under the same id or removes it (it never expires)
  *   (assistantDeletePost, db/assistantHistory.ts). At most
  *   ASSISTANT_DELETES_PER_DAY a day, and none while that list is full. The
  *   server can't tell a task from a journal entry, so keeping these deletes to

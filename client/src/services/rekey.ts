@@ -256,11 +256,50 @@ export async function checkPhotosReachable(cfg: R2Config, photoKeys: string[], f
   }
 }
 
+/**
+ * Put back every entry the AI app deleted that is still in its list of changes
+ * (the re-key empties that list). One already back ("taken", 409) or gone is
+ * passed over; any other failure stops the job, which Try again carries on. A
+ * server from before the feature has no list (404).
+ */
+export async function restoreAppDeletions(guard: () => Promise<void> = async () => {}): Promise<number> {
+  const ids: number[] = [];
+  try {
+    let before: number | undefined;
+    for (;;) {
+      const { changes, more } = await assistantChangesApi.list(before);
+      for (const c of changes) if (c.kind === 'entry' && c.extra?.deleted === true) ids.push(c.id);
+      if (!more || changes.length === 0) break;
+      before = changes[changes.length - 1].id;
+    }
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return 0;
+    throw err;
+  }
+  let restored = 0;
+  for (const id of ids) {
+    await guard();
+    try {
+      await assistantChangesApi.restore(id);
+      restored++;
+    } catch (err) {
+      if (!(err instanceof ApiError && (err.status === 409 || err.status === 404 || err.status === 410))) throw err;
+    }
+  }
+  return restored;
+}
+
 export async function runRekey({ newKey, oldKey, rekeyId, runner, onProgress, fetchFn = fetch, guard = async () => {}, allowMissingPhotos = false, pauseMs = STUCK_PAUSE_MS }: RekeyDeps): Promise<void> {
   const progress = (phase: RekeyPhase, done = 0, total = 0) => onProgress?.({ phase, done, total });
   const open = <T>(fn: (key: CryptoKey) => Promise<T>) => eitherKey(newKey, oldKey, fn);
   progress('starting');
   await guard();
+
+  // Entries the Chronicles AI app deleted live only as copies in its list of
+  // changes, sealed with the old key, and that list is emptied at the end. So
+  // they come back into the journal first, before anything moves: the drains
+  // below then seal them (and their photos) with the new key like any other.
+  await restoreAppDeletions(guard);
 
   /**
    * One kind of record, until none of it is left under the old key: read what

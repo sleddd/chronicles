@@ -80,3 +80,17 @@ describe('TaskCardRows — Blocked by', () => {
     expect(screen.queryByLabelText('Blocked by a task')).toBeNull();
   });
 });
+
+describe('TaskCardRows — Blocked by never goes round in a circle', () => {
+  it('leaves out a task already waiting on this one, directly or through another', () => {
+    const tasks = [
+      { id: 5, title: 'This task', isCompleted: false, blockerIds: [] },
+      { id: 7, title: 'Waits on this', isCompleted: false, blockerIds: [5] },
+      { id: 8, title: 'Waits on that', isCompleted: false, blockerIds: [7] },
+      { id: 9, title: 'Free', isCompleted: false, blockerIds: [] },
+    ];
+    renderWithTheme(<TaskCardRows values={base} onChange={vi.fn()} blockerTasks={tasks} selfId={5} />);
+    const options = [...(screen.getByLabelText('Blocked by a task') as HTMLSelectElement).options].map(o => o.textContent);
+    expect(options).toEqual(['Pick a task', 'Free']);
+  });
+});

@@ -16,6 +16,7 @@ import { useCalendarSync } from './hooks/useCalendarSync.js';
 import { useEntrySync } from './hooks/useEntrySync.js';
 import { LoginView } from './views/LoginView.js';
 import { NoticeBanner } from './components/organisms/NoticeBanner.js';
+import { AppDeletionsNotice } from './components/organisms/AppDeletionsNotice.js';
 import { ErrorBoundary } from './components/atoms/ErrorBoundary.js';
 import { JournalView } from './views/JournalView.js';
 import { useHabitStore } from './stores/habitStore.js';
@@ -646,11 +647,15 @@ function WallpaperGate() {
 
 /** The server-controlled notice banner — signed-in pages only. */
 function NoticeGate() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { pathname } = useLocation();
   const publicPage = isPublicPage(pathname);
   if (!isAuthenticated || publicPage) return null;
-  return <ErrorBoundary fallback="none"><NoticeBanner /></ErrorBoundary>;
+  return <>
+    <ErrorBoundary fallback="none"><NoticeBanner /></ErrorBoundary>
+    {/* Entries the Chronicles AI app deleted, waiting to be put back */}
+    {user?.assistantAvailable && <ErrorBoundary fallback="none"><AppDeletionsNotice /></ErrorBoundary>}
+  </>;
 }
 
 // Where a page that failed to show can send someone: places that may still open

@@ -567,5 +567,40 @@ describe.skipIf(!local)('AI app change history and hidden list (real Postgres)',
       // Unknown stays unknown
       expect(await h.restoreAssistantChange(SCHEMA, 987654321, { sessionId: 77 })).toEqual({ ok: false, reason: 'unknown' });
     });
+
+    it('a deleted entry’s copy never expires (it is the only copy); versions past their days still do', async () => {
+      await h.clearAssistantChanges(SCHEMA);
+      const id = await newEntry('kept for good', 160);
+      const changeId = keptId(await h.assistantDeletePost(SCHEMA, id, 77));
+      await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.assistant_changes SET saved_at = NOW() - interval '${h.ASSISTANT_HISTORY_DAYS + 30} days' WHERE id = $1`, changeId);
+      const other = await newEntry('owner', 161);
+      await appSavesEntry(other, 'app', 162);
+      await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.assistant_changes SET saved_at = NOW() - interval '${h.ASSISTANT_HISTORY_DAYS + 1} days' WHERE ref = $1`, String(other));
+      const ids = (await kept()).map(c => c.id);
+      expect(ids).toContain(changeId);
+      expect((await kept()).some(c => c.ref === String(other))).toBe(false);
+      expect(await h.restoreAssistantChange(SCHEMA, changeId)).toMatchObject({ ok: true });
+      expect(await contentOf(id)).toBe('kept for good');
+    });
+
+    it('comes back hidden from AI when a topic was kept from AI after the delete, not otherwise', async () => {
+      await h.clearAssistantChanges(SCHEMA);
+      const isHidden = async (pid: number) => (await db.$queryRawUnsafe<{ n: bigint }[]>(
+        `SELECT COUNT(*) AS n FROM ${SCHEMA}.ai_hidden_posts WHERE post_id = $1`, pid))[0].n > 0n;
+      await q.upsertSetting(SCHEMA, 'aiPrivacy', { appEnabled: true, hiddenTopicIds: [5], hiddenFeatures: [] });
+      const same = await newEntry('same topics', 170);
+      const sameCopy = keptId(await h.assistantDeletePost(SCHEMA, same, 77));
+      const changed = await newEntry('topic hidden since', 171);
+      const changedCopy = keptId(await h.assistantDeletePost(SCHEMA, changed, 77));
+      // A topic kept from AI after the deletes
+      await q.upsertSetting(SCHEMA, 'aiPrivacy', { appEnabled: true, hiddenTopicIds: [5, 9], hiddenFeatures: [] });
+      await db.$executeRawUnsafe(`UPDATE ${SCHEMA}.assistant_changes SET extra = jsonb_set(extra, '{hiddenTopics}', '[5, 9]') WHERE id = $1`, sameCopy);
+      expect(await h.restoreAssistantChange(SCHEMA, sameCopy)).toMatchObject({ ok: true });
+      expect(await isHidden(same)).toBe(false);
+      // The app's own undo too: hidden, so it can't read it until a browser looks
+      expect(await h.restoreAssistantChange(SCHEMA, changedCopy, { sessionId: 77 })).toMatchObject({ ok: true });
+      expect(await isHidden(changed)).toBe(true);
+      await q.upsertSetting(SCHEMA, 'aiPrivacy', { appEnabled: true, hiddenTopicIds: [], hiddenFeatures: [] });
+    });
   });
 });

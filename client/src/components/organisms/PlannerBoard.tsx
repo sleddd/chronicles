@@ -1026,9 +1026,8 @@ export function PlannerBoard({ lanes: givenLanes, overdue, open, ideas = NO_CARD
       if (from) onSchedule(id, '', null);
       return;
     }
-    if (!over) return;
     dragCard.current = null;
-    if (from === undefined) return;
+    if (!over || from === undefined) return;
     const target = String(over.id);
     // Onto a day — its free space or a card on it — the card goes to the time where its top was let go
     // (to the nearest five minutes, on that day's own scale) and stays there

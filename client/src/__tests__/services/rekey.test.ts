@@ -19,6 +19,8 @@ const server = vi.hoisted(() => ({
   financeBatches: [] as number[],
   /** Versions kept of what the Chronicles AI app overwrote (sealed with the old key) */
   keptChanges: 0,
+  /** Entries the AI app deleted, by the id of their copy in its list of changes (each the entry's row, sealed with the old key) */
+  deletions: new Map<number, Record<string, unknown>>(),
   /** How DELETE /assistant-changes answers: fine, a failure, or a server from before the feature */
   clearChanges: 'ok' as 'ok' | 'fail' | 'missing',
 }));
@@ -30,6 +32,17 @@ vi.mock('@/services/api', () => {
   return {
   ApiError,
   assistantChanges: {
+    list: async () => {
+      if (server.clearChanges === 'missing') throw new ApiError(404, 'Not found');
+      return { changes: [...server.deletions.keys()].map(id => ({ id, kind: 'entry', ref: String(server.deletions.get(id)!.id), extra: { deleted: true } })), more: false };
+    },
+    restore: async (id: number) => {
+      const row = server.deletions.get(id);
+      if (!row) throw new ApiError(404, 'Change not found');
+      server.deletions.delete(id);
+      server.entries.set(row.id as number, row);
+      return { id, kind: 'entry', extra: { deleted: true } };
+    },
     clear: async () => {
       if (server.clearChanges === 'fail') throw new ApiError(500, 'Failed to delete');
       if (server.clearChanges === 'missing') throw new ApiError(404, 'Not found');
@@ -311,6 +324,18 @@ describe('runRekey', () => {
     server.clearChanges = 'ok';
     await runRekey({ newKey, oldKey, rekeyId: REKEY, runner: RUNNER, fetchFn });
     expect(server.keptChanges).toBe(0);
+    expect(server.finished).toEqual([REKEY]);
+  });
+
+  // An entry the AI app deleted has only its copy in that list: it must come back before the list goes
+  it('brings back every entry the AI app deleted first, so it is sealed with the new key, not lost with the list', async () => {
+    await seed(oldKey);
+    const sealed = await encryptionService.encryptPost(oldKey, 42, 'deleted by the app', { _taxonomyId: 1 });
+    server.deletions.set(900, { id: 42, isEncrypted: true, createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z', ...sealed });
+    await runRekey({ newKey, oldKey, rekeyId: REKEY, runner: RUNNER, fetchFn });
+    expect(server.deletions.size).toBe(0);
+    const back = await encryptionService.decryptPost(newKey, server.entries.get(42) as never);
+    expect(back.content).toBe('deleted by the app');
     expect(server.finished).toEqual([REKEY]);
   });
 

@@ -8,6 +8,8 @@ import { SectionLabel, RowBox, LabelledRow, RowLabel, DateTimeBox } from '../mol
 import { EntryTagsField } from '../molecules/fields/EntryTagsField.js';
 import { tagsInUse, tagsOf } from '../../utils/entryTags.js';
 import { topicKind } from '../../utils/topicKind.js';
+import { usePlanData } from '../../hooks/usePlanData.js';
+import { blockersOf } from '../../utils/taskBlockers.js';
 import { TitleField } from '../molecules/fields/TitleInput.js';
 import { isHiddenFromAi } from '../../services/aiPrivacy.js';
 import { useAiPrivacy } from '../../hooks/useAiPrivacy.js';
@@ -1551,17 +1553,13 @@ export function EntryForm({
     .map(e => ({ id: e.id, title: stripHtml(e.content).slice(0, 60) || `Task #${e.id}` })), [entries, topics, entryId]);
 
   // Every task, for a task's Blocked by: the open ones are offered, and the rest
-  // say whether a blocker has cleared (done, or not there any more)
-  const blockerTasks = useMemo(() => customType !== 'task' ? [] : entries
-    .filter(e => {
-      const tid = (e.metadata as Record<string, unknown>)?._taxonomyId as number | undefined;
-      const t = tid ? topics.find(tp => tp.id === tid) : undefined;
-      return t && topicKind(t.name) === 'task';
-    })
-    .map(e => {
-      const cf = (e.metadata as Record<string, unknown>)?._customFields as Record<string, unknown> | undefined;
-      return { id: e.id, title: stripHtml(e.content).trim().slice(0, 80) || builtinEntryName(cf ?? {}) || `Task #${e.id}`, isCompleted: !!cf?.isCompleted };
-    }), [entries, topics, customType]);
+  // say whether a blocker has cleared (done, or not there any more). The same
+  // tasks and titles as the Planner, Your Agenda and Planning (usePlanData), so
+  // a blocker never reads as cleared in one and open in another
+  const { tasks: planTasks } = usePlanData();
+  const blockerTasks = useMemo(() => customType !== 'task' ? [] : planTasks
+    .map(t => ({ id: t.id, title: t.title, isCompleted: t.completed, blockerIds: blockersOf(t.fields).flatMap(b => (b.taskId ? [b.taskId] : [])) })),
+  [planTasks, customType]);
 
   const userFieldValues = (customFields._userFields as Record<string, unknown>) ?? {};
   // Any filled-in field makes an entry saveable — topics without a text area

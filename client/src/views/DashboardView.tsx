@@ -36,6 +36,7 @@ import { TopBarAction } from '../components/organisms/TopBarAction.js';
 import { goalCategoryOf } from '../utils/goalCategories.js';
 import { HabitsToday } from '../components/organisms/HabitsToday.js';
 import { plannerFacts, tasksByDay, parsePlannerOrder, type PlannerOrder } from '../utils/planner.js';
+import { showFlash } from '../services/flashNotice.js';
 import { useEncryptedSetting } from '../hooks/useEncryptedSetting.js';
 import { useFinance } from '../hooks/useFinance.js';
 import { useOpenInJournal } from '../hooks/useOpenInJournal.js';
@@ -2981,6 +2982,12 @@ export function DashboardView() {
       .flatMap(e => parseQuoteText(stripHtml(e.content)) ?? []);
   }, [quoteEntries, quoteTopics]);
   const [config, saveConfig, configLoaded] = useEncryptedSetting<DashboardConfig>('dashboardConfig', DEFAULT_CONFIG);
+  // A change to the dashboard's own setup (layout, folds, switches) that didn't save says so,
+  // rather than leaving an unhandled rejection and quietly going back on the next load
+  const saveDash = (next: DashboardConfig) => saveConfig(next).catch(err => {
+    console.warn('Couldn’t save the dashboard’s setup:', err instanceof Error ? err.message : err);
+    showFlash('Couldn’t save that change to your dashboard. Try again.');
+  });
   const onPhone = useMediaQuery('(max-width: 768px)');
   // The two columns' card order — live while dragging, saved on drop
   const [layout, setLayout] = useState(() => fullLayout(config.layout));
@@ -3073,7 +3080,7 @@ export function DashboardView() {
         if (z !== zone && from === z) grids[z] = gridFrom(config.grids?.[z], next[z].filter(visible), z === 'top' ? columnKeys(config.layout) : []);
       }
       setLayout(next);
-      void saveConfig({ ...config, layout: next, grids });
+      void saveDash({ ...config, layout: next, grids });
       return;
     }
     // A column: before the card it's over (after it, dragged down within its column), or at
@@ -3090,7 +3097,7 @@ export function DashboardView() {
       setLayout(next);
     }
     const saved = fullLayout(config.layout);
-    if (COLS.some(c => next[c].join() !== saved[c].join())) void saveConfig({ ...config, layout: next });
+    if (COLS.some(c => next[c].join() !== saved[c].join())) void saveDash({ ...config, layout: next });
   };
   const [customizing, setCustomizing] = useState(false);
   // The buttons move into the top bar on phones and tablets
@@ -3269,10 +3276,10 @@ export function DashboardView() {
   const toggleSection = (k: SectionKey, on: boolean) => {
     if (OFF_BY_DEFAULT.includes(k)) {
       const turnedOn = (config.turnedOn ?? []).filter(x => x !== k);
-      void saveConfig({ ...config, turnedOn: on ? [...turnedOn, k] : turnedOn });
+      void saveDash({ ...config, turnedOn: on ? [...turnedOn, k] : turnedOn });
       return;
     }
-    void saveConfig({ ...config, hidden: on ? (config.hidden ?? []).filter(x => x !== k) : [...(config.hidden ?? []), k] });
+    void saveDash({ ...config, hidden: on ? (config.hidden ?? []).filter(x => x !== k) : [...(config.hidden ?? []), k] });
   };
   const addPlace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3293,11 +3300,11 @@ export function DashboardView() {
   const collapsed = new Set(onPhone ? COLS.flatMap(c => DEFAULT_LAYOUT[c]).filter(k => !openOnPhone.has(k)) : config.collapsed ?? []);
   const toggleFold = (k: SectionKey) => {
     if (onPhone) {
-      void saveConfig({ ...config, openOnPhone: openOnPhone.has(k) ? [...openOnPhone].filter(x => x !== k) : [...openOnPhone, k] });
+      void saveDash({ ...config, openOnPhone: openOnPhone.has(k) ? [...openOnPhone].filter(x => x !== k) : [...openOnPhone, k] });
       return;
     }
     const folded = new Set(config.collapsed ?? []);
-    void saveConfig({ ...config, collapsed: folded.has(k) ? [...folded].filter(x => x !== k) : [...folded, k] });
+    void saveDash({ ...config, collapsed: folded.has(k) ? [...folded].filter(x => x !== k) : [...folded, k] });
   };
   // Every draggable card: its name (for the buttons' labels), whether it's on, and what it shows
   const widgets: Partial<Record<SectionKey, { label: string; on: boolean; node: ReactNode }>> = {
@@ -3328,7 +3335,7 @@ export function DashboardView() {
     },
     // World clocks are a full-width strip under the Quick entry, not a card
     // The world clocks strip: a card of its own above Your Agenda (the head row), draggable like the others
-    clocks: { label: 'world clocks', on: shown('clocks'), node: <WorldClocks strip places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} /> },
+    clocks: { label: 'world clocks', on: shown('clocks'), node: <WorldClocks strip places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveDash({ ...config, clocksExpanded: !config.clocksExpanded })} /> },
     // The wellness check-in sits full width above Day at a glance, not in the columns
     wellness: { label: 'wellness check-in', on: shown('wellness'), node: <WellnessCheckIn title="Wellness check-in" strip titled /> },
     // Next up, Wins and Tasks are no longer cards on the home dashboard (Wins lives in Day at a glance)
@@ -3383,7 +3390,7 @@ export function DashboardView() {
     const order = flattenGrid(rows) as SectionKey[];
     const next = { ...saved, [z]: [...order, ...saved[z].filter(x => !order.includes(x))] };
     setLayout(next);
-    void saveConfig({ ...config, layout: next, grids: { ...config.grids, [z]: rows } });
+    void saveDash({ ...config, layout: next, grids: { ...config.grids, [z]: rows } });
   };
   /** One card. `zone` / `w`: where it sits and its width there; `node`: what Your Agenda draws for
    *  it (the tasks with no day) */
@@ -3394,7 +3401,7 @@ export function DashboardView() {
     const body = node ?? (inAgenda && k === 'priorities' ? <Priorities compact />
       : inAgenda && k === 'wins' ? <Wins compact />
       // The clocks as a list of cities in a column (the strip is for a wide row)
-      : k === 'clocks' && (inAgenda || w === 1) ? <WorldClocks places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveConfig({ ...config, clocksExpanded: !config.clocksExpanded })} />
+      : k === 'clocks' && (inAgenda || w === 1) ? <WorldClocks places={places} now={now} open={!!config.clocksExpanded} onToggle={() => void saveDash({ ...config, clocksExpanded: !config.clocksExpanded })} />
       : wd.node);
     // Every card has its panel, title and fold (Priorities and Wins in their compact rows in Your
     // Agenda's column, the wellness check-in with its title row); only the clocks strip and Stats keep their own look
@@ -3500,14 +3507,14 @@ export function DashboardView() {
               <ToggleGrid>
                 {SECTIONS.filter(s => s.key !== 'focus' || canFocus).map(s => <label key={s.key}>{s.label}<Toggle checked={shown(s.key)} aria-label={s.label} onChange={v => toggleSection(s.key, v)} /></label>)}
                 {/* Day at a glance's Coming up: bills in it or not (Finance on) */}
-                {financeOn && <label>Bills in Coming up<Toggle checked={!config.comingUpHideBills} aria-label="Bills in Coming up" onChange={v => void saveConfig({ ...config, comingUpHideBills: !v })} /></label>}
+                {financeOn && <label>Bills in Coming up<Toggle checked={!config.comingUpHideBills} aria-label="Bills in Coming up" onChange={v => void saveDash({ ...config, comingUpHideBills: !v })} /></label>}
               </ToggleGrid>
               <h3>Cities (the first is home)</h3>
               {places.length === 0 && <Muted style={{ marginTop: 0 }}>Add your city for the weather, then up to seven more for world clocks.</Muted>}
               {places.map((p, i) => (
                 <PlaceRow key={`${p.name}-${i}`}>
                   <span>{p.name}<small>{i === 0 ? 'Home' : p.timezone.replace(/_/g, ' ')}</small></span>
-                  <button type="button" aria-label={`Remove ${p.name}`} onClick={() => void saveConfig({ ...config, places: places.filter((_, j) => j !== i) })}>
+                  <button type="button" aria-label={`Remove ${p.name}`} onClick={() => void saveDash({ ...config, places: places.filter((_, j) => j !== i) })}>
                     <Icon name="x" size={14} strokeWidth={2} />
                   </button>
                 </PlaceRow>

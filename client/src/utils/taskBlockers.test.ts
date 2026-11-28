@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  blockersOf, withBlocker, withoutBlocker, isBlockerCleared, openBlockers, blockerLabel, blockedByText, cleanBlockerNote,
+  blockersOf, withBlocker, withoutBlocker, isBlockerCleared, openBlockers, blockerLabel, blockedByText, cleanBlockerNote, wouldCycle,
   BLOCKERS_PER_TASK, BLOCKER_NOTE_MAX, type BlockerTask,
 } from './taskBlockers';
 
@@ -93,5 +93,29 @@ describe('cleared blockers', () => {
     expect(blockedByText({ blockers: [{ id: 'c', note: 'Rain' }] }, tasks)).toBe('Blocked by Rain');
     expect(blockedByText({ blockers: [{ id: 'a', taskId: 8 }] }, tasks)).toBeUndefined();
     expect(blockedByText({}, tasks)).toBeUndefined();
+  });
+});
+
+describe('wouldCycle', () => {
+  const tasks = [
+    { id: 1, blockerIds: [2] },   // 1 waits on 2
+    { id: 2, blockerIds: [3] },   // 2 waits on 3
+    { id: 3, blockerIds: [] },
+    { id: 4, blockerIds: [4, 1] }, // a bad self-loop in stored data
+  ];
+  it('refuses a task already waiting on this one, directly or through others', () => {
+    expect(wouldCycle(2, 1, tasks)).toBe(true);
+    expect(wouldCycle(3, 1, tasks)).toBe(true);
+    expect(wouldCycle(3, 2, tasks)).toBe(true);
+  });
+  it('allows a task that is not waiting on this one', () => {
+    expect(wouldCycle(1, 3, tasks)).toBe(false);
+    expect(wouldCycle(3, 4, tasks)).toBe(true); // 4 → 1 → 2 → 3
+    expect(wouldCycle(2, 4, tasks)).toBe(true);
+    expect(wouldCycle(5, 4, tasks)).toBe(false);
+  });
+  it('never refuses for a new task, and always refuses itself', () => {
+    expect(wouldCycle(null, 1, tasks)).toBe(false);
+    expect(wouldCycle(3, 3, tasks)).toBe(true);
   });
 });

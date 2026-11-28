@@ -17,7 +17,8 @@
  * same id. At most ASSISTANT_DELETES_PER_DAY a day, and a full list refuses
  * the delete just as it refuses a write.
  *
- * Kept for ASSISTANT_HISTORY_DAYS, at most ASSISTANT_HISTORY_ROWS versions and
+ * Kept for ASSISTANT_HISTORY_DAYS (the copy of a deleted entry until the owner
+ * puts it back or removes it: it is the entry's only copy), at most ASSISTANT_HISTORY_ROWS versions and
  * ASSISTANT_HISTORY_BYTES of them. It has its own cap, apart from the
  * journal's, so the AI app can never use up room for entries.
  *
@@ -55,6 +56,7 @@ import {
   createPost, postStorageBytes, pruneDeletedPosts, ensurePostSync, ASSISTANT_CREATES_PER_DAY, ASSISTANT_DELETES_PER_DAY, ASSISTANT_UNDO_MS,
   type CreatePostInput, type TenantClient, type TenantPost,
 } from './tenantQueries.js';
+import { AI_PRIVACY_KEY, parseAiPrivacy } from '@chronicles/shared';
 
 export const ASSISTANT_HISTORY_DAYS = 14;
 export const ASSISTANT_HISTORY_ROWS = 300;
@@ -99,6 +101,8 @@ export interface EntryDeletionExtra {
   metadata: unknown;
   /** Its topic links (post_taxonomies; older entries only) */
   topicIds: number[];
+  /** The topics kept from AI when it was deleted: one hidden since makes it come back hidden (hiddenSinceSql) */
+  hiddenTopics?: number[];
 }
 
 /** Whether a kept version is the copy of an entry the AI app deleted. */
@@ -182,8 +186,13 @@ const keepSql = (s: string, kind: AssistantChangeKind) =>
   `INSERT INTO ${s}.assistant_changes (kind, ref, body, body_iv, meta, meta_iv, extra) ${currentVersionSql(s, kind)}`;
 
 /** Past their days. The only thing that removes a version without the owner asking. */
+/* Past their days, versions go. Never the copy of an entry the AI app deleted:
+   it is the only copy of that entry, so it stays until the owner puts it back
+   or removes it (it still counts toward the list's cap, so a full list stops
+   the app's writes and deletes until the owner looks). */
 const expireSql = (s: string) =>
-  `DELETE FROM ${s}.assistant_changes WHERE saved_at < NOW() - make_interval(days => ${ASSISTANT_HISTORY_DAYS})`;
+  `DELETE FROM ${s}.assistant_changes c WHERE c.saved_at < NOW() - make_interval(days => ${ASSISTANT_HISTORY_DAYS})
+     AND ${DELETION_SQL('c')} IS NOT TRUE`; /* IS NOT TRUE, never NOT: a version with no extra makes the test NULL */
 
 async function ensureTables(schemaName: string, kind: AssistantChangeKind): Promise<void> {
   await ensureAiPrivacyTables(schemaName);
@@ -359,7 +368,12 @@ export type AssistantDelete = { keptChangeId: number } | 'unseen' | 'limit';
  *  - room in the list (AssistantHistoryFull otherwise, and nothing deleted),
  *  - a full copy of the entry is kept (EntryDeletionExtra),
  *  - `beforeDelete` runs (the route removes the entry's public links: they
- *    hold it as plaintext; if that fails the whole delete is rolled back),
+ *    hold it as plaintext). It is a write to the main database, so it isn't
+ *    part of this transaction: if it fails nothing here is kept and the entry
+ *    stays; if something after it fails the links are gone and the entry
+ *    stays (the safe way round — never a link outliving its entry). It runs
+ *    under the lock, before the delete, for that reason, and holds the
+ *    account's connection for one short indexed delete,
  *  - the entry is deleted. Its topic links and assistant_owned row go with it
  *    by foreign key, and the app's mark goes too, so once it is put back the
  *    entry is the owner's.
@@ -384,6 +398,9 @@ export async function assistantDeletePost(
     await tx.$executeRawUnsafe(expireSql(s));
     const [used] = await tx.$queryRawUnsafe<{ n: number | bigint; bytes: number | bigint | null }[]>(
       `SELECT COUNT(*) AS n, COALESCE(SUM(${SIZE}), 0) AS bytes FROM ${s}.assistant_changes`);
+    // The topics kept from AI now: the server can't see the entry's topic, so
+    // one hidden after this makes the entry come back hidden (recreateDeletedEntry)
+    const hiddenTopics = await hiddenTopicsNow(tx, s);
     // The copy's times and links add a little to the entry's own bytes
     if (Number(used.n) >= ASSISTANT_HISTORY_ROWS || Number(used.bytes ?? 0) + Number(post.bytes) + 512 > ASSISTANT_HISTORY_BYTES) {
       throw new AssistantHistoryFull();
@@ -396,9 +413,10 @@ export async function assistantDeletePost(
                 'createdAt', to_jsonb(p.created_at), 'updatedAt', to_jsonb(p.updated_at),
                 'isEncrypted', COALESCE(p.is_encrypted, FALSE), 'content', p.content, 'metadata', p.metadata,
                 'topicIds', (SELECT COALESCE(jsonb_agg(pt.tax_id ORDER BY pt.tax_id), '[]'::jsonb)
-                             FROM ${s}.post_taxonomies pt WHERE pt.post_id = p.id))
+                             FROM ${s}.post_taxonomies pt WHERE pt.post_id = p.id),
+                'hiddenTopics', to_jsonb($3::int[]))
        FROM ${s}.posts p WHERE p.id = $1
-       RETURNING id::int AS id`, id, sessionId);
+       RETURNING id::int AS id`, id, sessionId, hiddenTopics);
     // Counted for the day's budget, by the copy's id (each delete once)
     await tx.$executeRawUnsafe(`INSERT INTO ${s}.assistant_new_records (kind, ref) VALUES ('entry-deletion', $1)`, String(kept.id));
     // Old rows have no further use
@@ -520,6 +538,12 @@ function writeBackSql(s: string, kind: AssistantChangeKind): string {
  * deletion together, and drop it. One whose sync was after it is sent the
  * entry as new (the insert trigger stamps it, like any other write).
  */
+/** The topic ids the server's copy of the AI choices keeps from AI, read inside the caller's transaction. */
+async function hiddenTopicsNow(tx: TenantClient, s: string): Promise<number[]> {
+  const [row] = await tx.$queryRawUnsafe<{ value: unknown }[]>(`SELECT value FROM ${s}.settings WHERE key = $1`, AI_PRIVACY_KEY);
+  return parseAiPrivacy(row?.value).hiddenTopicIds;
+}
+
 async function recreateDeletedEntry(tx: TenantClient, s: string, change: AssistantChange): Promise<boolean> {
   const made = await tx.$executeRawUnsafe(
     `INSERT INTO ${s}.posts (id, content, metadata, content_encrypted, content_iv, metadata_encrypted, metadata_iv, is_encrypted, created_at, updated_at)
@@ -531,6 +555,15 @@ async function recreateDeletedEntry(tx: TenantClient, s: string, change: Assista
   if (!made) return false;
   const postId = Number(change.ref);
   await tx.$executeRawUnsafe(`DELETE FROM ${s}.deleted_posts WHERE id = $1`, postId);
+  // A topic kept from AI since it was deleted may be this entry's (its topic is
+  // sealed, and a browser can't mark an entry that doesn't exist): it comes
+  // back hidden, so the app can't read it before a browser brings the list in
+  // line. A copy with no record of the topics then counts every one as new.
+  // Failing closed: a browser's next load shares it again if it should be
+  const before = new Set(Array.isArray(change.extra?.hiddenTopics) ? (change.extra.hiddenTopics as unknown[]).filter(Number.isInteger) as number[] : []);
+  if ((await hiddenTopicsNow(tx, s)).some(t => !before.has(t))) {
+    await tx.$executeRawUnsafe(`INSERT INTO ${s}.ai_hidden_posts (post_id) VALUES ($1) ON CONFLICT DO NOTHING`, postId);
+  }
   const topicIds = Array.isArray(change.extra?.topicIds) ? (change.extra.topicIds as unknown[]).filter(Number.isInteger) : [];
   if (topicIds.length > 0) {
     await tx.$executeRawUnsafe(

@@ -109,7 +109,7 @@ export function AiPrivacySettings({ inAppAiOn }: { inAppAiOn: boolean }) {
         <SettingsGroup label="Chronicles AI app">
           <SettingsActionRow
             title="Chronicles AI app (Mac and iPad)"
-            description="When on, the Mac and iPad AI app signs in with your password, holds your saved In-App AI key while open, and respects items hidden from AI. It can add entries, log bill payments, and check off doses, habits, or tasks—with undo available below. Manage active sign-ins under Security → Sessions; turning this off signs all out."
+            description="When on, the Mac and iPad AI app signs in with your password, holds your saved In-App AI key while open, and respects items hidden from AI. It can add entries, log bill payments, check off doses, habits, or tasks, and delete entries—with undo available below. An entry it deletes is kept below until you restore or remove it. Manage active sign-ins under Security → Sessions; turning this off signs all out."
             action={<Toggle checked={privacy.appEnabled} disabled={saving}
               onChange={v => { void save(now => ({ ...now, appEnabled: v })); }} aria-label="Chronicles AI app" />}
           />

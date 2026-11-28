@@ -13,6 +13,7 @@ vi.mock('@/stores/entriesStore', () => ({
   useEntriesStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       decryptedEntries: [],
+      allTopics: [],
       updateDecryptedEntry: vi.fn(),
     }),
 }));

@@ -31,7 +31,7 @@ export function BlockedTag({ by, compact }: { by: string; compact?: boolean }) {
     <Wrap title={`Blocked by ${by}`}>
       <span className="tag">Blocked</span>
       {!compact && <span className="by">by {by}</span>}
-      {compact && <span className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>by {by}</span>}
+      {compact && <span className="sr-only">by {by}</span>}
     </Wrap>
   );
 }

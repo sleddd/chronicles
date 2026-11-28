@@ -22,6 +22,8 @@ export interface BlockerTask {
   id: number;
   title: string;
   isCompleted: boolean;
+  /** The tasks this one is waiting on (its own blockers' taskIds), to keep blockers from going round in a circle */
+  blockerIds?: number[];
 }
 
 export type BlockerTasks = ReadonlyMap<number, Pick<BlockerTask, 'isCompleted'> & Partial<Pick<BlockerTask, 'title'>>>;
@@ -115,4 +117,26 @@ export function blockedByText(fields: Fields, tasks: BlockerTasks): string | und
   if (open.length === 0) return undefined;
   const first = blockerLabel(open[0], tasks);
   return `Blocked by ${first}${open.length > 1 ? ` +${open.length - 1}` : ''}`;
+}
+
+/**
+ * Would `selfId` waiting on `candidateId` make a circle — the candidate already
+ * waiting on `selfId`, directly or through others? Such a pair would keep each
+ * other blocked for good, so it's never offered. A new task (no id yet) can't
+ * be waited on, so it never makes one.
+ */
+export function wouldCycle(selfId: number | null | undefined, candidateId: number, tasks: readonly Pick<BlockerTask, 'id' | 'blockerIds'>[]): boolean {
+  if (!selfId) return false;
+  if (candidateId === selfId) return true;
+  const waitsOn = new Map(tasks.map(t => [t.id, t.blockerIds ?? []]));
+  const seen = new Set<number>();
+  const stack = [candidateId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (id === selfId) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const next of waitsOn.get(id) ?? []) if (!seen.has(next)) stack.push(next);
+  }
+  return false;
 }

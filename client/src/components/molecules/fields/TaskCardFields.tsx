@@ -17,7 +17,7 @@ import { taskStatusOf, taskFieldsForStatus, type TaskStatus } from '../../../typ
 import { toDateStr } from '../../../utils/dateUtils.js';
 import { estimateLabel, estimateOf, parseEstimate } from '../../../utils/planner.js';
 import {
-  blockersOf, withBlocker, withoutBlocker, isBlockerCleared, blockerLabel, BLOCKERS_PER_TASK, BLOCKER_NOTE_MAX,
+  blockersOf, withBlocker, withoutBlocker, isBlockerCleared, blockerLabel, wouldCycle, BLOCKERS_PER_TASK, BLOCKER_NOTE_MAX,
   type BlockerTask, type TaskBlocker,
 } from '../../../utils/taskBlockers.js';
 
@@ -433,7 +433,8 @@ export function BlockedBy({ values, onChange, tasks = [], selfId = null }: {
   const blockers = blockersOf(values as unknown as Record<string, unknown>);
   const byId = new Map(tasks.map(t => [t.id, t]));
   const save = (next: TaskBlocker[]) => { if (next !== blockers) onChange({ ...values, blockers: next }); };
-  const offered = tasks.filter(t => !t.isCompleted && t.id !== selfId && !blockers.some(b => b.taskId === t.id));
+  // Open tasks not on the list yet, and none already waiting on this one (a circle would block both for good)
+  const offered = tasks.filter(t => !t.isCompleted && t.id !== selfId && !blockers.some(b => b.taskId === t.id) && !wouldCycle(selfId, t.id, tasks));
   const addNote = () => {
     if (note.trim()) save(withBlocker(blockers, { note }));
     setNote('');

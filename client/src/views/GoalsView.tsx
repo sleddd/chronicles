@@ -41,6 +41,7 @@ import {
 import { taskTypeList, taskTypeOf, taskTypeRank, sameTaskType } from '../utils/taskTypes.js';
 import { taskPassesFilter, checklistProgress } from '../utils/taskLists.js';
 import { blockedByText } from '../utils/taskBlockers.js';
+import { entryTitleText } from '../utils/entryTitle.js';
 import { DEFAULT_ACCENT_COLOR } from '../styles/accent.js';
 import {
   EMPTY_GOAL_CATEGORIES, parseGoalCategories, goalCategoryList, goalCategoryOf, categoriesInUse, sameCategory,
@@ -440,7 +441,8 @@ export function GoalsView() {
   }, [entries, taskTopicId]);
 
   // What a task's blockers need to know about the others (done, or gone): its "Blocked by" line
-  const blockerTasks = useMemo(() => new Map(tasks.map(t => [t.id, { title: t.title, isCompleted: t.isCompleted }])), [tasks]);
+  // (titled by the first line, as on the Planner: the whole text would run a task's notes into it)
+  const blockerTasks = useMemo(() => new Map(tasks.map(t => [t.id, { title: entryTitleText(t.content) || t.title, isCompleted: t.isCompleted }])), [tasks]);
 
   // Todos have no parent goal or milestone connection
   const todos = useMemo(() => tasks.filter(t => !t.parentMilestoneId && !t.parentGoalId), [tasks]);

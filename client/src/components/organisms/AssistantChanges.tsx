@@ -125,6 +125,9 @@ export function AssistantChanges() {
     }
   };
 
+  // Entries the app deleted among those loaded: Remove all would end them for good
+  const deletedCount = changes?.filter(c => c.deleted).length ?? 0;
+
   const removeAll = async () => {
     if (confirming !== 'all') { setConfirming('all'); return; }
     setConfirming(null); setBusy(true); setError('');
@@ -141,14 +144,14 @@ export function AssistantChanges() {
   return (
     <SettingsActionRow
       title="Changes the app made"
-      description="Previous versions of entries, doses, bills, and habit check-ins changed by the app, and entries it deleted, are saved for 14 days and can be restored here."
+      description="Previous versions of entries, doses, bills, and habit check-ins changed by the app are saved for 14 days. Entries it deleted are kept until you restore or remove them."
       action={<RowPill type="button" onClick={toggle} aria-expanded={open}>{open ? 'Hide' : 'View'}</RowPill>}
     >
       {open && (
         <>
           {error && <RowNote $error role="alert">{error}</RowNote>}
           {changes === null && !error && <RowNote>Loading…</RowNote>}
-          {changes && changes.length === 0 && <RowNote>Nothing has been changed by the app in the last 14 days.</RowNote>}
+          {changes && changes.length === 0 && <RowNote>Nothing has been changed or deleted by the app in the last 14 days.</RowNote>}
           {changes && changes.length > 0 && (
             <List>
               {changes.map(c => (
@@ -170,8 +173,12 @@ export function AssistantChanges() {
                   )}
                   <QuietLink type="button" disabled={busy} onClick={() => { void remove(c.id); }}
                     onBlur={() => setRemoving(v => (v === c.id ? null : v))}
-                    aria-label={removing === c.id ? `Remove this version of ${c.name || c.what} for good?` : `Remove this version of ${c.name || c.what} from the list`}>
-                    {removing === c.id ? 'Remove for good?' : 'Remove'}
+                    aria-label={c.deleted
+                      ? (removing === c.id ? `Delete ${c.name || 'this entry'} for good? It can’t be put back after this` : `Delete ${c.name || 'this entry'} for good`)
+                      : (removing === c.id ? `Remove this version of ${c.name || c.what} for good?` : `Remove this version of ${c.name || c.what} from the list`)}>
+                    {c.deleted
+                      ? (removing === c.id ? 'Delete the entry for good?' : 'Delete for good')
+                      : (removing === c.id ? 'Remove for good?' : 'Remove')}
                   </QuietLink>
                 </Row>
               ))}
@@ -184,7 +191,11 @@ export function AssistantChanges() {
                 : <span />}
               <QuietLink type="button" $danger disabled={busy} onClick={() => { void removeAll(); }}
                 onBlur={() => setConfirming(v => (v === 'all' ? null : v))}>
-                {confirming === 'all' ? 'Remove every kept version?' : 'Remove all'}
+                {confirming === 'all'
+                  ? (deletedCount > 0
+                    ? `Remove every kept version? ${deletedCount === 1 ? 'An entry the app deleted' : `${deletedCount}${more ? '+' : ''} entries the app deleted`} will be gone for good.`
+                    : 'Remove every kept version?')
+                  : 'Remove all'}
               </QuietLink>
             </Foot>
           )}

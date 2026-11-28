@@ -11,7 +11,8 @@ import { notice as noticeApi, type AppNotice } from '../../services/api.js';
 
 const DISMISS_KEY = 'app-notice-dismissed-v1';
 
-const Bar = styled.div`
+/** The banner's look, shared with AppDeletionsNotice */
+export const Bar = styled.div`
   position: fixed;
   top: 3px;
   left: 50%;
@@ -35,12 +36,12 @@ const Bar = styled.div`
   @media print { display: none; }
 `;
 
-const Text = styled.p`
+export const Text = styled.p`
   flex: 1;
   margin: 0;
 `;
 
-const Close = styled.button`
+export const Close = styled.button`
   display: inline-flex;
   padding: 2px;
   border: none;

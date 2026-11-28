@@ -5,7 +5,8 @@
  * to "add and tick". Instead it keeps the version of anything the app
  * overwrites — an entry, a dose record, a bill, the habit log — still
  * encrypted, for 14 days (server/src/db/assistantHistory.ts). It does the
- * same for an entry the app deletes: a full copy is kept, and putting it back
+ * same for an entry the app deletes: a full copy is kept (until put back or
+ * removed: it never expires, being the entry's only copy), and putting it back
  * brings the entry back as it was, under the same id. Here each kept version
  * is opened so it can be named, and one that is put back is shown in this tab
  * straight away.
