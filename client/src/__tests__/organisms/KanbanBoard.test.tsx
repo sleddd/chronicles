@@ -24,14 +24,16 @@ describe('KanbanBoard', () => {
     expect(screen.getByText('Drop tasks here')).toBeInTheDocument();
   });
 
-  it('a task still waiting on something says so in one quiet line; a finished one doesn’t', () => {
+  it('a task still waiting on something is struck through with a Blocked tag; a finished one isn’t tagged', () => {
     const blocked = [{ key: 'todo' as const, label: 'To Do', items: [
       { id: 3, title: 'Paint the hall', blockedBy: 'Blocked by Buy paint +1' },
       { id: 4, title: 'Hang the mirror', blockedBy: 'Blocked by Paint the hall', completed: true },
     ] }];
     renderWithTheme(<KanbanBoard columns={blocked} noun="task" onOpen={() => {}} onMove={() => {}} />);
-    expect(screen.getByText('Blocked by Buy paint +1')).toBeInTheDocument();
-    expect(screen.queryByText('Blocked by Paint the hall')).toBeNull();
+    expect(screen.getByTitle('Blocked by Buy paint +1')).toHaveTextContent('Blocked');
+    expect(screen.getByText('by Buy paint +1')).toBeInTheDocument();
+    expect(screen.getByText('Paint the hall')).toHaveStyle({ textDecoration: 'line-through' });
+    expect(screen.queryByTitle('Blocked by Paint the hall')).toBeNull();
   });
 
   it('the column + starts a new entry in that column', () => {

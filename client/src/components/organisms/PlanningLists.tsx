@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
+import { blockedBy } from '../atoms/BlockedTag.js';
 import type { GoalEntry, MilestoneEntryData, TaskEntryData } from '../../types/goals.js';
 import { normalizeRoadmapStatus } from '../../types/goals.js';
 import { SwipeActions } from '../molecules/SwipeActions.js';
@@ -309,13 +310,13 @@ export function TaskTable({ tasks, allTasks, goals, milestones, group, titleOf, 
     const note = (group !== 'milestone' && t.parentMilestoneId ? milestoneById.get(t.parentMilestoneId)?.title : undefined)
       ?? (group === 'none' && t.parentGoalId ? goalById.get(t.parentGoalId)?.title : undefined)
       ?? (taskTypeOf(t.customFields) || undefined);
-    // Still waiting on something: said after the rest, quietly (not once it's done)
-    const blocked = t.isCompleted ? undefined : blockedByOf?.(t);
-    const muted = [note, blocked].filter(Boolean).join(' · ') || undefined;
+    // Still waiting on something (not once it's done): struck through with its Blocked tag
+    const blocked = t.isCompleted ? undefined : blockedBy(blockedByOf?.(t));
+    const muted = note;
     return (
       <SwipeActions key={t.id} accentColor={shared.accentColor} onDelete={() => shared.onDelete(t.id)}>
         <PlanRow lead={<PlanTick done={t.isCompleted} title={title} onToggle={() => onToggleTask(t.id, !t.isCompleted)} />}
-          title={title} note={muted} done={t.isCompleted} onOpen={() => onOpen(t.id)}
+          title={title} note={muted} blocked={blocked} done={t.isCompleted} onOpen={() => onOpen(t.id)}
           cells={[
             <PriorityCell key="p" priority={t.priority} />,
             <PlannedCell key="s" day={dayOrNone(t.customFields.scheduledDate)} today={today} done={t.isCompleted} />,

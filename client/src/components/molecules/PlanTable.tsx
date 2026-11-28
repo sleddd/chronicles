@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import styled from 'styled-components';
 import { MaterialIcon } from '../atoms/MaterialIcon.js';
+import { BlockedTag } from '../atoms/BlockedTag.js';
 import { TickMark } from '../atoms/TickMark.js';
 import { cardLabel } from '../../styles/cardLabel.js';
 import { dueNote, plannedText, shortDay, type DueTone } from '../../utils/planTable.js';
@@ -272,7 +273,7 @@ const Lead = styled.div<{ $indent: number }>`
   padding-left: ${({ $indent }) => $indent * 56}px;
 `;
 
-const TitleBtn = styled.button<{ $done: boolean; $oneLine?: boolean }>`
+const TitleBtn = styled.button<{ $done: boolean; $oneLine?: boolean; $blocked?: boolean }>`
   min-width: 0;
   padding: 0;
   border: none;
@@ -288,6 +289,9 @@ const TitleBtn = styled.button<{ $done: boolean; $oneLine?: boolean }>`
   &:hover { color: var(--color-accent-link); }
   &:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 2px; }
   small { margin-left: 12px; font-size: 14px; color: var(--text-muted); text-decoration: none; display: inline-block; }
+  /* Waiting on something (Blocked by): the title struck through, its Blocked tag after it */
+  ${({ $blocked }) => ($blocked ? '& > span:first-child { text-decoration: line-through; }' : '')}
+  .blocked { display: inline-flex; margin-left: 12px; vertical-align: middle; text-decoration: none; max-width: 100%; }
   /* A line of code (a code snippet's first line), in a monospace face */
   .code { font-family: ${CODE_FONT}; font-size: 0.9em; }
   /* One line, cut off with "…" (a text entry's title and its next line) */
@@ -311,6 +315,8 @@ export interface PlanRowProps {
   noteCode?: boolean;
   /** Keep the title and note to one line, cut off with "…" */
   oneLine?: boolean;
+  /** What it's waiting on ("Call the plumber +1"): the title struck through, a Blocked tag after it */
+  blocked?: string;
   done?: boolean;
   /** 0 = a top row, 1 = under a goal or milestone */
   indent?: number;
@@ -321,14 +327,15 @@ export interface PlanRowProps {
   endCells?: boolean[];
 }
 
-export function PlanRow({ lead, title, note, titleCode, noteCode, oneLine, done = false, indent = 0, onOpen, cells, endCells = [] }: PlanRowProps) {
+export function PlanRow({ lead, title, note, titleCode, noteCode, oneLine, blocked, done = false, indent = 0, onOpen, cells, endCells = [] }: PlanRowProps) {
   return (
     <Row role="row" $child={indent > 0} data-plan-row="" data-plan-bare={lead ? undefined : ''} style={indent ? { '--plan-indent': indent } as CSSProperties : undefined}>
       <Lead role="cell" $indent={indent} data-plan-lead="">
         {lead && <Contents role="presentation" data-plan-mark="">{lead}</Contents>}
-        <TitleBtn type="button" data-plan-title="" $done={done} $oneLine={oneLine} onClick={onOpen} title={oneLine ? [title, note].filter(Boolean).join(' · ') : undefined}>
+        <TitleBtn type="button" data-plan-title="" $done={done} $blocked={!done && !!blocked} $oneLine={oneLine} onClick={onOpen} title={oneLine ? [title, note].filter(Boolean).join(' · ') : undefined}>
           <span className={titleCode ? 'code' : undefined}>{title}</span>
           {note && <small className={noteCode ? 'code' : undefined}>{note}</small>}
+          {blocked && !done && <span className="blocked"><BlockedTag by={blocked} /></span>}
         </TitleBtn>
       </Lead>
       <Contents role="presentation" data-plan-cells="">

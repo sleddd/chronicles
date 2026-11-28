@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { BlockedTag, blockedBy } from '../atoms/BlockedTag.js';
 import styled from 'styled-components';
 import {
   DndContext, closestCenter, KeyboardSensor, MouseSensor, TouchSensor, useDroppable,
@@ -243,15 +244,10 @@ const Detail = styled.p`
 `;
 
 /* Blocked by: one quiet line, cut off with "…" */
-const Blocked = styled.p`
+const BlockedLine = styled.div`
   margin: -4px 0 0;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  display: flex;
 `;
 
 const Foot = styled.div`
@@ -329,12 +325,13 @@ function BoardCard({ item, onOpen, timeTracking }: { item: BoardItem; onOpen: (i
         <TopText>
           {item.kicker && <Kicker>{item.kicker}</Kicker>}
           {item.badge && <Pill $color={item.badge.color}>{item.badge.label}</Pill>}
-          <CardTitle $done={item.completed}>{item.title}</CardTitle>
+          {/* Waiting on something (Blocked by): struck through like a done one, its Blocked tag under it */}
+          <CardTitle $done={item.completed || !!item.blockedBy}>{item.title}</CardTitle>
         </TopText>
         {item.image && <CardAvatar image={item.image} />}
       </Top>
       {item.detail && <Detail>{item.detail}</Detail>}
-      {item.blockedBy && !item.completed && <Blocked title={item.blockedBy}>{item.blockedBy}</Blocked>}
+      {item.blockedBy && !item.completed && <BlockedLine><BlockedTag by={blockedBy(item.blockedBy) ?? item.blockedBy} /></BlockedLine>}
       {(hasFoot || timed) && (
         <Foot>
           {item.date && <Chip><MaterialIcon $size={15} aria-hidden="true">flag</MaterialIcon>{item.date}</Chip>}

@@ -27,13 +27,14 @@ describe('TaskTable', () => {
     task(12, 'Call the dentist', null, { priority: 'medium' }),
   ];
 
-  it('a task still waiting on something says so after its note; a finished one doesn’t', () => {
+  it('a task still waiting on something gets a Blocked tag after its note; a finished one doesn’t', () => {
     renderWithTheme(<TaskTable tasks={tasks} allTasks={tasks} goals={goals} milestones={[]} group="none" titleOf={t => t.title}
       blockedByOf={() => 'Blocked by Buy shoes'} {...shared()} />);
     const tempo = screen.getByText('Tempo run').closest('[role="row"]') as HTMLElement;
-    expect(within(tempo).getByText('Run a 10K · Blocked by Buy shoes')).toBeTruthy();
+    expect(within(tempo).getByText('Run a 10K')).toBeTruthy();
+    expect(within(tempo).getByTitle('Blocked by Buy shoes')).toHaveTextContent('Blockedby Buy shoes');
     const race = screen.getByText('Book the race').closest('[role="row"]') as HTMLElement;
-    expect(within(race).queryByText(/Blocked by/)).toBeNull();
+    expect(within(race).queryByTitle(/Blocked by/)).toBeNull();
   });
 
   it('groups by goal with its progress, "No goal" last, and reads each column', () => {
